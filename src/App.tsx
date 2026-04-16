@@ -5,6 +5,7 @@ import CommandPalette from "./components/command-palette/CommandPalette";
 import SettingsDrawer from "./components/ui/SettingsDrawer";
 import TerminalPanel from "./components/ui/TerminalPanel";
 import TerminalCreateDialog from "./components/ui/TerminalCreateDialog";
+import TerminalContextMenu from "./components/terminal/TerminalContextMenu";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { useSettingsStore } from "./store/settingsStore";
 import { useWorkspace } from "./hooks/useWorkspace";
@@ -40,6 +41,7 @@ export default function App() {
       <SettingsDrawer />
       <TerminalPanel />
       <TerminalCreateDialog />
+      <TerminalContextMenu />
     </div>
   );
 }

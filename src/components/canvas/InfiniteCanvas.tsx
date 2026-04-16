@@ -104,6 +104,7 @@ export default function InfiniteCanvas() {
           }
         }
         clearWire();
+        setMode("select");
       }
     },
     [mode, drawRect, wireStartId, clearDrawRect, openTerminalCreate, setMode, addWire, clearWire]
@@ -116,7 +117,12 @@ export default function InfiniteCanvas() {
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={(e) => {
+        // Only prevent default on empty canvas, not on terminal nodes
+        if (!(e.target as HTMLElement).closest(".terminal-node")) {
+          e.preventDefault();
+        }
+      }}
       style={{
         position: "relative",
         width: "100%",

@@ -11,6 +11,7 @@ export default function WorkspaceSwitcher() {
   const [renameValue, setRenameValue] = useState("");
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newCwd, setNewCwd] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
@@ -39,8 +40,13 @@ export default function WorkspaceSwitcher() {
   const handleCreate = async () => {
     if (!newName.trim()) return;
     await createWorkspace(newName.trim(), buildWorkspace);
+    // Set workspace CWD if provided
+    if (newCwd.trim()) {
+      useWorkspaceStore.getState().setWorkspaceCwd(newCwd.trim());
+    }
     setCreating(false);
     setNewName("");
+    setNewCwd("");
     setDropdownOpen(false);
   };
 
@@ -232,7 +238,7 @@ export default function WorkspaceSwitcher() {
             }}
           >
             {creating ? (
-              <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
@@ -243,7 +249,20 @@ export default function WorkspaceSwitcher() {
                   placeholder="Workspace name"
                   autoFocus
                   style={{
-                    flex: 1,
+                    background: "#13141b",
+                    border: "1px solid #3b4261",
+                    borderRadius: 4,
+                    color: "#c0caf5",
+                    padding: "4px 8px",
+                    fontSize: 12,
+                    outline: "none",
+                  }}
+                />
+                <input
+                  value={newCwd}
+                  onChange={(e) => setNewCwd(e.target.value)}
+                  placeholder="Working directory (optional)"
+                  style={{
                     background: "#13141b",
                     border: "1px solid #3b4261",
                     borderRadius: 4,
@@ -266,7 +285,7 @@ export default function WorkspaceSwitcher() {
                     cursor: "pointer",
                   }}
                 >
-                  Save
+                  Create
                 </button>
               </div>
             ) : (

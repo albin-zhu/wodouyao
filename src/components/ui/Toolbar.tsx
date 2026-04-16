@@ -11,6 +11,12 @@ const MODE_BUTTONS: { mode: CanvasMode; label: string; title: string }[] = [
   { mode: "wire", label: "\u2014", title: "Wire (connect terminals)" },
 ];
 
+const AGENT_STYLES: Record<string, { bg: string; color: string; icon: string }> = {
+  claude: { bg: "#ff9e6420", color: "#ff9e64", icon: "\u2726" },  // ✦
+  codex: { bg: "#9ece6a20", color: "#9ece6a", icon: "\u25C8" },   // ◈
+  opencode: { bg: "#7dcfff20", color: "#7dcfff", icon: "\u25C7" }, // ◇
+};
+
 export default function Toolbar() {
   const terminalCount = useTerminalStore((s) => s.terminals.size);
   const { spawn } = useTerminal();
@@ -76,26 +82,36 @@ export default function Toolbar() {
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {/* Quick Command Buttons */}
-        {quickCommands.map((cmd) => (
-          <button
-            key={cmd.id}
-            onClick={() => spawn({ command: cmd.command, name: cmd.label })}
-            title={cmd.label}
-            style={{
-              background: "#292e42",
-              color: "#c0caf5",
-              border: "1px solid #3b4261",
-              borderRadius: 6,
-              padding: "4px 10px",
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: "pointer",
-              letterSpacing: 0.5,
-            }}
-          >
-            {cmd.icon_label}
-          </button>
-        ))}
+        {quickCommands.map((cmd) => {
+          const agentKey = cmd.command?.toLowerCase().trim();
+          const agentStyle = agentKey ? AGENT_STYLES[agentKey] : undefined;
+          return (
+            <button
+              key={cmd.id}
+              onClick={() => spawn({ command: cmd.command, name: cmd.label })}
+              title={cmd.label}
+              style={{
+                background: agentStyle?.bg ?? "#292e42",
+                color: agentStyle?.color ?? "#c0caf5",
+                border: `1px solid ${agentStyle?.color ?? "#3b4261"}40`,
+                borderRadius: 6,
+                padding: "4px 10px",
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: "pointer",
+                letterSpacing: 0.5,
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              {agentStyle && (
+                <span style={{ fontSize: 13 }}>{agentStyle.icon}</span>
+              )}
+              {cmd.icon_label}
+            </button>
+          );
+        })}
 
         <button
           onClick={(e) => {

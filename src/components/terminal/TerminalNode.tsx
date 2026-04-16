@@ -1,6 +1,7 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
+import { showTerminalContextMenu } from "./TerminalContextMenu";
 import TerminalTitleBar from "./TerminalTitleBar";
 import TerminalBody from "./TerminalBody";
 import type { TerminalNode as TerminalNodeType } from "../../types/terminal";
@@ -13,6 +14,7 @@ export default function TerminalNode({ terminal }: TerminalNodeProps) {
   const updateTerminal = useTerminalStore((s) => s.updateTerminal);
   const bringToFront = useTerminalStore((s) => s.bringToFront);
   const mode = useCanvasInteractionStore((s) => s.mode);
+  const setMode = useCanvasInteractionStore((s) => s.setMode);
   const setWireStart = useCanvasInteractionStore((s) => s.setWireStart);
   const dragStartRef = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
   const resizeStartRef = useRef<{
@@ -21,6 +23,16 @@ export default function TerminalNode({ terminal }: TerminalNodeProps) {
     startW: number;
     startH: number;
   } | null>(null);
+  const [hovered, setHovered] = useState(false);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showTerminalContextMenu(e.clientX, e.clientY, terminal);
+    },
+    [terminal]
+  );
 
   const handleMouseDown = useCallback(() => {
     bringToFront(terminal.id);
@@ -109,9 +121,13 @@ export default function TerminalNode({ terminal }: TerminalNodeProps) {
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      // Auto-switch to wire mode if not already
+      if (mode !== "wire") {
+        setMode("wire");
+      }
       setWireStart(terminal.id);
     },
-    [terminal.id, setWireStart]
+    [terminal.id, mode, setWireStart, setMode]
   );
 
   return (
@@ -119,6 +135,9 @@ export default function TerminalNode({ terminal }: TerminalNodeProps) {
       className="terminal-node"
       data-terminal-id={terminal.id}
       onMouseDown={handleMouseDown}
+      onContextMenu={handleContextMenu}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         position: "absolute",
         left: terminal.position.x,
@@ -153,8 +172,8 @@ export default function TerminalNode({ terminal }: TerminalNodeProps) {
           }}
         />
       )}
-      {/* Wire connection anchor (right side) */}
-      {mode === "wire" && (
+      {/* Wire connection anchor (right side) — visible on hover or wire mode */}
+      {(hovered || mode === "wire") && (
         <div
           onMouseDown={handleWireAnchorDown}
           style={{
@@ -169,6 +188,8 @@ export default function TerminalNode({ terminal }: TerminalNodeProps) {
             border: "2px solid #1f2335",
             cursor: "crosshair",
             zIndex: 10,
+            opacity: mode === "wire" ? 1 : 0.6,
+            transition: "opacity 0.15s",
           }}
         />
       )}
