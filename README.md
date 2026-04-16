@@ -91,6 +91,10 @@ src-tauri/                    # Rust backend
 | State management | Zustand 5 |
 | Canvas grid | Konva (pointer-events: none background) |
 
+## Acknowledgments
+
+The name "TheMaestri" is inspired by [TheMaestri.app](https://www.themaestri.app) -- a polished, production-grade terminal orchestrator for macOS. If you're on a Mac, we highly recommend checking it out. This project is an independent, open-source exploration of similar ideas across all platforms. Respect and gratitude to the original TheMaestri team for the inspiration.
+
 ## License
 
 MIT
