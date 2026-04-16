@@ -1,0 +1,9 @@
+export const MIN_ZOOM = 0.1;
+export const MAX_ZOOM = 3.0;
+export const ZOOM_STEP = 0.1;
+export const GRID_SIZE = 50;
+export const TITLE_BAR_HEIGHT = 36;
+export const DEFAULT_TERMINAL_WIDTH = 600;
+export const DEFAULT_TERMINAL_HEIGHT = 400;
+export const DEFAULT_COLS = 80;
+export const DEFAULT_ROWS = 24;

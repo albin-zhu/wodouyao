@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Tauri
+src-tauri/target/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Screenshots / test artifacts
+*.png
+!src-tauri/icons/**/*.png
+!public/**/*.svg
+.playwright-mcp/
