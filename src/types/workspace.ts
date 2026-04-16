@@ -1,6 +1,7 @@
 export interface Workspace {
   id: string;
   name: string;
+  cwd?: string;
   canvas: {
     pan_x: number;
     pan_y: number;
@@ -22,6 +23,9 @@ export interface WorkspaceTerminalLayout {
   position: { x: number; y: number };
   size: { width: number; height: number };
   is_folded: boolean;
+  color?: string;
+  theme?: string;
+  cwd?: string;
 }
 
 export interface WorkspaceWireLayout {

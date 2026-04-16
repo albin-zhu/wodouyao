@@ -31,14 +31,14 @@ export default function CommandPalette() {
       id: "spawn",
       label: "New Terminal",
       description: "Create a new terminal window",
-      execute: (args) => spawn(args),
+      execute: (args) => spawn(args ? { command: args } : undefined),
     },
     {
       id: "spawn-with-cmd",
       label: "Run Command",
       description: "Create terminal and run a command",
       execute: (args) => {
-        if (args) spawn(args, `Run: ${args}`);
+        if (args) spawn({ command: args, name: `Run: ${args}` });
       },
     },
     {

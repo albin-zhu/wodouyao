@@ -3,6 +3,7 @@ import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasStore } from "../../store/canvasStore";
 import { useWireStore } from "../../store/wireStore";
 import { useTerminal } from "../../hooks/useTerminal";
+import { readTerminalBuffer } from "../../services/terminalRegistry";
 
 export default function TerminalPanel() {
   const [open, setOpen] = useState(true);
@@ -225,7 +226,7 @@ export default function TerminalPanel() {
                     width: 6,
                     height: 6,
                     borderRadius: "50%",
-                    background: statusColor(t.status),
+                    background: t.color ?? statusColor(t.status),
                     flexShrink: 0,
                   }}
                 />
@@ -252,6 +253,25 @@ export default function TerminalPanel() {
                   </span>
                 )}
               </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const content = readTerminalBuffer(t.id);
+                  navigator.clipboard.writeText(content).catch(console.error);
+                }}
+                title="Copy terminal buffer"
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#565f89",
+                  cursor: "pointer",
+                  fontSize: 11,
+                  padding: "0 4px",
+                  flexShrink: 0,
+                }}
+              >
+                {"\u2398"}
+              </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation();

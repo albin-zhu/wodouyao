@@ -7,6 +7,7 @@ import {
   DEFAULT_ROWS,
   TITLE_BAR_HEIGHT,
 } from "../utils/constants";
+import { DEFAULT_COLOR, DEFAULT_THEME } from "../utils/terminalThemes";
 import { generateId } from "../utils/id";
 
 interface TerminalStore {
@@ -46,6 +47,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       cols: overrides?.cols ?? DEFAULT_COLS,
       rows: overrides?.rows ?? DEFAULT_ROWS,
       createdAt: Date.now(),
+      color: overrides?.color ?? DEFAULT_COLOR,
+      theme: overrides?.theme ?? DEFAULT_THEME,
+      cwd: overrides?.cwd,
       ...overrides,
       // Ensure id is not overwritten by spread
     };

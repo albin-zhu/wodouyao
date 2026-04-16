@@ -32,6 +32,12 @@ pub struct TerminalNodeLayout {
     pub position: Position,
     pub size: Dimensions,
     pub is_folded: bool,
+    #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
+    pub theme: Option<String>,
+    #[serde(default)]
+    pub cwd: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -46,6 +52,8 @@ pub struct WireLayout {
 pub struct Workspace {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub cwd: Option<String>,
     pub canvas: CanvasState,
     pub terminals: Vec<TerminalNodeLayout>,
     #[serde(default)]

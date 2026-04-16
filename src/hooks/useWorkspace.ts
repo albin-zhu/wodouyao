@@ -40,6 +40,9 @@ export function useWorkspace() {
       position: { x: t.position.x, y: t.position.y },
       size: { width: t.size.width, height: t.size.height },
       is_folded: t.isFolded,
+      color: t.color,
+      theme: t.theme,
+      cwd: t.cwd,
     }));
 
     const wireLayouts: WorkspaceWireLayout[] = Array.from(wiresMap.values()).map((w) => ({
@@ -52,6 +55,7 @@ export function useWorkspace() {
     return {
       id: "",
       name: "",
+      cwd: useWorkspaceStore.getState().currentWorkspaceCwd ?? undefined,
       canvas: {
         pan_x: panX,
         pan_y: panY,
@@ -79,6 +83,9 @@ export function useWorkspace() {
       // Clear existing wires
       useWireStore.getState().clearAll();
 
+      // Restore workspace cwd
+      useWorkspaceStore.getState().setWorkspaceCwd(ws.cwd ?? null);
+
       // Restore canvas state
       setPan(ws.canvas.pan_x, ws.canvas.pan_y);
       useCanvasStore.setState({ zoom: ws.canvas.zoom });
@@ -93,6 +100,9 @@ export function useWorkspace() {
           position: { x: layout.position.x, y: layout.position.y },
           size: { width: layout.size.width, height: layout.size.height },
           isFolded: layout.is_folded,
+          color: layout.color,
+          theme: (layout.theme as TerminalNode["theme"]) ?? "tokyonight",
+          cwd: layout.cwd,
         };
 
         addTerminal(overrides);
@@ -103,6 +113,7 @@ export function useWorkspace() {
             command: layout.initial_command,
             cols: DEFAULT_COLS,
             rows: DEFAULT_ROWS,
+            cwd: layout.cwd ?? ws.cwd,
           });
         } catch (err) {
           console.error("[workspace] Failed to create terminal:", err);

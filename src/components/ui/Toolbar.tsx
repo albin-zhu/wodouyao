@@ -1,6 +1,7 @@
 import { useTerminalStore } from "../../store/terminalStore";
 import { useTerminal } from "../../hooks/useTerminal";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useDialogStore } from "../../store/dialogStore";
 import { useCanvasInteractionStore, type CanvasMode } from "../../store/canvasInteractionStore";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 
@@ -15,6 +16,7 @@ export default function Toolbar() {
   const { spawn } = useTerminal();
   const settings = useSettingsStore((s) => s.settings);
   const openDrawer = useSettingsStore((s) => s.openDrawer);
+  const openTerminalCreate = useDialogStore((s) => s.openTerminalCreate);
   const currentMode = useCanvasInteractionStore((s) => s.mode);
   const setMode = useCanvasInteractionStore((s) => s.setMode);
 
@@ -77,7 +79,7 @@ export default function Toolbar() {
         {quickCommands.map((cmd) => (
           <button
             key={cmd.id}
-            onClick={() => spawn(cmd.command, cmd.label)}
+            onClick={() => spawn({ command: cmd.command, name: cmd.label })}
             title={cmd.label}
             style={{
               background: "#292e42",
@@ -96,7 +98,14 @@ export default function Toolbar() {
         ))}
 
         <button
-          onClick={() => spawn()}
+          onClick={(e) => {
+            if (e.shiftKey) {
+              spawn();
+            } else {
+              openTerminalCreate();
+            }
+          }}
+          title="New terminal (Shift+click for quick create)"
           style={{
             background: "#7aa2f7",
             color: "#1a1b26",

@@ -1,5 +1,6 @@
 export type TerminalStatus = "starting" | "running" | "idle" | "error" | "terminated";
 export type ShellType = "Bash" | "Zsh" | "PowerShell" | "Pwsh" | "Cmd" | "Fish" | "Custom";
+export type TerminalTheme = "tokyonight" | "dracula" | "nord" | "monokai" | "solarized";
 
 export interface TerminalNode {
   id: string;
@@ -14,6 +15,9 @@ export interface TerminalNode {
   cols: number;
   rows: number;
   createdAt: number;
+  color: string;
+  theme: TerminalTheme;
+  cwd?: string;
 }
 
 export interface ShellInfo {

@@ -1,5 +1,7 @@
 import { useRef, useEffect, useCallback } from "react";
 import { useTerminalIO } from "../../hooks/useTerminalIO";
+import { useTerminalStore } from "../../store/terminalStore";
+import { TERMINAL_THEMES } from "../../utils/terminalThemes";
 import "@xterm/xterm/css/xterm.css";
 
 interface TerminalBodyProps {
@@ -9,6 +11,8 @@ interface TerminalBodyProps {
 export default function TerminalBody({ terminalId }: TerminalBodyProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { fit, termRef } = useTerminalIO(terminalId, containerRef);
+  const themeName = useTerminalStore((s) => s.terminals.get(terminalId)?.theme ?? "tokyonight");
+  const bg = TERMINAL_THEMES[themeName]?.background ?? "#1a1b26";
 
   const handleClick = useCallback(() => {
     termRef.current?.focus();
@@ -35,7 +39,7 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
         flex: 1,
         overflow: "hidden",
         padding: 4,
-        background: "#1a1b26",
+        background: bg,
       }}
     />
   );

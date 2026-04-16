@@ -10,10 +10,12 @@ import { generateId } from "../utils/id";
 
 interface WorkspaceStore {
   currentWorkspace: WorkspaceMeta | null;
+  currentWorkspaceCwd: string | null;
   workspaces: WorkspaceMeta[];
   loading: boolean;
 
   setCurrentWorkspace: (meta: WorkspaceMeta | null) => void;
+  setWorkspaceCwd: (cwd: string | null) => void;
   loadWorkspaceList: () => Promise<void>;
   saveCurrentWorkspace: (
     name: string | undefined,
@@ -37,10 +39,12 @@ interface WorkspaceStore {
 
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   currentWorkspace: null,
+  currentWorkspaceCwd: null,
   workspaces: [],
   loading: false,
 
   setCurrentWorkspace: (meta) => set({ currentWorkspace: meta }),
+  setWorkspaceCwd: (cwd) => set({ currentWorkspaceCwd: cwd }),
 
   loadWorkspaceList: async () => {
     try {
@@ -92,6 +96,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
           terminal_count: ws.terminals.length,
           updated_at: ws.updated_at,
         },
+        currentWorkspaceCwd: ws.cwd ?? null,
         loading: false,
       });
     } catch (e) {

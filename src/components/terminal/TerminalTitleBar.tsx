@@ -36,12 +36,23 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
         padding: "0 10px",
         background: "#1f2335",
         borderBottom: terminal.isFolded ? "none" : "1px solid #292e42",
+        borderLeft: `3px solid ${terminal.color}`,
         cursor: "grab",
         userSelect: "none",
         borderRadius: terminal.isFolded ? "8px" : "8px 8px 0 0",
       }}
     >
       <TerminalStatusBadge status={terminal.status} />
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: terminal.color,
+          marginRight: 8,
+          flexShrink: 0,
+        }}
+      />
       <span
         style={{
           flex: 1,

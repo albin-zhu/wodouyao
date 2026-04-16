@@ -5,37 +5,34 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { CanvasAddon } from "@xterm/addon-canvas";
 import { writeTerminal, resizeTerminal } from "../services/tauriCommands";
 import { listenTerminalOutput, listenTerminalExit } from "../services/tauriEvents";
+import { registerXterm, unregisterXterm } from "../services/terminalRegistry";
 import { useTerminalStore } from "../store/terminalStore";
+import { TERMINAL_THEMES } from "../utils/terminalThemes";
+import type { TerminalTheme } from "../types/terminal";
 
 export function useTerminalIO(terminalId: string, containerRef: React.RefObject<HTMLDivElement | null>) {
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const setStatus = useTerminalStore((s) => s.setStatus);
   const updateTerminal = useTerminalStore((s) => s.updateTerminal);
+  const themeRef = useRef<TerminalTheme>("tokyonight");
+
+  // Read initial theme from store
+  const initialTheme = useTerminalStore((s) => s.terminals.get(terminalId)?.theme ?? "tokyonight");
 
   // Single effect that handles attach + cleanup — works with React StrictMode
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
+    themeRef.current = initialTheme;
+    const xtermTheme = TERMINAL_THEMES[initialTheme] ?? TERMINAL_THEMES.tokyonight;
+
     const term = new Terminal({
       cursorBlink: true,
       fontSize: 14,
       fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
-      theme: {
-        background: "#1a1b26",
-        foreground: "#a9b1d6",
-        cursor: "#c0caf5",
-        selectionBackground: "#33467c",
-        black: "#15161e",
-        red: "#f7768e",
-        green: "#9ece6a",
-        yellow: "#e0af68",
-        blue: "#7aa2f7",
-        magenta: "#bb9af7",
-        cyan: "#7dcfff",
-        white: "#a9b1d6",
-      },
+      theme: xtermTheme,
     });
 
     const fitAddon = new FitAddon();
@@ -66,6 +63,9 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
     termRef.current = term;
     fitAddonRef.current = fitAddon;
 
+    // Register in global registry for cross-terminal operations
+    registerXterm(terminalId, term);
+
     // Send user input to backend PTY
     term.onData((data) => {
       const encoder = new TextEncoder();
@@ -89,6 +89,7 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
     // Cleanup — runs on unmount (and between StrictMode re-mounts)
     return () => {
       unlistenFns.forEach((fn) => fn());
+      unregisterXterm(terminalId);
       term.dispose();
       termRef.current = null;
       fitAddonRef.current = null;

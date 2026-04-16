@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useWorkspaceStore } from "../../store/workspaceStore";
 import { listAvailableShells } from "../../services/tauriCommands";
 import type { ShellInfo } from "../../types/terminal";
 import type { QuickCommand } from "../../types/settings";
@@ -7,18 +8,22 @@ import type { QuickCommand } from "../../types/settings";
 export default function SettingsDrawer() {
   const { settings, drawerOpen, closeDrawer, updateSettings } =
     useSettingsStore();
+  const workspaceCwd = useWorkspaceStore((s) => s.currentWorkspaceCwd);
+  const setWorkspaceCwd = useWorkspaceStore((s) => s.setWorkspaceCwd);
   const [shells, setShells] = useState<ShellInfo[]>([]);
   const [editingCmd, setEditingCmd] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editCommand, setEditCommand] = useState("");
+  const [cwdInput, setCwdInput] = useState("");
 
   useEffect(() => {
     if (drawerOpen) {
       listAvailableShells()
         .then(setShells)
         .catch(() => {});
+      setCwdInput(workspaceCwd ?? "");
     }
-  }, [drawerOpen]);
+  }, [drawerOpen, workspaceCwd]);
 
   if (!drawerOpen || !settings) return null;
 
@@ -124,6 +129,55 @@ export default function SettingsDrawer() {
         <div
           style={{ flex: 1, overflowY: "auto", padding: "0 16px" }}
         >
+          {/* Workspace Directory */}
+          <div style={sectionStyle}>
+            <div style={labelStyle}>Workspace Directory</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                value={cwdInput}
+                onChange={(e) => setCwdInput(e.target.value)}
+                onBlur={() => setWorkspaceCwd(cwdInput || null)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") setWorkspaceCwd(cwdInput || null);
+                }}
+                placeholder="Not set (system default)"
+                style={{
+                  flex: 1,
+                  padding: "8px 10px",
+                  background: "#13141b",
+                  border: "1px solid #292e42",
+                  borderRadius: 6,
+                  color: "#c0caf5",
+                  fontSize: 13,
+                  outline: "none",
+                }}
+              />
+              {cwdInput && (
+                <button
+                  onClick={() => {
+                    setCwdInput("");
+                    setWorkspaceCwd(null);
+                  }}
+                  title="Clear"
+                  style={{
+                    background: "#292e42",
+                    border: "none",
+                    color: "#565f89",
+                    borderRadius: 6,
+                    padding: "0 10px",
+                    cursor: "pointer",
+                    fontSize: 14,
+                  }}
+                >
+                  {"\u2715"}
+                </button>
+              )}
+            </div>
+            <div style={{ color: "#565f89", fontSize: 11, marginTop: 4 }}>
+              New terminals will open in this directory
+            </div>
+          </div>
+
           {/* Default Shell */}
           <div style={sectionStyle}>
             <div style={labelStyle}>Default Shell</div>

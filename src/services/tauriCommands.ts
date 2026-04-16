@@ -50,3 +50,13 @@ export async function getSettings(): Promise<AppSettings> {
 export async function updateSettings(settings: AppSettings): Promise<void> {
   return invoke<void>("update_settings", { settings });
 }
+
+export interface CliAgent {
+  name: string;
+  path: string;
+  available: boolean;
+}
+
+export async function detectCliAgents(): Promise<CliAgent[]> {
+  return invoke<CliAgent[]>("detect_cli_agents");
+}

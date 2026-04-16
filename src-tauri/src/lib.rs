@@ -26,6 +26,7 @@ pub fn run() {
             commands::workspace::delete_workspace,
             commands::settings::get_settings,
             commands::settings::update_settings,
+            commands::agents::detect_cli_agents,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
