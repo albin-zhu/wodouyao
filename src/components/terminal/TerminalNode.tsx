@@ -1,6 +1,7 @@
 import { useRef, useCallback, useState } from "react";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
+import { useTeamStore } from "../../store/teamStore";
 import { showTerminalContextMenu } from "./TerminalContextMenu";
 import TerminalTitleBar from "./TerminalTitleBar";
 import TerminalBody from "./TerminalBody";
@@ -16,6 +17,7 @@ export default function TerminalNode({ terminal }: TerminalNodeProps) {
   const mode = useCanvasInteractionStore((s) => s.mode);
   const setMode = useCanvasInteractionStore((s) => s.setMode);
   const setWireStart = useCanvasInteractionStore((s) => s.setWireStart);
+  const team = useTeamStore((s) => s.getTeamForTerminal(terminal.id));
   const dragStartRef = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
   const resizeStartRef = useRef<{
     mouseX: number;
@@ -150,7 +152,9 @@ export default function TerminalNode({ terminal }: TerminalNodeProps) {
         borderRadius: 8,
         border: mode === "wire" ? `1px solid ${terminal.color}` : `1px solid ${terminal.color}40`,
         overflow: "hidden",
-        boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
+        boxShadow: team
+          ? `0 4px 24px rgba(0,0,0,0.4), 0 0 0 3px ${team.palette.base}55`
+          : "0 4px 24px rgba(0,0,0,0.4)",
         transition: "height 0.2s ease",
         pointerEvents: "auto",
       }}
@@ -162,13 +166,18 @@ export default function TerminalNode({ terminal }: TerminalNodeProps) {
       {!terminal.isFolded && (
         <div
           onMouseDown={handleResizeStart}
+          title="Drag to resize"
           style={{
             position: "absolute",
             right: 0,
             bottom: 0,
-            width: 16,
-            height: 16,
+            width: 18,
+            height: 18,
             cursor: "se-resize",
+            pointerEvents: "auto",
+            zIndex: 5,
+            background: `linear-gradient(135deg, transparent 0 55%, ${terminal.color}66 55% 63%, transparent 63% 72%, ${terminal.color}99 72% 80%, transparent 80%)`,
+            borderBottomRightRadius: 8,
           }}
         />
       )}

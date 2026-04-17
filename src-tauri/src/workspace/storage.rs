@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+use crate::hub::{Team, Wire};
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Position {
     pub x: f64,
@@ -41,14 +43,6 @@ pub struct TerminalNodeLayout {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct WireLayout {
-    pub id: String,
-    pub source_id: String,
-    pub target_id: String,
-    pub forward_output: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
 pub struct Workspace {
     pub id: String,
     pub name: String,
@@ -57,7 +51,9 @@ pub struct Workspace {
     pub canvas: CanvasState,
     pub terminals: Vec<TerminalNodeLayout>,
     #[serde(default)]
-    pub wires: Vec<WireLayout>,
+    pub wires: Vec<Wire>,
+    #[serde(default)]
+    pub teams: Vec<Team>,
     pub created_at: u64,
     pub updated_at: u64,
 }
@@ -72,7 +68,7 @@ pub struct WorkspaceMeta {
 
 fn workspaces_dir() -> Result<PathBuf, String> {
     let base = dirs::data_dir().ok_or("Cannot find data directory")?;
-    let dir = base.join("com.themaestri.app").join("workspaces");
+    let dir = base.join("com.wodouyao.app").join("workspaces");
     fs::create_dir_all(&dir).map_err(|e| format!("Cannot create workspaces dir: {}", e))?;
     Ok(dir)
 }

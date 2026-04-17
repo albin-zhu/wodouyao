@@ -1,9 +1,14 @@
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize};
+use std::collections::VecDeque;
 use std::io::{Read, Write};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use tauri::{AppHandle, Emitter};
 
 use super::shell::ShellType;
+
+const RING_BUFFER_CAPACITY: usize = 64 * 1024;
 
 #[derive(serde::Serialize, Clone)]
 pub struct TerminalOutputPayload {
@@ -25,6 +30,8 @@ pub struct PtySession {
     pub shell_type: ShellType,
     pub cols: u16,
     pub rows: u16,
+    pub ring_buffer: Arc<Mutex<VecDeque<u8>>>,
+    pub subscribers: Arc<Mutex<Vec<mpsc::Sender<Vec<u8>>>>>,
 }
 
 impl PtySession {
@@ -35,6 +42,7 @@ impl PtySession {
         cols: u16,
         rows: u16,
         cwd: Option<&str>,
+        env: &[(String, String)],
         app_handle: AppHandle,
     ) -> Result<Self, String> {
         let pty_system = portable_pty::native_pty_system();
@@ -53,6 +61,9 @@ impl PtySession {
         let mut cmd = CommandBuilder::new(shell_path);
         if let Some(dir) = cwd {
             cmd.cwd(dir);
+        }
+        for (k, v) in env {
+            cmd.env(k, v);
         }
 
         let child = pair
@@ -73,6 +84,13 @@ impl PtySession {
             .try_clone_reader()
             .map_err(|e| format!("Failed to get PTY reader: {}", e))?;
 
+        let ring_buffer: Arc<Mutex<VecDeque<u8>>> =
+            Arc::new(Mutex::new(VecDeque::with_capacity(RING_BUFFER_CAPACITY)));
+        let ring_for_reader = Arc::clone(&ring_buffer);
+        let subscribers: Arc<Mutex<Vec<mpsc::Sender<Vec<u8>>>>> =
+            Arc::new(Mutex::new(Vec::new()));
+        let subscribers_for_reader = Arc::clone(&subscribers);
+
         // Use a plain std::thread instead of tokio — no runtime needed
         let reader_id = id.clone();
         thread::spawn(move || {
@@ -90,6 +108,24 @@ impl PtySession {
                         break;
                     }
                     Ok(n) => {
+                        if let Ok(mut ring) = ring_for_reader.lock() {
+                            let slice = &buf[..n];
+                            if slice.len() >= RING_BUFFER_CAPACITY {
+                                ring.clear();
+                                ring.extend(&slice[slice.len() - RING_BUFFER_CAPACITY..]);
+                            } else {
+                                let overflow = (ring.len() + slice.len())
+                                    .saturating_sub(RING_BUFFER_CAPACITY);
+                                for _ in 0..overflow {
+                                    ring.pop_front();
+                                }
+                                ring.extend(slice);
+                            }
+                        }
+                        if let Ok(mut subs) = subscribers_for_reader.lock() {
+                            let slice = &buf[..n];
+                            subs.retain(|s| s.send(slice.to_vec()).is_ok());
+                        }
                         let _ = app_handle.emit(
                             &format!("terminal-output-{}", reader_id),
                             TerminalOutputPayload {
@@ -122,6 +158,8 @@ impl PtySession {
             shell_type,
             cols,
             rows,
+            ring_buffer,
+            subscribers,
         };
 
         // If an initial command is provided, write it after a short delay
@@ -157,6 +195,24 @@ impl PtySession {
 
     pub fn kill(&mut self) {
         let _ = self.child.kill();
+    }
+
+    pub fn subscribe(&self) -> mpsc::Receiver<Vec<u8>> {
+        let (tx, rx) = mpsc::channel();
+        if let Ok(mut subs) = self.subscribers.lock() {
+            subs.push(tx);
+        }
+        rx
+    }
+
+    pub fn recent_output(&self, max_bytes: usize) -> Vec<u8> {
+        let Ok(ring) = self.ring_buffer.lock() else {
+            return Vec::new();
+        };
+        let len = ring.len();
+        let take = max_bytes.min(len);
+        let start = len - take;
+        ring.iter().skip(start).copied().collect()
     }
 }
 

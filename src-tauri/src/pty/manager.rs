@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::mpsc;
 use tauri::AppHandle;
 
 use super::session::PtySession;
@@ -6,6 +7,7 @@ use super::session::PtySession;
 pub struct PtyManager {
     sessions: HashMap<String, PtySession>,
     app_handle: Option<AppHandle>,
+    live_test_ids: HashSet<String>,
 }
 
 impl PtyManager {
@@ -13,6 +15,7 @@ impl PtyManager {
         PtyManager {
             sessions: HashMap::new(),
             app_handle: None,
+            live_test_ids: HashSet::new(),
         }
     }
 
@@ -28,6 +31,7 @@ impl PtyManager {
         cols: u16,
         rows: u16,
         cwd: Option<&str>,
+        env: &[(String, String)],
     ) -> Result<String, String> {
         let app_handle = self
             .app_handle
@@ -41,6 +45,7 @@ impl PtyManager {
             cols,
             rows,
             cwd,
+            env,
             app_handle,
         )?;
 
@@ -57,6 +62,23 @@ impl PtyManager {
         }
     }
 
+    pub fn has_session(&self, id: &str) -> bool {
+        self.sessions.contains_key(id) || self.live_test_ids.contains(id)
+    }
+
+    pub fn live_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self.sessions.keys().cloned().collect();
+        ids.extend(self.live_test_ids.iter().cloned());
+        ids
+    }
+
+    /// Test hook: pretend a session exists without actually spawning a PTY.
+    /// Used only by integration tests exercising the hub's liveness filter.
+    #[doc(hidden)]
+    pub fn mark_live_for_test(&mut self, id: String) {
+        self.live_test_ids.insert(id);
+    }
+
     pub fn write_to_session(&mut self, id: &str, data: &[u8]) -> Result<(), String> {
         if let Some(session) = self.sessions.get_mut(id) {
             session.write(data)
@@ -71,5 +93,20 @@ impl PtyManager {
         } else {
             Err(format!("Session {} not found", id))
         }
+    }
+
+    pub fn read_recent(&self, id: &str, max_bytes: usize) -> Result<Vec<u8>, String> {
+        if let Some(session) = self.sessions.get(id) {
+            Ok(session.recent_output(max_bytes))
+        } else {
+            Err(format!("Session {} not found", id))
+        }
+    }
+
+    pub fn subscribe(&self, id: &str) -> Result<mpsc::Receiver<Vec<u8>>, String> {
+        self.sessions
+            .get(id)
+            .map(|s| s.subscribe())
+            .ok_or_else(|| format!("Session {} not found", id))
     }
 }

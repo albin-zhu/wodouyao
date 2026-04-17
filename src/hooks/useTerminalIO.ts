@@ -3,7 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { CanvasAddon } from "@xterm/addon-canvas";
-import { writeTerminal, resizeTerminal } from "../services/tauriCommands";
+import { writeTerminal, resizeTerminal, destroyTerminal } from "../services/tauriCommands";
 import { listenTerminalOutput, listenTerminalExit } from "../services/tauriEvents";
 import { registerXterm, unregisterXterm } from "../services/terminalRegistry";
 import { useTerminalStore } from "../store/terminalStore";
@@ -82,6 +82,10 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
 
     listenTerminalExit(terminalId, (_exitCode) => {
       setStatus(terminalId, "terminated");
+      // Shell exited on its own; reap the backend session so the hub stops
+      // returning it as a live peer. Node stays visible with a "terminated"
+      // badge until the user closes it from the UI.
+      destroyTerminal(terminalId).catch(() => {});
     }).then((fn) => unlistenFns.push(fn)).catch(() => {});
 
     setStatus(terminalId, "running");

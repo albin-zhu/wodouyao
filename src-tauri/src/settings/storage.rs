@@ -11,11 +11,39 @@ pub struct QuickCommand {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct BackgroundSettings {
+    pub kind: String,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub particle: Option<String>,
+    #[serde(default = "default_opacity")]
+    pub opacity: f64,
+}
+
+fn default_opacity() -> f64 {
+    1.0
+}
+
+impl Default for BackgroundSettings {
+    fn default() -> Self {
+        BackgroundSettings {
+            kind: "none".into(),
+            source: None,
+            particle: Some("matrix".into()),
+            opacity: 1.0,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct AppSettings {
     pub default_shell_path: Option<String>,
     pub font_size: u16,
     pub last_workspace_id: Option<String>,
     pub quick_commands: Vec<QuickCommand>,
+    #[serde(default)]
+    pub background: BackgroundSettings,
 }
 
 impl Default for AppSettings {
@@ -24,6 +52,7 @@ impl Default for AppSettings {
             default_shell_path: None,
             font_size: 14,
             last_workspace_id: None,
+            background: BackgroundSettings::default(),
             quick_commands: vec![
                 QuickCommand {
                     id: "claude".into(),
@@ -50,7 +79,7 @@ impl Default for AppSettings {
 
 fn settings_path() -> Result<PathBuf, String> {
     let base = dirs::data_dir().ok_or("Cannot find data directory")?;
-    let dir = base.join("com.themaestri.app");
+    let dir = base.join("com.wodouyao.app");
     fs::create_dir_all(&dir).map_err(|e| format!("Cannot create settings dir: {}", e))?;
     Ok(dir.join("settings.json"))
 }

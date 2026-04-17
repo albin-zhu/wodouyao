@@ -22,9 +22,9 @@ export function useWorkspace() {
     loadWorkspaceById,
     loadWorkspaceList,
   } = useWorkspaceStore();
+  const currentWorkspaceCwd = useWorkspaceStore((s) => s.currentWorkspaceCwd);
   const { settings, updateSettings } = useSettingsStore();
   const wiresMap = useWireStore((s) => s.wires);
-  const addWire = useWireStore((s) => s.addWire);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initRef = useRef(false);
@@ -49,7 +49,7 @@ export function useWorkspace() {
       id: w.id,
       source_id: w.sourceId,
       target_id: w.targetId,
-      forward_output: w.forwardOutput,
+      forward_output: true,
     }));
 
     return {
@@ -80,8 +80,8 @@ export function useWorkspace() {
         removeTerminal(t.id);
       }
 
-      // Clear existing wires
-      useWireStore.getState().clearAll();
+      // Backend's load_workspace command has already seeded the wire topology
+      // from ws.wires; the frontend just mirrors that state below via hydrate().
 
       // Restore workspace cwd
       useWorkspaceStore.getState().setWorkspaceCwd(ws.cwd ?? null);
@@ -120,14 +120,10 @@ export function useWorkspace() {
         }
       }
 
-      // Restore wires
-      if (ws.wires) {
-        for (const wire of ws.wires) {
-          addWire(wire.source_id, wire.target_id);
-        }
-      }
+      // Pull the freshly seeded wire topology from the backend.
+      await useWireStore.getState().hydrate();
     },
-    [getTerminals, removeTerminal, addTerminal, addWire, setPan]
+    [getTerminals, removeTerminal, addTerminal, setPan]
   );
 
   // Auto-save: debounce 3s on terminal/canvas changes
@@ -147,7 +143,7 @@ export function useWorkspace() {
         clearTimeout(saveTimerRef.current);
       }
     };
-  }, [terminals, panX, panY, zoom, currentWorkspace, buildWorkspace, saveCurrentWorkspace]);
+  }, [terminals, panX, panY, zoom, currentWorkspaceCwd, currentWorkspace, buildWorkspace, saveCurrentWorkspace]);
 
   // Startup: load last workspace
   useEffect(() => {

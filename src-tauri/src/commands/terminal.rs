@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::pty::shell;
 use crate::state::AppState;
@@ -24,6 +24,31 @@ pub fn create_terminal(
         .shell_path
         .unwrap_or_else(|| shell::detect_default_shell().path);
 
+    let mut env = vec![
+        (
+            "WODOUYAO_ENDPOINT".to_string(),
+            state.hub.endpoint_path.to_string_lossy().into_owned(),
+        ),
+        ("WODOUYAO_ID".to_string(), request.id.clone()),
+    ];
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        // Tauri copies `bundle.resources` entries preserving their relative
+        // path, so `src-tauri/resources/bin/wodouyao` lands at
+        // `<resource_dir>/resources/bin/wodouyao` in both dev and bundled
+        // builds.
+        let bin_dir = resource_dir.join("resources").join("bin");
+        let bin_dir_str = bin_dir.to_string_lossy().into_owned();
+        let separator = if cfg!(windows) { ';' } else { ':' };
+        let new_path = match std::env::var("PATH") {
+            Ok(current) if !current.is_empty() => {
+                format!("{}{}{}", bin_dir_str, separator, current)
+            }
+            _ => bin_dir_str,
+        };
+        env.push(("PATH".to_string(), new_path));
+    }
+
     let mut manager = state.pty_manager.lock().map_err(|e| e.to_string())?;
     manager.set_app_handle(app);
     manager.create_session(
@@ -33,13 +58,21 @@ pub fn create_terminal(
         request.cols,
         request.rows,
         request.cwd.as_deref(),
+        &env,
     )
 }
 
 #[tauri::command]
 pub fn destroy_terminal(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    let mut manager = state.pty_manager.lock().map_err(|e| e.to_string())?;
-    manager.destroy_session(&id)
+    // Kill the PTY first; even if that fails, clean up the hub bookkeeping
+    // so peers stop seeing a dead terminal.
+    let pty_result = {
+        let mut manager = state.pty_manager.lock().map_err(|e| e.to_string())?;
+        manager.destroy_session(&id)
+    };
+    state.topology.remove_for_terminal(&id);
+    state.identities.remove(&id);
+    pty_result
 }
 
 #[tauri::command]

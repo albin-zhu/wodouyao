@@ -1,34 +1,72 @@
 import { create } from "zustand";
 import type { Wire } from "../types/wire";
-import { generateId } from "../utils/id";
+import {
+  wireCreate,
+  wireList,
+  wireRemove,
+  wireReplaceAll,
+  type WireIpc,
+} from "../services/tauriCommands";
 
 interface WireStore {
   wires: Map<string, Wire>;
 
-  addWire: (sourceId: string, targetId: string) => Wire;
-  removeWire: (wireId: string) => void;
+  hydrate: () => Promise<void>;
+  addWire: (sourceId: string, targetId: string) => Promise<Wire | null>;
+  removeWire: (wireId: string) => Promise<void>;
   getWiresForTerminal: (terminalId: string) => Wire[];
-  toggleForward: (wireId: string) => void;
   getWires: () => Wire[];
-  clearAll: () => void;
+  clearAll: () => Promise<void>;
+}
+
+function fromIpc(w: WireIpc): Wire {
+  return {
+    id: w.id,
+    sourceId: w.source_id,
+    targetId: w.target_id,
+  };
 }
 
 export const useWireStore = create<WireStore>((set, get) => ({
   wires: new Map(),
 
-  addWire: (sourceId, targetId) => {
-    const id = generateId();
-    const wire: Wire = { id, sourceId, targetId, forwardOutput: true };
-    const newMap = new Map(get().wires);
-    newMap.set(id, wire);
-    set({ wires: newMap });
-    return wire;
+  hydrate: async () => {
+    try {
+      const list = await wireList();
+      const next = new Map<string, Wire>();
+      for (const ipc of list) {
+        const w = fromIpc(ipc);
+        next.set(w.id, w);
+      }
+      set({ wires: next });
+    } catch (e) {
+      console.error("wireStore.hydrate failed:", e);
+    }
   },
 
-  removeWire: (wireId) => {
-    const newMap = new Map(get().wires);
-    newMap.delete(wireId);
-    set({ wires: newMap });
+  addWire: async (sourceId, targetId) => {
+    try {
+      const ipc = await wireCreate(sourceId, targetId);
+      const wire = fromIpc(ipc);
+      const next = new Map(get().wires);
+      next.set(wire.id, wire);
+      set({ wires: next });
+      return wire;
+    } catch (e) {
+      console.error("wireStore.addWire failed:", e);
+      return null;
+    }
+  },
+
+  removeWire: async (wireId) => {
+    try {
+      await wireRemove(wireId);
+    } catch (e) {
+      console.error("wireStore.removeWire failed:", e);
+    }
+    const next = new Map(get().wires);
+    next.delete(wireId);
+    set({ wires: next });
   },
 
   getWiresForTerminal: (terminalId) => {
@@ -37,15 +75,14 @@ export const useWireStore = create<WireStore>((set, get) => ({
     );
   },
 
-  toggleForward: (wireId) => {
-    const wire = get().wires.get(wireId);
-    if (!wire) return;
-    const newMap = new Map(get().wires);
-    newMap.set(wireId, { ...wire, forwardOutput: !wire.forwardOutput });
-    set({ wires: newMap });
-  },
-
   getWires: () => Array.from(get().wires.values()),
 
-  clearAll: () => set({ wires: new Map() }),
+  clearAll: async () => {
+    try {
+      await wireReplaceAll([]);
+    } catch (e) {
+      console.error("wireStore.clearAll failed:", e);
+    }
+    set({ wires: new Map() });
+  },
 }));

@@ -1,0 +1,822 @@
+#!/bin/sh
+# wodouyao — CLI wrapper around the in-process wodouyao hub HTTP API.
+# Strict POSIX sh, no bashisms.
+set -eu
+
+SELF=wodouyao
+
+die() { printf '%s: %s\n' "$SELF" "$1" >&2; exit "${2:-1}"; }
+
+usage() {
+    cat >&2 <<'EOF'
+Usage: wodouyao <subcommand> [args]
+  peers                              list peer terminal ids (one per line)
+  whoami                             print this terminal's registered identity
+  hello [--name N] [--kind K] [--caps a,b,c]
+                                     register this terminal's identity
+  spawn [--name N] [--kind K] [--command C] [--cwd P] [--no-wire]
+        [--team T] [--team-role R]
+                                     create a new terminal (auto-wired from caller
+                                     by default); prints the new id on stdout
+  send <peer> [--raw|--keys] <text>  send text (default mode: keys)
+  read <peer> [--bytes N]            read recent output (default N=16384)
+  watch <peer>                       stream a peer's output until Ctrl+C
+  team create <name> [--palette K] [--as-lead]
+                                     create a team; prints new team id
+  team list                          list teams, one per line
+  team info <name-or-id>             pretty-print team JSON
+  team join <name-or-id> [--role R]  join a team
+  team leave <name-or-id>            leave a team
+  team dissolve <name-or-id>         dissolve a team
+  team task add <team> "<subject>" [--desc "..."] [--blocked-by id,id]
+                                     create a team task; prints new task id
+  team task list <team>              list team tasks
+  team task take <team> <task-id>    claim a task (sets owner + in_progress)
+  team task done <team> <task-id>    mark a task completed
+  team task assign <team> <task-id> <peer-id>
+                                     assign a task to a peer
+  team bcast <team> "<msg>"          broadcast to all team members
+  team dm <team> <role> "<msg>"      direct message members by role
+EOF
+    exit "${1:-1}"
+}
+
+# extract_field <key> <file> — pull a string field from a flat JSON object.
+extract_field() {
+    _f=$1; _file=$2
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))[sys.argv[2]])' \
+            "$_file" "$_f" 2>/dev/null
+    else
+        grep -o "\"$_f\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$_file" 2>/dev/null \
+            | sed "s/.*\"$_f\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/"
+    fi
+}
+
+# json_escape <string> — emit a JSON string literal (including surrounding quotes).
+json_escape() {
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$1" | python3 -c 'import json,sys;sys.stdout.write(json.dumps(sys.stdin.read()))'
+    else
+        # Fallback: escape backslash then double-quote; wrap in quotes.
+        printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e '1s/^/"/' -e '$s/$/"/'
+    fi
+}
+
+load_endpoint() {
+    if [ -z "${WODOUYAO_ENDPOINT:-}" ] || [ -z "${WODOUYAO_ID:-}" ]; then
+        die "not running inside a wodouyao terminal" 2
+    fi
+    [ -r "$WODOUYAO_ENDPOINT" ] || die "malformed endpoint file" 3
+    URL=$(extract_field url "$WODOUYAO_ENDPOINT") || die "malformed endpoint file" 3
+    TOKEN=$(extract_field token "$WODOUYAO_ENDPOINT") || die "malformed endpoint file" 3
+    [ -n "$URL" ] && [ -n "$TOKEN" ] || die "malformed endpoint file" 3
+}
+
+curl_auth() { curl -sS -H "Authorization: Bearer $TOKEN" "$@"; }
+
+cmd_peers() {
+    load_endpoint
+    _body=$(curl_auth -f "$URL/v1/peers?from=$WODOUYAO_ID") \
+        || die "failed to fetch peers"
+    # Response is now a JSON array of identity objects. Extract .id from each.
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_body" | python3 -c '
+import json, sys
+for e in json.load(sys.stdin):
+    print(e.get("id", ""))
+'
+    else
+        # POSIX fallback: grep every `"id":"..."` occurrence.
+        printf '%s' "$_body" \
+            | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' \
+            | sed 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/'
+    fi
+}
+
+cmd_whoami() {
+    load_endpoint
+    curl_auth -f "$URL/v1/whoami?id=$WODOUYAO_ID" || die "whoami failed"
+    printf '\n'
+}
+
+cmd_hello() {
+    _name=""
+    _kind=""
+    _caps=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --name) [ $# -ge 2 ] || die "--name requires a value"
+                    _name=$2; shift 2 ;;
+            --kind) [ $# -ge 2 ] || die "--kind requires a value"
+                    _kind=$2; shift 2 ;;
+            --caps) [ $# -ge 2 ] || die "--caps requires a comma-separated list"
+                    _caps=$2; shift 2 ;;
+            *) die "unknown argument: $1" ;;
+        esac
+    done
+    load_endpoint
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WODOUYAO_HELLO_ID=$WODOUYAO_ID \
+                WODOUYAO_HELLO_NAME=$_name \
+                WODOUYAO_HELLO_KIND=$_kind \
+                WODOUYAO_HELLO_CAPS=$_caps \
+                python3 -c '
+import json, os
+caps = os.environ.get("WODOUYAO_HELLO_CAPS", "")
+caps_list = [c.strip() for c in caps.split(",") if c.strip()]
+obj = {"id": os.environ["WODOUYAO_HELLO_ID"]}
+name = os.environ.get("WODOUYAO_HELLO_NAME", "")
+kind = os.environ.get("WODOUYAO_HELLO_KIND", "")
+if name:
+    obj["name"] = name
+if kind:
+    obj["agent_kind"] = kind
+if caps_list:
+    obj["capabilities"] = caps_list
+print(json.dumps(obj))
+')
+    else
+        _name_j=$(json_escape "$_name")
+        _kind_j=$(json_escape "$_kind")
+        # Fallback: caps becomes ["a","b"] via awk.
+        _caps_j=$(printf '%s' "$_caps" \
+            | awk -F, 'BEGIN{printf "["} {for(i=1;i<=NF;i++){if($i!=""){if(out)printf ",";printf "\"%s\"",$i;out=1}}} END{printf "]"}')
+        _body=$(printf '{"id":"%s","name":%s,"agent_kind":%s,"capabilities":%s}' \
+            "$WODOUYAO_ID" "$_name_j" "$_kind_j" "$_caps_j")
+    fi
+    _code=$(curl_auth -o /dev/null -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/self") || die "hello failed"
+    [ "$_code" = 200 ] || die "hello failed (HTTP $_code)"
+}
+
+cmd_send() {
+    [ $# -gt 0 ] || usage
+    _peer=$1; shift
+    _mode=keys
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --raw)  _mode=raw;  shift ;;
+            --keys) _mode=keys; shift ;;
+            --)     shift; break ;;
+            -*)     die "unknown flag: $1" ;;
+            *)      break ;;
+        esac
+    done
+    [ $# -gt 0 ] || die "send: missing text"
+    _text=$*
+    load_endpoint
+    _encoded=$(json_escape "$_text")
+    _body=$(printf '{"from":"%s","to":"%s","text":%s,"mode":"%s"}' \
+        "$WODOUYAO_ID" "$_peer" "$_encoded" "$_mode")
+    _code=$(curl_auth -o /dev/null -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/send") || die "send failed"
+    case $_code in
+        204) : ;;
+        403) printf '%s: no wire to %s\n' "$SELF" "$_peer" >&2; exit 4 ;;
+        *)   die "send failed (HTTP $_code)" ;;
+    esac
+}
+
+cmd_read() {
+    [ $# -gt 0 ] || usage
+    _peer=$1; shift
+    _bytes=16384
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --bytes) [ $# -ge 2 ] || die "--bytes requires a value"
+                     _bytes=$2; shift 2 ;;
+            *) die "unknown argument: $1" ;;
+        esac
+    done
+    load_endpoint
+    curl_auth -f "$URL/v1/read?from=$WODOUYAO_ID&to=$_peer&bytes=$_bytes" \
+        || die "read failed"
+}
+
+cmd_watch() {
+    [ $# -gt 0 ] || usage
+    _peer=$1; shift
+    load_endpoint
+    # -N disables curl's output buffering so chunks stream through as they
+    # arrive. -f makes curl fail early on HTTP 4xx/5xx. The server closes the
+    # connection when the peer session ends; otherwise the user Ctrl+Cs.
+    curl_auth -fN "$URL/v1/watch?from=$WODOUYAO_ID&to=$_peer"
+}
+
+# resolve_team_id <name-or-id> — echo team id to stdout; exit 4 if not found.
+resolve_team_id() {
+    _arg=$1
+    # Looks like an id already (team_<hex>): pass through.
+    case $_arg in
+        team_*)
+            _rest=${_arg#team_}
+            if printf '%s' "$_rest" | grep -Eq '^[a-f0-9]+$'; then
+                printf '%s' "$_arg"
+                return 0
+            fi
+            ;;
+    esac
+    _list=$(curl_auth -f "$URL/v1/teams") || die "team lookup failed"
+    if command -v python3 >/dev/null 2>&1; then
+        _found=$(printf '%s' "$_list" | \
+            WODOUYAO_LOOKUP_NAME=$_arg python3 -c '
+import json, os, sys
+name = os.environ["WODOUYAO_LOOKUP_NAME"]
+try:
+    teams = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for t in teams:
+    if t.get("name") == name or t.get("id") == name:
+        print(t.get("id", ""))
+        break
+')
+    else
+        _found=$(printf '%s' "$_list" | tr ',' '\n' \
+            | awk -v n="$_arg" '
+                /"id"[[:space:]]*:[[:space:]]*"/ {
+                    sub(/.*"id"[[:space:]]*:[[:space:]]*"/, ""); sub(/".*/, "");
+                    id=$0; next
+                }
+                /"name"[[:space:]]*:[[:space:]]*"/ {
+                    sub(/.*"name"[[:space:]]*:[[:space:]]*"/, ""); sub(/".*/, "");
+                    if ($0==n) { print id; exit }
+                }')
+    fi
+    [ -n "$_found" ] || { printf '%s: team not found: %s\n' "$SELF" "$_arg" >&2; exit 4; }
+    printf '%s' "$_found"
+}
+
+cmd_team_create() {
+    _name=""
+    _palette=""
+    _as_lead=0
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --palette) [ $# -ge 2 ] || die "--palette requires a value"
+                       _palette=$2; shift 2 ;;
+            --as-lead) _as_lead=1; shift ;;
+            -*)        die "unknown flag: $1" ;;
+            *)         [ -z "$_name" ] || die "team create: multiple names given"
+                       _name=$1; shift ;;
+        esac
+    done
+    [ -n "$_name" ] || die "team create: missing <name>"
+    load_endpoint
+    _lead=""
+    if [ "$_as_lead" = 1 ]; then
+        _lead=$WODOUYAO_ID
+    fi
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WODOUYAO_T_NAME=$_name \
+                WODOUYAO_T_PALETTE=$_palette \
+                WODOUYAO_T_LEAD=$_lead \
+                python3 -c '
+import json, os
+obj = {"name": os.environ["WODOUYAO_T_NAME"]}
+p = os.environ.get("WODOUYAO_T_PALETTE", "")
+if p:
+    obj["palette"] = p
+lead = os.environ.get("WODOUYAO_T_LEAD", "")
+if lead:
+    obj["lead"] = lead
+print(json.dumps(obj))
+')
+    else
+        _name_j=$(json_escape "$_name")
+        _body="{\"name\":$_name_j"
+        if [ -n "$_palette" ]; then
+            _p_j=$(json_escape "$_palette")
+            _body="$_body,\"palette\":$_p_j"
+        fi
+        if [ -n "$_lead" ]; then
+            _l_j=$(json_escape "$_lead")
+            _body="$_body,\"lead\":$_l_j"
+        fi
+        _body="$_body}"
+    fi
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/teams") \
+        || { rm -f "$_tmp"; die "team create failed"; }
+    case $_code in
+        200|201)
+            _id=$(extract_field id "$_tmp")
+            rm -f "$_tmp"
+            [ -n "$_id" ] || die "team create: response missing id"
+            printf '%s\n' "$_id"
+            ;;
+        409) _err=$(cat "$_tmp"); rm -f "$_tmp"
+             printf '%s: team name already exists: %s\n' "$SELF" "$_name" >&2; exit 4 ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "team create failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_team_list() {
+    load_endpoint
+    _body=$(curl_auth -f "$URL/v1/teams") || die "team list failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_body" | python3 -c '
+import json, sys
+try:
+    teams = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for t in teams:
+    pid = (t.get("palette") or {})
+    pkey = pid.get("key") if isinstance(pid, dict) else pid
+    members = t.get("members") or []
+    print("%s  %s  %d members  palette=%s" % (
+        t.get("id", ""), t.get("name", ""), len(members), pkey or ""))
+'
+    else
+        # Crude fallback: emit one raw object per line.
+        printf '%s\n' "$_body"
+    fi
+}
+
+cmd_team_info() {
+    [ $# -gt 0 ] || die "team info: missing <name-or-id>"
+    load_endpoint
+    _id=$(resolve_team_id "$1")
+    _body=$(curl_auth -f "$URL/v1/teams/$_id") || die "team info failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_body" | python3 -m json.tool
+    else
+        printf '%s\n' "$_body"
+    fi
+}
+
+# _post_team_action <id> <action> <body> — POST to /v1/teams/<id>/<action>.
+_post_team_action() {
+    _id=$1; _action=$2; _body=$3
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/teams/$_id/$_action") \
+        || { rm -f "$_tmp"; die "team $_action failed"; }
+    case $_code in
+        200|204) rm -f "$_tmp" ;;
+        404)     rm -f "$_tmp"
+                 printf '%s: team not found: %s\n' "$SELF" "$_id" >&2; exit 4 ;;
+        409)     _err=$(cat "$_tmp"); rm -f "$_tmp"
+                 printf '%s: team %s rejected (409): %s\n' "$SELF" "$_action" "$_err" >&2
+                 exit 4 ;;
+        *)       _err=$(cat "$_tmp"); rm -f "$_tmp"
+                 die "team $_action failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_team_join() {
+    _target=""
+    _role=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --role) [ $# -ge 2 ] || die "--role requires a value"
+                    _role=$2; shift 2 ;;
+            -*)     die "unknown flag: $1" ;;
+            *)      [ -z "$_target" ] || die "team join: multiple targets"
+                    _target=$1; shift ;;
+        esac
+    done
+    [ -n "$_target" ] || die "team join: missing <name-or-id>"
+    load_endpoint
+    _id=$(resolve_team_id "$_target")
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WODOUYAO_T_TERM=$WODOUYAO_ID \
+                WODOUYAO_T_ROLE=$_role \
+                python3 -c '
+import json, os
+obj = {"term_id": os.environ["WODOUYAO_T_TERM"]}
+r = os.environ.get("WODOUYAO_T_ROLE", "")
+if r:
+    obj["role"] = r
+print(json.dumps(obj))
+')
+    else
+        _t_j=$(json_escape "$WODOUYAO_ID")
+        _body="{\"term_id\":$_t_j"
+        if [ -n "$_role" ]; then
+            _r_j=$(json_escape "$_role")
+            _body="$_body,\"role\":$_r_j"
+        fi
+        _body="$_body}"
+    fi
+    _post_team_action "$_id" join "$_body"
+}
+
+cmd_team_leave() {
+    [ $# -gt 0 ] || die "team leave: missing <name-or-id>"
+    load_endpoint
+    _id=$(resolve_team_id "$1")
+    _t_j=$(json_escape "$WODOUYAO_ID")
+    _body="{\"term_id\":$_t_j}"
+    _post_team_action "$_id" leave "$_body"
+}
+
+cmd_team_dissolve() {
+    [ $# -gt 0 ] || die "team dissolve: missing <name-or-id>"
+    load_endpoint
+    _id=$(resolve_team_id "$1")
+    _post_team_action "$_id" dissolve "{}"
+}
+
+# _patch_team_task <team-id> <task-id> <body> — PATCH /v1/teams/<id>/tasks/<tid>.
+_patch_team_task() {
+    _id=$1; _tid=$2; _body=$3
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X PATCH -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/teams/$_id/tasks/$_tid") \
+        || { rm -f "$_tmp"; die "task patch failed"; }
+    case $_code in
+        200|204) rm -f "$_tmp" ;;
+        404)     rm -f "$_tmp"
+                 printf '%s: task not found: %s\n' "$SELF" "$_tid" >&2; exit 4 ;;
+        *)       _err=$(cat "$_tmp"); rm -f "$_tmp"
+                 die "task patch failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_team_task_add() {
+    _team=""
+    _subject=""
+    _desc=""
+    _blocked=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --desc)       [ $# -ge 2 ] || die "--desc requires a value"
+                          _desc=$2; shift 2 ;;
+            --blocked-by) [ $# -ge 2 ] || die "--blocked-by requires a value"
+                          _blocked=$2; shift 2 ;;
+            -*)           die "unknown flag: $1" ;;
+            *)            if [ -z "$_team" ]; then _team=$1
+                          elif [ -z "$_subject" ]; then _subject=$1
+                          else die "team task add: too many arguments"
+                          fi
+                          shift ;;
+        esac
+    done
+    [ -n "$_team" ] || die "team task add: missing <team>"
+    [ -n "$_subject" ] || die "team task add: missing <subject>"
+    load_endpoint
+    _id=$(resolve_team_id "$_team")
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WODOUYAO_T_SUBJ=$_subject \
+                WODOUYAO_T_DESC=$_desc \
+                WODOUYAO_T_BY=$WODOUYAO_ID \
+                WODOUYAO_T_BLOCK=$_blocked \
+                python3 -c '
+import json, os
+obj = {"subject": os.environ["WODOUYAO_T_SUBJ"],
+       "created_by": os.environ["WODOUYAO_T_BY"]}
+d = os.environ.get("WODOUYAO_T_DESC", "")
+if d:
+    obj["description"] = d
+b = os.environ.get("WODOUYAO_T_BLOCK", "")
+blk = [x.strip() for x in b.split(",") if x.strip()]
+if blk:
+    obj["blocked_by"] = blk
+print(json.dumps(obj))
+')
+    else
+        _s_j=$(json_escape "$_subject")
+        _by_j=$(json_escape "$WODOUYAO_ID")
+        _body="{\"subject\":$_s_j,\"created_by\":$_by_j"
+        if [ -n "$_desc" ]; then
+            _d_j=$(json_escape "$_desc")
+            _body="$_body,\"description\":$_d_j"
+        fi
+        if [ -n "$_blocked" ]; then
+            _blk_j=$(printf '%s' "$_blocked" \
+                | awk -F, 'BEGIN{printf "["} {for(i=1;i<=NF;i++){if($i!=""){if(out)printf ",";printf "\"%s\"",$i;out=1}}} END{printf "]"}')
+            _body="$_body,\"blocked_by\":$_blk_j"
+        fi
+        _body="$_body}"
+    fi
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/teams/$_id/tasks") \
+        || { rm -f "$_tmp"; die "team task add failed"; }
+    case $_code in
+        200|201)
+            _tid=$(extract_field id "$_tmp")
+            rm -f "$_tmp"
+            [ -n "$_tid" ] || die "team task add: response missing id"
+            printf '%s\n' "$_tid"
+            ;;
+        404) rm -f "$_tmp"
+             printf '%s: team not found: %s\n' "$SELF" "$_team" >&2; exit 4 ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "team task add failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_team_task_list() {
+    [ $# -gt 0 ] || die "team task list: missing <team>"
+    load_endpoint
+    _id=$(resolve_team_id "$1")
+    _body=$(curl_auth -f "$URL/v1/teams/$_id/tasks") || die "team task list failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_body" | python3 -c '
+import json, sys
+try:
+    tasks = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for t in tasks:
+    line = "%s  %s  %s" % (
+        t.get("id", ""), t.get("status", ""), t.get("subject", ""))
+    owner = t.get("owner") or ""
+    if owner:
+        line += "  [owner=%s]" % owner
+    print(line)
+'
+    else
+        printf '%s\n' "$_body"
+    fi
+}
+
+cmd_team_task_take() {
+    [ $# -ge 2 ] || die "team task take: usage <team> <task-id>"
+    load_endpoint
+    _id=$(resolve_team_id "$1")
+    _tid=$2
+    _by_j=$(json_escape "$WODOUYAO_ID")
+    _body="{\"owner\":$_by_j,\"status\":\"in_progress\"}"
+    _patch_team_task "$_id" "$_tid" "$_body"
+}
+
+cmd_team_task_done() {
+    [ $# -ge 2 ] || die "team task done: usage <team> <task-id>"
+    load_endpoint
+    _id=$(resolve_team_id "$1")
+    _tid=$2
+    _patch_team_task "$_id" "$_tid" '{"status":"completed"}'
+}
+
+cmd_team_task_assign() {
+    [ $# -ge 3 ] || die "team task assign: usage <team> <task-id> <peer-id>"
+    load_endpoint
+    _id=$(resolve_team_id "$1")
+    _tid=$2
+    _peer=$3
+    _p_j=$(json_escape "$_peer")
+    _body="{\"owner\":$_p_j}"
+    _patch_team_task "$_id" "$_tid" "$_body"
+}
+
+cmd_team_task() {
+    [ $# -gt 0 ] || die "team task: missing subcommand (add|list|take|done|assign)"
+    _sub=$1; shift
+    case $_sub in
+        add)    cmd_team_task_add    "$@" ;;
+        list)   cmd_team_task_list   "$@" ;;
+        take)   cmd_team_task_take   "$@" ;;
+        done)   cmd_team_task_done   "$@" ;;
+        assign) cmd_team_task_assign "$@" ;;
+        *)      die "team task: unknown subcommand: $_sub" ;;
+    esac
+}
+
+cmd_team_bcast() {
+    [ $# -ge 2 ] || die "team bcast: usage <team> <msg>"
+    _team=$1; shift
+    _text=$*
+    load_endpoint
+    _id=$(resolve_team_id "$_team")
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WODOUYAO_T_FROM=$WODOUYAO_ID \
+                WODOUYAO_T_TEXT=$_text \
+                python3 -c '
+import json, os
+print(json.dumps({
+    "from": os.environ["WODOUYAO_T_FROM"],
+    "text": os.environ["WODOUYAO_T_TEXT"],
+    "mode": "keys",
+}))
+')
+    else
+        _from_j=$(json_escape "$WODOUYAO_ID")
+        _text_j=$(json_escape "$_text")
+        _body=$(printf '{"from":%s,"text":%s,"mode":"keys"}' "$_from_j" "$_text_j")
+    fi
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/teams/$_id/broadcast") \
+        || { rm -f "$_tmp"; die "team bcast failed"; }
+    case $_code in
+        200|204)
+            if command -v python3 >/dev/null 2>&1; then
+                _failed=$(python3 -c '
+import json, sys
+try:
+    r = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+f = r.get("failed") or []
+if f:
+    print(",".join(str(x) for x in f))
+' "$_tmp" 2>/dev/null)
+                if [ -n "$_failed" ]; then
+                    printf '%s: bcast partial failure: %s\n' "$SELF" "$_failed" >&2
+                fi
+            fi
+            rm -f "$_tmp"
+            ;;
+        404) rm -f "$_tmp"
+             printf '%s: team not found: %s\n' "$SELF" "$_team" >&2; exit 4 ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "team bcast failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_team_dm() {
+    [ $# -ge 3 ] || die "team dm: usage <team> <role> <msg>"
+    _team=$1; shift
+    _role=$1; shift
+    _text=$*
+    load_endpoint
+    _id=$(resolve_team_id "$_team")
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WODOUYAO_T_FROM=$WODOUYAO_ID \
+                WODOUYAO_T_ROLE=$_role \
+                WODOUYAO_T_TEXT=$_text \
+                python3 -c '
+import json, os
+print(json.dumps({
+    "from": os.environ["WODOUYAO_T_FROM"],
+    "to_role": os.environ["WODOUYAO_T_ROLE"],
+    "text": os.environ["WODOUYAO_T_TEXT"],
+    "mode": "keys",
+}))
+')
+    else
+        _from_j=$(json_escape "$WODOUYAO_ID")
+        _role_j=$(json_escape "$_role")
+        _text_j=$(json_escape "$_text")
+        _body=$(printf '{"from":%s,"to_role":%s,"text":%s,"mode":"keys"}' \
+            "$_from_j" "$_role_j" "$_text_j")
+    fi
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/teams/$_id/dm") \
+        || { rm -f "$_tmp"; die "team dm failed"; }
+    case $_code in
+        200|204)
+            if command -v python3 >/dev/null 2>&1; then
+                _failed=$(python3 -c '
+import json, sys
+try:
+    r = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+f = r.get("failed") or []
+if f:
+    print(",".join(str(x) for x in f))
+' "$_tmp" 2>/dev/null)
+                if [ -n "$_failed" ]; then
+                    printf '%s: dm partial failure: %s\n' "$SELF" "$_failed" >&2
+                fi
+            fi
+            rm -f "$_tmp"
+            ;;
+        404) rm -f "$_tmp"
+             printf '%s: team not found: %s\n' "$SELF" "$_team" >&2; exit 4 ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "team dm failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_team() {
+    [ $# -gt 0 ] || die "team: missing subcommand (create|list|info|join|leave|dissolve|task|bcast|dm)"
+    _sub=$1; shift
+    case $_sub in
+        create)   cmd_team_create   "$@" ;;
+        list)     cmd_team_list     "$@" ;;
+        info)     cmd_team_info     "$@" ;;
+        join)     cmd_team_join     "$@" ;;
+        leave)    cmd_team_leave    "$@" ;;
+        dissolve) cmd_team_dissolve "$@" ;;
+        task)     cmd_team_task     "$@" ;;
+        bcast)    cmd_team_bcast    "$@" ;;
+        dm)       cmd_team_dm       "$@" ;;
+        *)        die "team: unknown subcommand: $_sub" ;;
+    esac
+}
+
+cmd_spawn() {
+    _name=""
+    _kind=""
+    _command=""
+    _cwd=""
+    _team=""
+    _team_role=""
+    _wire=1
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --name)      [ $# -ge 2 ] || die "--name requires a value"
+                         _name=$2; shift 2 ;;
+            --kind)      [ $# -ge 2 ] || die "--kind requires a value"
+                         _kind=$2; shift 2 ;;
+            --command)   [ $# -ge 2 ] || die "--command requires a value"
+                         _command=$2; shift 2 ;;
+            --cwd)       [ $# -ge 2 ] || die "--cwd requires a value"
+                         _cwd=$2; shift 2 ;;
+            --team)      [ $# -ge 2 ] || die "--team requires a value"
+                         _team=$2; shift 2 ;;
+            --team-role) [ $# -ge 2 ] || die "--team-role requires a value"
+                         _team_role=$2; shift 2 ;;
+            --no-wire)   _wire=0; shift ;;
+            *) die "unknown argument: $1" ;;
+        esac
+    done
+    load_endpoint
+
+    if [ "$_wire" = 1 ]; then
+        _from=$WODOUYAO_ID
+    else
+        _from=""
+    fi
+
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WODOUYAO_SPAWN_NAME=$_name \
+                WODOUYAO_SPAWN_KIND=$_kind \
+                WODOUYAO_SPAWN_CMD=$_command \
+                WODOUYAO_SPAWN_CWD=$_cwd \
+                WODOUYAO_SPAWN_FROM=$_from \
+                WODOUYAO_SPAWN_TEAM=$_team \
+                WODOUYAO_SPAWN_TEAM_ROLE=$_team_role \
+                python3 -c '
+import json, os
+obj = {}
+for key, env in [
+    ("name",           "WODOUYAO_SPAWN_NAME"),
+    ("kind",           "WODOUYAO_SPAWN_KIND"),
+    ("command",        "WODOUYAO_SPAWN_CMD"),
+    ("cwd",            "WODOUYAO_SPAWN_CWD"),
+    ("auto_wire_from", "WODOUYAO_SPAWN_FROM"),
+    ("team",           "WODOUYAO_SPAWN_TEAM"),
+    ("team_role",      "WODOUYAO_SPAWN_TEAM_ROLE"),
+]:
+    v = os.environ.get(env, "")
+    if v:
+        obj[key] = v
+print(json.dumps(obj))
+')
+    else
+        # Minimal fallback: manual JSON assembly without embedded quotes in values.
+        _body="{"
+        _sep=""
+        _append() {
+            _k=$1; _v=$2
+            [ -n "$_v" ] || return 0
+            _vj=$(printf '%s' "$_v" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+            _body="$_body$_sep\"$_k\":\"$_vj\""
+            _sep=","
+        }
+        _append name           "$_name"
+        _append kind           "$_kind"
+        _append command        "$_command"
+        _append cwd            "$_cwd"
+        _append auto_wire_from "$_from"
+        _append team           "$_team"
+        _append team_role      "$_team_role"
+        _body="$_body}"
+    fi
+
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/spawn") || { rm -f "$_tmp"; die "spawn failed"; }
+    case $_code in
+        200) cat "$_tmp"; printf '\n' ;;
+        503) rm -f "$_tmp"; die "spawn failed: frontend not ready yet (try again in a moment)" ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "spawn failed (HTTP $_code): $_err" ;;
+    esac
+    rm -f "$_tmp"
+}
+
+[ $# -gt 0 ] || usage
+sub=$1; shift
+case $sub in
+    peers)          cmd_peers "$@" ;;
+    whoami)         cmd_whoami "$@" ;;
+    hello)          cmd_hello "$@" ;;
+    spawn)          cmd_spawn "$@" ;;
+    send)           cmd_send  "$@" ;;
+    read)           cmd_read  "$@" ;;
+    watch)          cmd_watch "$@" ;;
+    team)           cmd_team  "$@" ;;
+    -h|--help|help) usage 0 ;;
+    *)              die "unknown subcommand: $sub" ;;
+esac

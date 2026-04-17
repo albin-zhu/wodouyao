@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-TheMaestri is a cross-platform infinite canvas terminal multiplexer built with Tauri 2 + React 19 + TypeScript. Users place PTY-backed terminal windows on a zoomable canvas and connect them with wires.
+Wodouyao is a cross-platform infinite canvas terminal multiplexer built with Tauri 2 + React 19 + TypeScript. Users place PTY-backed terminal windows on a zoomable canvas and connect them with wires.
 
 ## Commands
 

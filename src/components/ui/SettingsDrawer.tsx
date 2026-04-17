@@ -3,7 +3,13 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import { listAvailableShells } from "../../services/tauriCommands";
 import type { ShellInfo } from "../../types/terminal";
-import type { QuickCommand } from "../../types/settings";
+import type {
+  BackgroundKind,
+  BackgroundSettings,
+  ParticlePreset,
+  QuickCommand,
+} from "../../types/settings";
+import IntegrationsSection from "./IntegrationsSection";
 
 export default function SettingsDrawer() {
   const { settings, drawerOpen, closeDrawer, updateSettings } =
@@ -50,6 +56,14 @@ export default function SettingsDrawer() {
     );
     updateSettings({ quick_commands: updated });
     setEditingCmd(null);
+  };
+
+  const bg: BackgroundSettings = settings.background ?? {
+    kind: "none",
+    opacity: 1,
+  };
+  const patchBg = (patch: Partial<BackgroundSettings>) => {
+    updateSettings({ background: { ...bg, ...patch } });
   };
 
   const sectionStyle: React.CSSProperties = {
@@ -251,8 +265,110 @@ export default function SettingsDrawer() {
             </div>
           </div>
 
+          {/* Background */}
+          <div style={sectionStyle}>
+            <div style={labelStyle}>Background</div>
+            <select
+              value={bg.kind}
+              onChange={(e) =>
+                patchBg({ kind: e.target.value as BackgroundKind })
+              }
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                background: "#13141b",
+                border: "1px solid #292e42",
+                borderRadius: 6,
+                color: "#c0caf5",
+                fontSize: 13,
+                outline: "none",
+                marginBottom: 8,
+              }}
+            >
+              <option value="none">None (solid)</option>
+              <option value="image">Image</option>
+              <option value="video">Video</option>
+              <option value="url">Web page (URL)</option>
+              <option value="particles">Particles</option>
+            </select>
+
+            {(bg.kind === "image" || bg.kind === "video" || bg.kind === "url") && (
+              <input
+                value={bg.source ?? ""}
+                onChange={(e) => patchBg({ source: e.target.value || null })}
+                placeholder={
+                  bg.kind === "url"
+                    ? "https://example.com"
+                    : "/absolute/path or https://..."
+                }
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  background: "#13141b",
+                  border: "1px solid #292e42",
+                  borderRadius: 6,
+                  color: "#c0caf5",
+                  fontSize: 12,
+                  fontFamily: "monospace",
+                  outline: "none",
+                  marginBottom: 8,
+                }}
+              />
+            )}
+
+            {bg.kind === "particles" && (
+              <select
+                value={bg.particle ?? "matrix"}
+                onChange={(e) =>
+                  patchBg({ particle: e.target.value as ParticlePreset })
+                }
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  background: "#13141b",
+                  border: "1px solid #292e42",
+                  borderRadius: 6,
+                  color: "#c0caf5",
+                  fontSize: 13,
+                  outline: "none",
+                  marginBottom: 8,
+                }}
+              >
+                <option value="matrix">Matrix — green rain</option>
+                <option value="starfield">Starfield — parallax</option>
+                <option value="wave">Wave — synthwave grid</option>
+                <option value="dust">Dust — slow drift</option>
+              </select>
+            )}
+
+            {bg.kind !== "none" && (
+              <div>
+                <div style={{ color: "#565f89", fontSize: 11, marginBottom: 4 }}>
+                  Opacity: {(bg.opacity ?? 1).toFixed(2)}
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={bg.opacity ?? 1}
+                  onChange={(e) =>
+                    patchBg({ opacity: parseFloat(e.target.value) })
+                  }
+                  style={{ width: "100%" }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Integrations */}
+          <div style={sectionStyle}>
+            <div style={labelStyle}>Integrations</div>
+            <IntegrationsSection />
+          </div>
+
           {/* Quick Commands */}
-          <div style={{ ...sectionStyle, borderBottom: "none" }}>
+          <div style={sectionStyle}>
             <div style={labelStyle}>Quick Commands</div>
             {settings.quick_commands.map((cmd) => (
               <div

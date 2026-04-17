@@ -60,7 +60,7 @@
 ### Phase 7 -- Agent Intelligence
 - [ ] Skill definitions (read buffer, write input, query state, delegate task)
 - [ ] Agent capability negotiation (what skills each CLI supports)
-- [ ] Orchestration layer -- maestri coordinates multi-agent workflows
+- [ ] Orchestration layer -- wodouyao coordinates multi-agent workflows
 - [ ] Task routing based on wire topology
 - [ ] Conversation context sharing between connected agents
 

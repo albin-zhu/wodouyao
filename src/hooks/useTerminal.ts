@@ -8,6 +8,7 @@ import { DEFAULT_COLS, DEFAULT_ROWS } from "../utils/constants";
 import type { TerminalNode, TerminalTheme } from "../types/terminal";
 
 export interface SpawnOptions {
+  id?: string;
   command?: string;
   name?: string;
   position?: { x: number; y: number };
@@ -25,7 +26,7 @@ export function useTerminal() {
 
   const spawn = useCallback(
     async (options?: SpawnOptions): Promise<TerminalNode> => {
-      const id = generateId();
+      const id = options?.id ?? generateId();
 
       // Use provided position or place at viewport center
       const pos = options?.position ?? {

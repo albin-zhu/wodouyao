@@ -3,18 +3,21 @@ import InfiniteCanvas from "./components/canvas/InfiniteCanvas";
 import Toolbar from "./components/ui/Toolbar";
 import CommandPalette from "./components/command-palette/CommandPalette";
 import SettingsDrawer from "./components/ui/SettingsDrawer";
+import TeamsDrawer from "./components/ui/TeamsDrawer";
 import TerminalPanel from "./components/ui/TerminalPanel";
 import TerminalCreateDialog from "./components/ui/TerminalCreateDialog";
 import TerminalContextMenu from "./components/terminal/TerminalContextMenu";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { useSettingsStore } from "./store/settingsStore";
 import { useWorkspace } from "./hooks/useWorkspace";
-import { useWireForwarding } from "./hooks/useWireForwarding";
+import { useHubSpawn } from "./hooks/useHubSpawn";
+import { useTeamsSync } from "./hooks/useTeamsSync";
 
 export default function App() {
   useKeyboard();
   useWorkspace();
-  useWireForwarding();
+  useHubSpawn();
+  useTeamsSync();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
 
   useEffect(() => {
@@ -39,6 +42,7 @@ export default function App() {
       </div>
       <CommandPalette />
       <SettingsDrawer />
+      <TeamsDrawer />
       <TerminalPanel />
       <TerminalCreateDialog />
       <TerminalContextMenu />

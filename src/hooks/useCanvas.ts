@@ -11,13 +11,18 @@ export function useCanvas() {
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
+      // Ctrl/Meta+wheel always zooms the canvas, regardless of target.
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
         setZoom(zoom + delta, e.clientX, e.clientY);
-      } else {
-        adjustPan(-e.deltaX, -e.deltaY);
+        return;
       }
+      // Over a terminal body: let xterm handle wheel for its own scrollback.
+      if ((e.target as HTMLElement).closest(".terminal-body")) {
+        return;
+      }
+      adjustPan(-e.deltaX, -e.deltaY);
     },
     [zoom, adjustPan, setZoom]
   );

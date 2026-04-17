@@ -1,8 +1,10 @@
-# TheMaestri
+# Wodouyao
 
 Cross-platform infinite canvas terminal orchestrator. Manage multiple terminal sessions on a zoomable, pannable canvas with wire connections between them.
 
 Built with Tauri 2 (Rust) + React 19 + TypeScript.
+
+![Wodouyao canvas screenshot](assets/screen-snapshot.png)
 
 ## Features
 
@@ -93,7 +95,7 @@ src-tauri/                    # Rust backend
 
 ## Acknowledgments
 
-The name "TheMaestri" is inspired by [TheMaestri.app](https://www.themaestri.app) -- a polished, production-grade terminal orchestrator for macOS. If you're on a Mac, we highly recommend checking it out. This project is an independent, open-source exploration of similar ideas across all platforms. Respect and gratitude to the original TheMaestri team for the inspiration.
+Wodouyao（我都要）is inspired by [TheMaestri.app](https://www.themaestri.app) -- a polished, production-grade terminal orchestrator for macOS. If you're on a Mac, we highly recommend checking it out. This project is an independent, open-source exploration of similar ideas across all platforms. Respect and gratitude to the original TheMaestri team for the inspiration.
 
 ## License
 

@@ -1,5 +1,6 @@
 import { useTerminalStore } from "../../store/terminalStore";
 import { useTerminal } from "../../hooks/useTerminal";
+import { useTeamStore } from "../../store/teamStore";
 import TerminalStatusBadge from "./TerminalStatusBadge";
 import type { TerminalNode } from "../../types/terminal";
 
@@ -11,6 +12,7 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
   const foldTerminal = useTerminalStore((s) => s.foldTerminal);
   const unfoldTerminal = useTerminalStore((s) => s.unfoldTerminal);
   const { kill } = useTerminal();
+  const team = useTeamStore((s) => s.getTeamForTerminal(terminal.id));
 
   const handleFoldToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -63,6 +65,22 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
           whiteSpace: "nowrap",
         }}
       >
+        {team && (
+          <span
+            style={{
+              padding: "1px 6px",
+              marginRight: 6,
+              borderRadius: 3,
+              background: team.palette.base,
+              color: "#1a1b26",
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: 0.3,
+            }}
+          >
+            {team.name}
+          </span>
+        )}
         {terminal.name}
       </span>
       <button

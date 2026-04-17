@@ -1,6 +1,7 @@
 import { useTerminalStore } from "../../store/terminalStore";
 import { useTerminal } from "../../hooks/useTerminal";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useTeamStore } from "../../store/teamStore";
 import { useDialogStore } from "../../store/dialogStore";
 import { useCanvasInteractionStore, type CanvasMode } from "../../store/canvasInteractionStore";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
@@ -22,6 +23,7 @@ export default function Toolbar() {
   const { spawn } = useTerminal();
   const settings = useSettingsStore((s) => s.settings);
   const openDrawer = useSettingsStore((s) => s.openDrawer);
+  const openTeamsDrawer = useTeamStore((s) => s.openDrawer);
   const openTerminalCreate = useDialogStore((s) => s.openTerminalCreate);
   const currentMode = useCanvasInteractionStore((s) => s.mode);
   const setMode = useCanvasInteractionStore((s) => s.setMode);
@@ -43,7 +45,7 @@ export default function Toolbar() {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ color: "#7aa2f7", fontWeight: 600, fontSize: 14 }}>TheMaestri</span>
+        <span style={{ color: "#7aa2f7", fontWeight: 600, fontSize: 14 }}>Wodouyao</span>
         <WorkspaceSwitcher />
         <span style={{ color: "#565f89", fontSize: 12 }}>
           {terminalCount} terminal{terminalCount !== 1 ? "s" : ""}
@@ -139,6 +141,27 @@ export default function Toolbar() {
           Ctrl+K
         </span>
 
+        {/* Teams button */}
+        <button
+          onClick={openTeamsDrawer}
+          title="Teams"
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "2px 4px",
+            lineHeight: 0,
+          }}
+        >
+          <img
+            src="/icons/teams.png"
+            alt="Teams"
+            width={22}
+            height={22}
+            style={{ display: "block", opacity: 0.85 }}
+          />
+        </button>
+
         {/* Settings gear button */}
         <button
           onClick={openDrawer}
@@ -146,14 +169,18 @@ export default function Toolbar() {
           style={{
             background: "none",
             border: "none",
-            color: "#565f89",
             cursor: "pointer",
-            fontSize: 16,
-            padding: "4px 6px",
-            lineHeight: 1,
+            padding: "2px 4px",
+            lineHeight: 0,
           }}
         >
-          {"\u2699"}
+          <img
+            src="/icons/settings.png"
+            alt="Settings"
+            width={22}
+            height={22}
+            style={{ display: "block", opacity: 0.85 }}
+          />
         </button>
       </div>
     </div>

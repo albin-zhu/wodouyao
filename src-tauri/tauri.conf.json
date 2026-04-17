@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-utils/schema.json",
-  "productName": "TheMaestri",
+  "productName": "Wodouyao",
   "version": "0.1.0",
-  "identifier": "com.themaestri.app",
+  "identifier": "com.wodouyao.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "TheMaestri",
+        "title": "Wodouyao",
         "width": 1280,
         "height": 800,
         "resizable": true,
@@ -20,7 +20,11 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: http://asset.localhost https:; media-src 'self' asset: http://asset.localhost https: blob:; frame-src 'self' https: http:; connect-src ipc: http://ipc.localhost https: http:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
     }
   },
   "bundle": {
@@ -32,6 +36,11 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "resources": [
+      "resources/bin/wodouyao",
+      "resources/skills/wodouyao/SKILL.md",
+      "resources/skills/wodouyao/references/send-keys.md"
     ]
   }
 }

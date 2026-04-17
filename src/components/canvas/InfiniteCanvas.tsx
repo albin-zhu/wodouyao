@@ -4,7 +4,7 @@ import { useCanvasStore } from "../../store/canvasStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
 import { useWireStore } from "../../store/wireStore";
 import { useDialogStore } from "../../store/dialogStore";
-import CanvasBackground from "./CanvasBackground";
+import BackgroundLayer from "./BackgroundLayer";
 import TerminalLayer from "../terminal/TerminalLayer";
 import WireLayer from "./WireLayer";
 import CanvasControls from "./CanvasControls";
@@ -132,7 +132,7 @@ export default function InfiniteCanvas() {
         cursor: mode === "draw" ? "crosshair" : mode === "wire" ? "crosshair" : "default",
       }}
     >
-      <CanvasBackground />
+      <BackgroundLayer />
       <WireLayer />
       <TerminalLayer />
       <CanvasControls />

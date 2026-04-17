@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { CreateTerminalRequest, ShellInfo } from "../types/terminal";
 import type { Workspace, WorkspaceMeta } from "../types/workspace";
 import type { AppSettings } from "../types/settings";
+import type { Team } from "../types/team";
 
 export async function createTerminal(request: CreateTerminalRequest): Promise<string> {
   return invoke<string>("create_terminal", { request });
@@ -59,4 +60,105 @@ export interface CliAgent {
 
 export async function detectCliAgents(): Promise<CliAgent[]> {
   return invoke<CliAgent[]>("detect_cli_agents");
+}
+
+export interface WireIpc {
+  id: string;
+  source_id: string;
+  target_id: string;
+  forward_output: boolean;
+}
+
+export async function wireList(): Promise<WireIpc[]> {
+  return invoke<WireIpc[]>("wire_list");
+}
+
+export async function wireCreate(
+  sourceId: string,
+  targetId: string
+): Promise<WireIpc> {
+  return invoke<WireIpc>("wire_create", {
+    sourceId,
+    targetId,
+  });
+}
+
+export async function wireRemove(id: string): Promise<boolean> {
+  return invoke<boolean>("wire_remove", { id });
+}
+
+export async function wireReplaceAll(wires: WireIpc[]): Promise<void> {
+  return invoke<void>("wire_replace_all", { wires });
+}
+
+export async function wirePeersFor(terminalId: string): Promise<string[]> {
+  return invoke<string[]>("wire_peers_for", { terminalId });
+}
+
+export type IntegrationAgent = "claude" | "codex";
+
+export interface IntegrationStatus {
+  agent: IntegrationAgent;
+  skill_installed: boolean;
+  doc_installed: boolean;
+}
+
+export async function integrationsStatus(): Promise<IntegrationStatus[]> {
+  return invoke<IntegrationStatus[]>("integrations_status");
+}
+
+export async function integrationsInstall(
+  agent: IntegrationAgent
+): Promise<IntegrationStatus> {
+  return invoke<IntegrationStatus>("integrations_install", { agent });
+}
+
+export async function integrationsUninstall(
+  agent: IntegrationAgent
+): Promise<IntegrationStatus> {
+  return invoke<IntegrationStatus>("integrations_uninstall", { agent });
+}
+
+export async function teamsList(): Promise<Team[]> {
+  return invoke<Team[]>("teams_list");
+}
+
+export async function teamsTeamForTerminal(
+  termId: string
+): Promise<Team | null> {
+  return invoke<Team | null>("teams_team_for_terminal", { termId });
+}
+
+export async function teamsDissolve(teamId: string): Promise<string[]> {
+  return invoke<string[]>("teams_dissolve", { teamId });
+}
+
+export interface TeamsCreateParams {
+  name: string;
+  palette: string;
+  asLead: boolean;
+  callerTermId: string | null;
+}
+
+export async function teamsCreate(params: TeamsCreateParams): Promise<Team> {
+  return invoke<Team>("teams_create", { ...params });
+}
+
+export interface TeamsJoinParams {
+  teamId: string;
+  termId: string;
+  role: "lead" | "worker" | "observer";
+}
+
+export async function teamsJoin(params: TeamsJoinParams): Promise<Team> {
+  return invoke<Team>("teams_join", { ...params });
+}
+
+export interface TeamsLeaveParams {
+  teamId: string;
+  termId: string;
+}
+
+export async function teamsLeave(params: TeamsLeaveParams): Promise<void> {
+  return invoke<void>("teams_leave", { ...params });
 }

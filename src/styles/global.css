@@ -11,6 +11,22 @@ html, body, #root {
   background: #13141b;
   color: #c0caf5;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+/* Re-enable selection where it actually makes sense: terminal scrollback,
+   text inputs, and the occasional readable content block. */
+.terminal-body,
+.terminal-body *,
+input,
+textarea,
+[contenteditable="true"],
+.selectable,
+.selectable * {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 ::-webkit-scrollbar {

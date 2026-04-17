@@ -3,7 +3,7 @@ import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
 import { useTerminal } from "../../hooks/useTerminal";
 import { useWireStore } from "../../store/wireStore";
-import { readTerminalBuffer } from "../../services/terminalRegistry";
+import { getXterm, readTerminalBuffer } from "../../services/terminalRegistry";
 import { ACCENT_COLORS } from "../../utils/terminalThemes";
 import type { TerminalNode } from "../../types/terminal";
 
@@ -93,6 +93,17 @@ export default function TerminalContextMenu() {
   const connectedIds = new Set(
     existingWires.flatMap((w) => [w.sourceId, w.targetId])
   );
+
+  const term = getXterm(terminal.id);
+  const hasSelection = term?.hasSelection() ?? false;
+
+  const handleCopySelected = () => {
+    const selection = term?.getSelection() ?? "";
+    if (selection) {
+      navigator.clipboard.writeText(selection).catch(console.error);
+    }
+    close();
+  };
 
   const handleCopyBuffer = () => {
     const content = readTerminalBuffer(terminal.id);
@@ -247,6 +258,13 @@ export default function TerminalContextMenu() {
           <div style={{ borderTop: "1px solid #292e42", margin: "4px 0" }} />
         </div>
       )}
+
+      {/* Copy Selected */}
+      <MenuItem
+        label="Copy Selected"
+        disabled={!hasSelection}
+        onClick={handleCopySelected}
+      />
 
       {/* Copy Buffer */}
       <MenuItem label="Copy Buffer" onClick={handleCopyBuffer} />
