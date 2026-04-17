@@ -12,6 +12,8 @@ pub struct CreateTerminalRequest {
     pub cols: u16,
     pub rows: u16,
     pub cwd: Option<String>,
+    #[serde(default)]
+    pub fast_start: bool,
 }
 
 #[tauri::command]
@@ -59,6 +61,7 @@ pub fn create_terminal(
         request.rows,
         request.cwd.as_deref(),
         &env,
+        request.fast_start,
     )
 }
 

@@ -32,6 +32,7 @@ impl PtyManager {
         rows: u16,
         cwd: Option<&str>,
         env: &[(String, String)],
+        fast_start: bool,
     ) -> Result<String, String> {
         let app_handle = self
             .app_handle
@@ -46,6 +47,7 @@ impl PtyManager {
             rows,
             cwd,
             env,
+            fast_start,
             app_handle,
         )?;
 

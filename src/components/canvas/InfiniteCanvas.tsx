@@ -3,7 +3,7 @@ import { useCanvas } from "../../hooks/useCanvas";
 import { useCanvasStore } from "../../store/canvasStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
 import { useWireStore } from "../../store/wireStore";
-import { useDialogStore } from "../../store/dialogStore";
+import { useNewTerminal } from "../../hooks/useNewTerminal";
 import BackgroundLayer from "./BackgroundLayer";
 import TerminalLayer from "../terminal/TerminalLayer";
 import WireLayer from "./WireLayer";
@@ -21,7 +21,7 @@ export default function InfiniteCanvas() {
   const setWireEndPos = useCanvasInteractionStore((s) => s.setWireEndPos);
   const clearWire = useCanvasInteractionStore((s) => s.clearWire);
   const addWire = useWireStore((s) => s.addWire);
-  const openTerminalCreate = useDialogStore((s) => s.openTerminalCreate);
+  const launchTerminal = useNewTerminal();
   const drawingRef = useRef(false);
 
   const screenToWorld = useCallback(
@@ -88,7 +88,11 @@ export default function InfiniteCanvas() {
         const h = Math.abs(drawRect.endY - drawRect.startY);
         clearDrawRect();
         if (w >= 100 && h >= 60) {
-          openTerminalCreate({ position: { x, y }, size: { width: w, height: h } });
+          launchTerminal({
+            shiftKey: e.shiftKey,
+            position: { x, y },
+            size: { width: w, height: h },
+          });
           setMode("select");
         }
       }
@@ -107,7 +111,7 @@ export default function InfiniteCanvas() {
         setMode("select");
       }
     },
-    [mode, drawRect, wireStartId, clearDrawRect, openTerminalCreate, setMode, addWire, clearWire]
+    [mode, drawRect, wireStartId, clearDrawRect, launchTerminal, setMode, addWire, clearWire]
   );
 
   return (

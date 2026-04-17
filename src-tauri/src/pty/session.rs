@@ -43,6 +43,7 @@ impl PtySession {
         rows: u16,
         cwd: Option<&str>,
         env: &[(String, String)],
+        fast_start: bool,
         app_handle: AppHandle,
     ) -> Result<Self, String> {
         let pty_system = portable_pty::native_pty_system();
@@ -64,6 +65,34 @@ impl PtySession {
         }
         for (k, v) in env {
             cmd.env(k, v);
+        }
+        if fast_start {
+            // Skip rc/profile files so the shell drops into an interactive
+            // prompt instantly. User loses PATH / aliases / custom prompt.
+            let basename = std::path::Path::new(shell_path)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            // Strip trailing ".exe" on Windows.
+            let basename = basename.trim_end_matches(".exe");
+            match basename {
+                "zsh" => {
+                    cmd.arg("--no-rcs");
+                    cmd.arg("--no-global-rcs");
+                }
+                "bash" | "sh" => {
+                    cmd.arg("--noprofile");
+                    cmd.arg("--norc");
+                }
+                "fish" => {
+                    cmd.arg("-N");
+                }
+                "pwsh" | "powershell" => {
+                    cmd.arg("-NoProfile");
+                }
+                _ => {} // unknown shell: best-effort, do nothing
+            }
         }
 
         let child = pair

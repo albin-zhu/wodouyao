@@ -21,4 +21,6 @@ export interface AppSettings {
   last_workspace_id: string | null;
   quick_commands: QuickCommand[];
   background: BackgroundSettings;
+  /** When true, "+ Terminal" skips the dialog and uses last prefs. Shift+click inverts. */
+  skip_create_dialog: boolean;
 }

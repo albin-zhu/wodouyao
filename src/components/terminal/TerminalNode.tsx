@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from "react";
+import { memo, useRef, useCallback, useState } from "react";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
 import { useTeamStore } from "../../store/teamStore";
@@ -11,7 +11,7 @@ interface TerminalNodeProps {
   terminal: TerminalNodeType;
 }
 
-export default function TerminalNode({ terminal }: TerminalNodeProps) {
+function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
   const updateTerminal = useTerminalStore((s) => s.updateTerminal);
   const bringToFront = useTerminalStore((s) => s.bringToFront);
   const mode = useCanvasInteractionStore((s) => s.mode);
@@ -205,3 +205,10 @@ export default function TerminalNode({ terminal }: TerminalNodeProps) {
     </div>
   );
 }
+
+// Memoize so that moving/resizing ONE terminal (which replaces the
+// terminalStore's Map reference) doesn't re-render every other node.
+// Props-level Object.is on `terminal` is enough because updateTerminal only
+// replaces the entry for the node being changed; unchanged nodes keep their
+// old object reference.
+export default memo(TerminalNodeImpl);

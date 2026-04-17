@@ -18,6 +18,8 @@ export interface TerminalNode {
   color: string;
   theme: TerminalTheme;
   cwd?: string;
+  /** Saved position/size to restore from a maximize. Present = currently maximized. */
+  prevBounds?: { position: { x: number; y: number }; size: { width: number; height: number } };
 }
 
 export interface ShellInfo {
@@ -33,4 +35,5 @@ export interface CreateTerminalRequest {
   cols: number;
   rows: number;
   cwd?: string;
+  fast_start?: boolean;
 }

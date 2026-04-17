@@ -1,8 +1,7 @@
 import { useTerminalStore } from "../../store/terminalStore";
-import { useTerminal } from "../../hooks/useTerminal";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useTeamStore } from "../../store/teamStore";
-import { useDialogStore } from "../../store/dialogStore";
+import { useNewTerminal } from "../../hooks/useNewTerminal";
 import { useCanvasInteractionStore, type CanvasMode } from "../../store/canvasInteractionStore";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 
@@ -20,11 +19,10 @@ const AGENT_STYLES: Record<string, { bg: string; color: string; icon: string }> 
 
 export default function Toolbar() {
   const terminalCount = useTerminalStore((s) => s.terminals.size);
-  const { spawn } = useTerminal();
   const settings = useSettingsStore((s) => s.settings);
   const openDrawer = useSettingsStore((s) => s.openDrawer);
   const openTeamsDrawer = useTeamStore((s) => s.openDrawer);
-  const openTerminalCreate = useDialogStore((s) => s.openTerminalCreate);
+  const launchTerminal = useNewTerminal();
   const currentMode = useCanvasInteractionStore((s) => s.mode);
   const setMode = useCanvasInteractionStore((s) => s.setMode);
 
@@ -90,7 +88,12 @@ export default function Toolbar() {
           return (
             <button
               key={cmd.id}
-              onClick={() => spawn({ command: cmd.command, name: cmd.label })}
+              onClick={(e) =>
+                launchTerminal({
+                  shiftKey: e.shiftKey,
+                  overrides: { command: cmd.command, name: cmd.label },
+                })
+              }
               title={cmd.label}
               style={{
                 background: agentStyle?.bg ?? "#292e42",
@@ -116,14 +119,12 @@ export default function Toolbar() {
         })}
 
         <button
-          onClick={(e) => {
-            if (e.shiftKey) {
-              spawn();
-            } else {
-              openTerminalCreate();
-            }
-          }}
-          title="New terminal (Shift+click for quick create)"
+          onClick={(e) => launchTerminal({ shiftKey: e.shiftKey })}
+          title={
+            settings?.skip_create_dialog
+              ? "New terminal (uses last prefs; Shift+click for dialog)"
+              : "New terminal (Shift+click for quick spawn)"
+          }
           style={{
             background: "#7aa2f7",
             color: "#1a1b26",

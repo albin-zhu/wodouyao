@@ -82,10 +82,13 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
 
     listenTerminalExit(terminalId, (_exitCode) => {
       setStatus(terminalId, "terminated");
-      // Shell exited on its own; reap the backend session so the hub stops
-      // returning it as a live peer. Node stays visible with a "terminated"
-      // badge until the user closes it from the UI.
+      // Shell exited on its own; reap the backend session and then drop the
+      // node from the canvas so the UI matches reality. Brief delay so the
+      // final output + "terminated" badge are visible for a moment.
       destroyTerminal(terminalId).catch(() => {});
+      setTimeout(() => {
+        useTerminalStore.getState().removeTerminal(terminalId);
+      }, 400);
     }).then((fn) => unlistenFns.push(fn)).catch(() => {});
 
     setStatus(terminalId, "running");

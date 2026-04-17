@@ -58,6 +58,26 @@ export default function SettingsDrawer() {
     setEditingCmd(null);
   };
 
+  const addQuickCmd = () => {
+    const id = `cmd-${Date.now().toString(36)}`;
+    const next: QuickCommand = {
+      id,
+      label: "New Command",
+      command: "",
+      icon_label: "?",
+    };
+    updateSettings({ quick_commands: [...settings.quick_commands, next] });
+    setEditingCmd(id);
+    setEditLabel(next.label);
+    setEditCommand(next.command);
+  };
+
+  const deleteQuickCmd = (id: string) => {
+    const next = settings.quick_commands.filter((c) => c.id !== id);
+    updateSettings({ quick_commands: next });
+    if (editingCmd === id) setEditingCmd(null);
+  };
+
   const bg: BackgroundSettings = settings.background ?? {
     kind: "none",
     opacity: 1,
@@ -265,6 +285,52 @@ export default function SettingsDrawer() {
             </div>
           </div>
 
+          {/* New Terminal flow */}
+          <div style={sectionStyle}>
+            <div style={labelStyle}>New Terminal</div>
+            <div
+              style={{
+                display: "flex",
+                background: "#13141b",
+                border: "1px solid #292e42",
+                borderRadius: 6,
+                padding: 2,
+                gap: 2,
+              }}
+            >
+              {[
+                { value: false, label: "Show dialog" },
+                { value: true, label: "Use last prefs" },
+              ].map((opt) => {
+                const active = (settings.skip_create_dialog ?? false) === opt.value;
+                return (
+                  <button
+                    key={String(opt.value)}
+                    onClick={() =>
+                      updateSettings({ skip_create_dialog: opt.value })
+                    }
+                    style={{
+                      flex: 1,
+                      background: active ? "#7aa2f7" : "transparent",
+                      color: active ? "#1a1b26" : "#c0caf5",
+                      border: "none",
+                      borderRadius: 4,
+                      padding: "6px 8px",
+                      fontSize: 12,
+                      fontWeight: active ? 600 : 400,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ color: "#565f89", fontSize: 11, marginTop: 6 }}>
+              {"Shift+click the \"+ Terminal\" button to invert this setting once."}
+            </div>
+          </div>
+
           {/* Background */}
           <div style={sectionStyle}>
             <div style={labelStyle}>Background</div>
@@ -464,23 +530,55 @@ export default function SettingsDrawer() {
                         $ {cmd.command}
                       </div>
                     </div>
-                    <button
-                      onClick={() => startEditCmd(cmd)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        color: "#565f89",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        padding: "2px 8px",
-                      }}
-                    >
-                      Edit
-                    </button>
+                    <div style={{ display: "flex", gap: 2 }}>
+                      <button
+                        onClick={() => startEditCmd(cmd)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#565f89",
+                          cursor: "pointer",
+                          fontSize: 12,
+                          padding: "2px 8px",
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deleteQuickCmd(cmd.id)}
+                        title="Delete"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#f7768e",
+                          cursor: "pointer",
+                          fontSize: 12,
+                          padding: "2px 8px",
+                        }}
+                      >
+                        {"\u2715"}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             ))}
+            <button
+              onClick={addQuickCmd}
+              style={{
+                background: "#13141b",
+                border: "1px dashed #292e42",
+                borderRadius: 6,
+                color: "#7aa2f7",
+                cursor: "pointer",
+                padding: "8px 12px",
+                fontSize: 12,
+                width: "100%",
+                marginTop: 4,
+              }}
+            >
+              + Add quick command
+            </button>
           </div>
         </div>
       </div>

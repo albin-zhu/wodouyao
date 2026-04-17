@@ -2,10 +2,12 @@ import { useState, useRef, useEffect } from "react";
 import { useCommandStore } from "../../store/commandStore";
 import { useTerminal } from "../../hooks/useTerminal";
 import { useTerminalStore } from "../../store/terminalStore";
+import { useCanvasStore } from "../../store/canvasStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useSettingsStore } from "../../store/settingsStore";
 import { fuzzyMatch } from "../../utils/fuzzyMatch";
+import { TITLE_BAR_HEIGHT } from "../../utils/constants";
 
 interface CommandItem {
   id: string;
@@ -22,9 +24,26 @@ export default function CommandPalette() {
   const { spawn } = useTerminal();
   const foldAll = useTerminalStore((s) => s.foldAll);
   const unfoldAll = useTerminalStore((s) => s.unfoldAll);
+  const bringToFront = useTerminalStore((s) => s.bringToFront);
+  const terminalsMap = useTerminalStore((s) => s.terminals);
+  const unfoldTerminal = useTerminalStore((s) => s.unfoldTerminal);
   const { buildWorkspace, applyWorkspace } = useWorkspace();
   const { saveCurrentWorkspace, loadWorkspaceById, workspaces } = useWorkspaceStore();
   const openDrawer = useSettingsStore((s) => s.openDrawer);
+
+  const focusTerminal = (id: string) => {
+    const term = useTerminalStore.getState().terminals.get(id);
+    if (!term) return;
+    if (term.isFolded) unfoldTerminal(id);
+    bringToFront(id);
+    // Pan canvas so the terminal's center sits in the viewport center.
+    const { zoom, setPan } = useCanvasStore.getState();
+    const cx = term.position.x + term.size.width / 2;
+    const cy = term.position.y + term.size.height / 2;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight - TITLE_BAR_HEIGHT; // subtract toolbar
+    setPan(vw / 2 - cx * zoom, TITLE_BAR_HEIGHT + vh / 2 - cy * zoom);
+  };
 
   const commands: CommandItem[] = [
     {
@@ -74,21 +93,44 @@ export default function CommandPalette() {
     })),
   ];
 
-  const filtered = query
-    ? commands
-        .map((cmd) => ({
-          cmd,
-          score: Math.max(
-            fuzzyMatch(query, cmd.label).score,
-            fuzzyMatch(query, cmd.description).score
-          ),
-          match:
-            fuzzyMatch(query, cmd.label).match ||
-            fuzzyMatch(query, cmd.description).match,
-        }))
-        .filter((r) => r.match)
+  // Terminal focus entries are injected into results ONLY when the query
+  // hits a terminal name; they don't clutter the default palette view.
+  const terminalMatches: CommandItem[] = query
+    ? Array.from(terminalsMap.values())
+        .map((t) => {
+          const m = fuzzyMatch(query, t.name);
+          return m.match ? { t, score: m.score } : null;
+        })
+        .filter((x): x is { t: ReturnType<typeof terminalsMap.values> extends IterableIterator<infer V> ? V : never; score: number } => x !== null)
         .sort((a, b) => b.score - a.score)
-        .map((r) => r.cmd)
+        .map(({ t }) => ({
+          id: `focus-term-${t.id}`,
+          label: t.name,
+          description: `Focus terminal · ${t.shellType}${
+            t.initialCommand ? ` · ${t.initialCommand}` : ""
+          }`,
+          execute: () => focusTerminal(t.id),
+        }))
+    : [];
+
+  const filtered = query
+    ? [
+        ...commands
+          .map((cmd) => ({
+            cmd,
+            score: Math.max(
+              fuzzyMatch(query, cmd.label).score,
+              fuzzyMatch(query, cmd.description).score
+            ),
+            match:
+              fuzzyMatch(query, cmd.label).match ||
+              fuzzyMatch(query, cmd.description).match,
+          }))
+          .filter((r) => r.match)
+          .sort((a, b) => b.score - a.score)
+          .map((r) => r.cmd),
+        ...terminalMatches,
+      ]
     : commands;
 
   useEffect(() => {

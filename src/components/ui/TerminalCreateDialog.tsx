@@ -7,6 +7,31 @@ import type { CliAgent } from "../../services/tauriCommands";
 import { ACCENT_COLORS, TERMINAL_THEMES } from "../../utils/terminalThemes";
 import type { TerminalTheme, ShellInfo } from "../../types/terminal";
 
+// Fields that persist between dialog opens (remembered from last Create).
+// Name/command/cwd vary per terminal, so they're explicitly NOT carried over.
+const PREFS_KEY = "wodouyao.terminalCreatePrefs";
+interface DialogPrefs {
+  color?: string;
+  theme?: TerminalTheme;
+  shell?: string;
+  fastStart?: boolean;
+}
+function loadPrefs(): DialogPrefs {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+function savePrefs(prefs: DialogPrefs) {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    /* quota / disabled storage — best effort */
+  }
+}
+
 export default function TerminalCreateDialog() {
   const { terminalCreateOpen, terminalCreateDefaults, closeTerminalCreate } =
     useDialogStore();
@@ -19,6 +44,7 @@ export default function TerminalCreateDialog() {
   const [shell, setShell] = useState("");
   const [cwd, setCwd] = useState("");
   const [command, setCommand] = useState("");
+  const [fastStart, setFastStart] = useState(true);
   const [shells, setShells] = useState<ShellInfo[]>([]);
   const [agents, setAgents] = useState<CliAgent[]>([]);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -27,12 +53,18 @@ export default function TerminalCreateDialog() {
     if (terminalCreateOpen) {
       listAvailableShells().then(setShells).catch(() => {});
       detectCliAgents().then(setAgents).catch(() => {});
+      // Restore remembered color/theme/shell/fastStart, explicit dialog
+      // defaults still win.
+      const prefs = loadPrefs();
       setName(terminalCreateDefaults?.name ?? "");
-      setColor(terminalCreateDefaults?.color ?? ACCENT_COLORS[0].hex);
-      setTheme(terminalCreateDefaults?.theme ?? "tokyonight");
-      setShell(terminalCreateDefaults?.shell ?? "");
+      setColor(
+        terminalCreateDefaults?.color ?? prefs.color ?? ACCENT_COLORS[0].hex
+      );
+      setTheme(terminalCreateDefaults?.theme ?? prefs.theme ?? "tokyonight");
+      setShell(terminalCreateDefaults?.shell ?? prefs.shell ?? "");
       setCwd(terminalCreateDefaults?.cwd ?? workspaceCwd ?? "");
       setCommand(terminalCreateDefaults?.command ?? "");
+      setFastStart(prefs.fastStart ?? true);
       setTimeout(() => nameRef.current?.focus(), 50);
     }
   }, [terminalCreateOpen, terminalCreateDefaults, workspaceCwd]);
@@ -40,6 +72,7 @@ export default function TerminalCreateDialog() {
   if (!terminalCreateOpen) return null;
 
   const handleCreate = () => {
+    savePrefs({ color, theme, shell, fastStart });
     spawn({
       name: name || undefined,
       color,
@@ -47,6 +80,7 @@ export default function TerminalCreateDialog() {
       shell: shell || undefined,
       cwd: cwd || undefined,
       command: command || undefined,
+      fastStart,
       position: terminalCreateDefaults?.position,
       size: terminalCreateDefaults?.size,
     });
@@ -241,6 +275,28 @@ export default function TerminalCreateDialog() {
           placeholder="Optional command to run on start"
           style={inputStyle}
         />
+
+        <label
+          style={{
+            ...labelStyle,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            cursor: "pointer",
+            marginTop: 6,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={fastStart}
+            onChange={(e) => setFastStart(e.target.checked)}
+            style={{ margin: 0 }}
+          />
+          <span>Fast startup (skip shell rc)</span>
+        </label>
+        <div style={{ color: "#565f89", fontSize: 11, marginTop: -4 }}>
+          Shell opens instantly but loses your PATH / aliases / prompt.
+        </div>
 
         {/* Buttons */}
         <div

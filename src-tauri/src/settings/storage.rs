@@ -44,6 +44,11 @@ pub struct AppSettings {
     pub quick_commands: Vec<QuickCommand>,
     #[serde(default)]
     pub background: BackgroundSettings,
+    /// When true, the "+ Terminal" button skips the create dialog and spawns
+    /// directly using the last-used color/theme/shell/fast-start preferences.
+    /// Shift+click inverts this behavior per invocation.
+    #[serde(default)]
+    pub skip_create_dialog: bool,
 }
 
 impl Default for AppSettings {
@@ -53,6 +58,7 @@ impl Default for AppSettings {
             font_size: 14,
             last_workspace_id: None,
             background: BackgroundSettings::default(),
+            skip_create_dialog: false,
             quick_commands: vec![
                 QuickCommand {
                     id: "claude".into(),

@@ -17,6 +17,7 @@ export interface SpawnOptions {
   theme?: TerminalTheme;
   shell?: string;
   cwd?: string;
+  fastStart?: boolean;
 }
 
 export function useTerminal() {
@@ -59,6 +60,7 @@ export function useTerminal() {
           cols: DEFAULT_COLS,
           rows: DEFAULT_ROWS,
           cwd,
+          fast_start: options?.fastStart ?? false,
         });
       } catch (err) {
         console.error("[spawn] createTerminal failed:", err);

@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState } from "react";
+import { useMemo, useCallback, useRef, useState } from "react";
 import { useWireStore } from "../../store/wireStore";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasStore } from "../../store/canvasStore";
@@ -17,10 +17,10 @@ interface WireStyle {
 function wireStyle(
   sourceId: string,
   targetId: string,
-  getTeam: (id: string) => Team | undefined
+  termToTeam: Map<string, Team>
 ): WireStyle {
-  const teamA = getTeam(sourceId);
-  const teamB = getTeam(targetId);
+  const teamA = termToTeam.get(sourceId);
+  const teamB = termToTeam.get(targetId);
   const sameTeam = teamA && teamB && teamA.id === teamB.id ? teamA : null;
   if (!sameTeam) {
     return { stroke: DEFAULT_WIRE_STROKE, width: 2, opacity: 1 };
@@ -53,12 +53,27 @@ export default function WireLayer() {
   const { panX, panY, zoom } = useCanvasStore();
   const wireStartId = useCanvasInteractionStore((s) => s.wireStartId);
   const wireEndPos = useCanvasInteractionStore((s) => s.wireEndPos);
-  const getTeamForTerminal = useTeamStore((s) => s.getTeamForTerminal);
+  const teamsMap = useTeamStore((s) => s.teams);
+
+  // Precompute term_id -> team lookup so wireStyle is O(1) per endpoint.
+  const termToTeam = useMemo(() => {
+    const map = new Map<string, Team>();
+    for (const team of teamsMap.values()) {
+      for (const m of team.members) map.set(m.term_id, team);
+    }
+    return map;
+  }, [teamsMap]);
 
   const [hoveredWireId, setHoveredWireId] = useState<string | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(
-    null
-  );
+  // Tooltip position tracked via ref + imperative DOM update so mousemove
+  // doesn't trigger a full WireLayer re-render on every pixel.
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const moveTooltip = useCallback((clientX: number, clientY: number) => {
+    const el = tooltipRef.current;
+    if (!el) return;
+    el.style.left = `${clientX + 12}px`;
+    el.style.top = `${clientY + 14}px`;
+  }, []);
 
   const getAnchor = useCallback(
     (terminalId: string, side: "right" | "left") => {
@@ -126,11 +141,7 @@ export default function WireLayer() {
             const midX = (source.x + target.x) / 2;
             const midY = (source.y + target.y) / 2;
 
-            const style = wireStyle(
-              wire.sourceId,
-              wire.targetId,
-              getTeamForTerminal
-            );
+            const style = wireStyle(wire.sourceId, wire.targetId, termToTeam);
             const wireColor = style.stroke;
             const wireOpacity = style.opacity;
             const wireWidth = style.width;
@@ -145,16 +156,16 @@ export default function WireLayer() {
                   strokeWidth={12 / zoom}
                   style={{ cursor: "pointer" }}
                   onClick={() => removeWire(wire.id)}
-                  onMouseEnter={() => setHoveredWireId(wire.id)}
+                  onMouseEnter={(e) => {
+                    setHoveredWireId(wire.id);
+                    moveTooltip(e.clientX, e.clientY);
+                  }}
                   onMouseLeave={() => {
                     setHoveredWireId((prev) =>
                       prev === wire.id ? null : prev
                     );
-                    setTooltipPos(null);
                   }}
-                  onMouseMove={(e) =>
-                    setTooltipPos({ x: e.clientX, y: e.clientY })
-                  }
+                  onMouseMove={(e) => moveTooltip(e.clientX, e.clientY)}
                 />
                 {/* Visible wire */}
                 <path
@@ -224,30 +235,30 @@ export default function WireLayer() {
         </g>
       </svg>
 
-      {hoveredWire && tooltipPos && (
-        <div
-          style={{
-            position: "fixed",
-            left: tooltipPos.x + 12,
-            top: tooltipPos.y + 14,
-            background: "#1f2335",
-            color: "#c0caf5",
-            border: "1px solid #292e42",
-            borderRadius: 4,
-            padding: "4px 8px",
-            fontSize: 11,
-            lineHeight: 1.4,
-            pointerEvents: "none",
-            zIndex: 1000,
-            whiteSpace: "nowrap",
-          }}
-        >
-          <div>
-            {sourceName}  →  {targetName}
-          </div>
-          <div style={{ color: "#565f89" }}>click to delete</div>
+      <div
+        ref={tooltipRef}
+        style={{
+          position: "fixed",
+          left: 0,
+          top: 0,
+          display: hoveredWire ? "block" : "none",
+          background: "#1f2335",
+          color: "#c0caf5",
+          border: "1px solid #292e42",
+          borderRadius: 4,
+          padding: "4px 8px",
+          fontSize: 11,
+          lineHeight: 1.4,
+          pointerEvents: "none",
+          zIndex: 1000,
+          whiteSpace: "nowrap",
+        }}
+      >
+        <div>
+          {sourceName}  →  {targetName}
         </div>
-      )}
+        <div style={{ color: "#565f89" }}>click to delete</div>
+      </div>
     </>
   );
 }
