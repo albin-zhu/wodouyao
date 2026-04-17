@@ -18,5 +18,7 @@ Thumbs.db
 # Screenshots / test artifacts
 *.png
 !src-tauri/icons/**/*.png
+!public/**/*.png
 !public/**/*.svg
+!assets/screen-snapshot.png
 .playwright-mcp/
