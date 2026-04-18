@@ -40,6 +40,7 @@ export function useNodeDrag(opts: NodeDragOptions) {
     (e: React.MouseEvent) => {
       if ((e.target as HTMLElement).closest("button, textarea, input")) return;
       e.preventDefault();
+      e.stopPropagation();
       opts.onBringToFront?.();
       dragStartRef.current = {
         x: e.clientX,

@@ -759,6 +759,59 @@ cmd_spawn() {
     done
     load_endpoint
 
+    # Default command from kind if not explicitly set
+    if [ -n "$_kind" ] && [ -z "$_command" ]; then
+        case "$_kind" in
+            claude)
+                _prompt_file=$(mktemp "${TMPDIR:-/tmp}/wodouyao_prompt_XXXXXX.md")
+                _agent_name="${_name:-Agent}"
+                cat > "$_prompt_file" << ROLEEOF
+# Role: $_agent_name
+
+You are running inside a Wodouyao canvas terminal as **$_agent_name**.
+
+## Startup (run these NOW)
+
+\`\`\`sh
+wodouyao hello --name "$_agent_name" --kind claude
+wodouyao task list
+\`\`\`
+
+## Key Commands
+
+- \`wodouyao peers\` — list connected peers
+- \`wodouyao task list\` — view tasks
+- \`wodouyao task take <id>\` — claim a task
+- \`wodouyao task done <id>\` — mark complete
+- \`wodouyao send <peer> "text" Enter\` — send to peer
+- \`wodouyao read <peer>\` — read peer output
+- \`wodouyao note add "text"\` — add a sticky note
+
+## Workflow
+
+1. Register identity (hello)
+2. Check task list
+3. Claim an unclaimed task (take)
+4. Complete the work
+5. Mark done, then check for more tasks
+ROLEEOF
+                # Convert to mixed Windows path if on MSYS/Git Bash
+                if command -v cygpath >/dev/null 2>&1; then
+                    _prompt_path=$(cygpath -m "$_prompt_file")
+                else
+                    _prompt_path="$_prompt_file"
+                fi
+                _command="claude --dangerously-skip-permissions \"@${_prompt_path}\""
+                ;;
+            codex)  _command="codex" ;;
+            opencode) _command="opencode" ;;
+        esac
+    fi
+    # Default cwd to current directory if not specified
+    if [ -z "$_cwd" ]; then
+        _cwd="$(pwd)"
+    fi
+
     if [ "$_wire" = 1 ]; then
         _from=$WODOUYAO_ID
     else

@@ -64,7 +64,7 @@ export function useCanvas() {
       // Left button in select mode on empty canvas: pan
       if (e.button === 0 && mode === "select") {
         const target = e.target as HTMLElement;
-        if (target.closest(".terminal-node") || target.closest("button")) return;
+        if (target.closest(".terminal-node, [data-node-id]") || target.closest("button")) return;
 
         e.preventDefault();
         panningRef.current = true;

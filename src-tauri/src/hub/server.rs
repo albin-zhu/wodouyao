@@ -462,11 +462,55 @@ fn spawn(
         emit_teams_updated(app_handle);
     }
 
+    let command = parsed.command.clone().or_else(|| {
+        parsed.kind.as_deref().and_then(|k| match k {
+            "claude" => {
+                let agent_name = parsed.name.as_deref().unwrap_or("Agent");
+                let prompt = format!(
+                    "# Role: {name}\n\n\
+                     You are running inside a Wodouyao canvas terminal as **{name}**.\n\n\
+                     ## Startup (run these NOW)\n\n\
+                     ```sh\n\
+                     wodouyao hello --name \"{name}\" --kind claude\n\
+                     wodouyao task list\n\
+                     ```\n\n\
+                     ## Key Commands\n\n\
+                     - `wodouyao peers` — list connected peers\n\
+                     - `wodouyao task list` — view tasks\n\
+                     - `wodouyao task take <id>` — claim a task\n\
+                     - `wodouyao task done <id>` — mark complete\n\
+                     - `wodouyao send <peer> \"text\" Enter` — send to peer\n\
+                     - `wodouyao read <peer>` — read peer output\n\
+                     - `wodouyao note add \"text\"` — add a sticky note\n\n\
+                     ## Workflow\n\n\
+                     1. Register identity (hello)\n\
+                     2. Check task list\n\
+                     3. Claim an unclaimed task (take)\n\
+                     4. Complete the work\n\
+                     5. Mark done, then check for more tasks\n",
+                    name = agent_name,
+                );
+                let dir = std::env::temp_dir().join("wodouyao");
+                let _ = std::fs::create_dir_all(&dir);
+                let file = dir.join(format!("prompt_{}.md", new_id));
+                if std::fs::write(&file, &prompt).is_ok() {
+                    let path_str = file.to_string_lossy().replace('\\', "/");
+                    Some(format!("claude --dangerously-skip-permissions \"@{}\"", path_str))
+                } else {
+                    Some("claude --dangerously-skip-permissions".into())
+                }
+            }
+            "codex" => Some("codex".into()),
+            "opencode" => Some("opencode".into()),
+            _ => None,
+        })
+    });
+
     let payload = SpawnEventPayload {
         id: new_id.clone(),
         name: parsed.name,
         kind: parsed.kind,
-        command: parsed.command,
+        command,
         cwd: parsed.cwd,
         auto_wire_from: parsed.auto_wire_from,
         team_id,
