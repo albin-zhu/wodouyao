@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Wodouyao is a cross-platform infinite canvas terminal multiplexer built with Tauri 2 + React 19 + TypeScript. Users place PTY-backed terminal windows on a zoomable canvas and connect them with wires.
+Wodouyao is a cross-platform infinite canvas terminal multiplexer built with Tauri 2 + React 19 + TypeScript. Users place PTY-backed terminal windows on a zoomable canvas, connect them with wires, and observe multi-agent workflows. It is **not** a harness -- it is an observation and orchestration panel for existing agent harnesses (Claude Code, Codex, etc.).
 
 ## Commands
 
@@ -23,10 +23,11 @@ npm run dev
 ## Architecture
 
 ### Rendering Layers (bottom to top)
-1. **Konva Stage** -- grid dot background, `pointerEvents: none`
-2. **SVG WireLayer** -- bezier wire curves between terminals, z-index 5
-3. **DOM TerminalLayer** -- CSS `transform: translate/scale` for pan/zoom, contains TerminalNode divs
-4. **CanvasControls** -- zoom buttons overlay, top-right corner
+1. **BackgroundLayer** (Konva) -- grid dot background, `pointerEvents: none`
+2. **WireLayer** (SVG) -- bezier wire curves between nodes, z-index 5
+3. **ResourceLayer** (DOM) -- sticky notes + file nodes, pan/zoom via CSS transform
+4. **TerminalLayer** (DOM) -- CSS `transform: translate/scale` for pan/zoom, contains TerminalNode divs
+5. **CanvasControls** -- zoom buttons overlay, top-right corner
 
 ### Coordinate System
 - Screen-to-world: `worldX = (screenX - viewportOffsetX - panX) / zoom`
@@ -36,26 +37,36 @@ npm run dev
 ### State Management (Zustand)
 | Store | Purpose |
 |---|---|
-| `terminalStore` | Terminal nodes Map, CRUD, z-index, status |
-| `canvasStore` | panX, panY, zoom |
+| `terminalStore` | Terminal nodes Map, CRUD, z-index, status, role, activity |
+| `canvasStore` | panX, panY, zoom, grid settings |
 | `canvasInteractionStore` | Current mode (select/draw/wire), draw rect, wire drag state |
-| `wireStore` | Wire connections Map |
+| `wireStore` | Wire connections Map (typed: io/note/file/team) |
 | `workspaceStore` | Workspace CRUD, current workspace, CWD |
-| `settingsStore` | App settings, default shell, quick commands |
+| `settingsStore` | App settings, quick commands, wire-to-empty spawn config |
+| `taskStore` | Task CRUD, drawer state, workspace-scoped |
+| `teamStore` | Team management, drawer state |
+| `noteStore` | Sticky notes on canvas |
+| `fileNodeStore` | File/folder nodes on canvas |
 | `dialogStore` | Modal dialog open/close state |
 | `commandStore` | Command palette state |
 
 ### Backend (Rust)
 - **PTY**: `src-tauri/src/pty/` -- portable-pty sessions, shell detection, resize
-- **Commands**: `src-tauri/src/commands/` -- Tauri IPC commands (terminal, workspace, settings, agents)
+- **Commands**: `src-tauri/src/commands/` -- Tauri IPC commands (terminal, workspace, settings, agents, wire, team, tasks, file_preview)
+- **Hub**: `src-tauri/src/hub/` -- local HTTP server (topology, identity, teams, endpoints) on port 19790
 - **Workspace**: `src-tauri/src/workspace/` -- JSON file persistence in app data dir
 - **Settings**: `src-tauri/src/settings/` -- App settings JSON persistence
+- **Tasks**: `src-tauri/src/tasks/` -- Task store with CRUD
+- **Integrations**: `src-tauri/src/integrations/` -- Agent CLI detection (claude, codex)
 
 ### Key Patterns
 - **SpawnOptions**: `useTerminal.spawn()` takes an options object, not positional args
 - **Terminal Registry**: `services/terminalRegistry.ts` -- global Map of xterm instances for cross-terminal read/write
 - **Theme System**: `utils/terminalThemes.ts` -- 5 xterm ITheme objects + 8 accent colors
+- **Role System**: `utils/terminalRoles.ts` -- 5 terminal roles with color/glyph metadata
 - **Event Forwarding**: Tauri events `terminal-output-{id}` and `terminal-exit-{id}` per terminal
+- **Activity Polling**: `useTerminalActivity` runs a 500ms tick to derive working/idle from last output timestamp
+- **Node Drag**: `useNodeDrag` -- shared drag/resize hook for terminals, notes, and file nodes
 
 ## Conventions
 
@@ -73,4 +84,7 @@ npm run dev
 - TerminalLayer uses `pointerEvents: none` on the container, `pointerEvents: auto` on individual TerminalNode divs
 - The `--zoom` CSS custom property on `#terminal-layer` is read by drag/resize handlers to compensate for scale
 - Workspace files are stored in the OS app data directory (via Rust `dirs::data_dir()`)
-- Wire `forwardOutput` is legacy -- wire semantics are being refactored to relationship registration
+- Wire `forwardOutput` is legacy -- wire semantics are relationship registration, not output forwarding
+- Port 1420 conflicts with Windows Hyper-V reserved range; dev server runs on port 5173
+- Shell pref must be `undefined` (not empty string) to fall back to system default -- empty string causes null-byte crash
+- OS file drop listener registers once with `[]` deps; reads store via `getState()` inside handler to avoid re-registration leaks
