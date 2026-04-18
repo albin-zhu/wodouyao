@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useTeamStore } from "../../store/teamStore";
 import { useTerminalStore } from "../../store/terminalStore";
 import { teamsCreate, teamsJoin } from "../../services/tauriCommands";
@@ -36,6 +37,7 @@ function TeamCard({
   onJoin: () => void;
   onArrange: () => void;
 }) {
+  const { t } = useTranslation();
   const grouped: Record<Role, typeof team.members> = {
     lead: [],
     worker: [],
@@ -88,7 +90,7 @@ function TeamCard({
           {team.members.length > 1 && (
             <button
               onClick={onArrange}
-              title="Rearrange members below the lead in a row"
+              title={t("teams.arrangeTitle")}
               style={{
                 background: "#292e42",
                 color: "#7aa2f7",
@@ -99,13 +101,13 @@ function TeamCard({
                 cursor: "pointer",
               }}
             >
-              Arrange
+              {t("teams.arrange")}
             </button>
           )}
           {canJoin && (
             <button
               onClick={onJoin}
-              title="Join with the currently focused terminal"
+              title={t("teams.joinTitle")}
               style={{
                 background: "#292e42",
                 color: "#9ece6a",
@@ -116,7 +118,7 @@ function TeamCard({
                 cursor: "pointer",
               }}
             >
-              Join
+              {t("teams.join")}
             </button>
           )}
           <button
@@ -131,14 +133,14 @@ function TeamCard({
               cursor: "pointer",
             }}
           >
-            Dissolve
+            {t("teams.dissolve")}
           </button>
         </div>
       </div>
       <div style={{ color: "#565f89", fontSize: 11, marginBottom: 8 }}>
-        {team.members.length} member{team.members.length !== 1 ? "s" : ""}
+        {t("teams.memberCount", { count: team.members.length })}
         {"  \u00B7  "}
-        {team.tasks.length} task{team.tasks.length !== 1 ? "s" : ""}
+        {t("teams.taskCount", { count: team.tasks.length })}
       </div>
       {ROLE_ORDER.map((role) =>
         grouped[role].length > 0 ? (
@@ -176,6 +178,7 @@ function TeamCard({
 }
 
 function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [name, setName] = useState("");
   const [palette, setPalette] = useState<string>("blue");

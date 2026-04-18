@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -11,10 +12,10 @@ import { useForkWorkspace } from "../../hooks/useForkWorkspace";
 import { useCanvasInteractionStore, type CanvasMode } from "../../store/canvasInteractionStore";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 
-const MODE_BUTTONS: { mode: CanvasMode; label: string; title: string }[] = [
-  { mode: "select", label: "\u2190", title: "Select (move/resize terminals)" },
-  { mode: "draw", label: "\u25AD", title: "Draw (drag to create terminal)" },
-  { mode: "wire", label: "\u2014", title: "Wire (connect terminals)" },
+const MODE_BUTTONS: { mode: CanvasMode; label: string; titleKey: string }[] = [
+  { mode: "select", label: "\u2190", titleKey: "toolbar.selectMode" },
+  { mode: "draw", label: "\u25AD", titleKey: "toolbar.drawMode" },
+  { mode: "wire", label: "\u2014", titleKey: "toolbar.wireMode" },
 ];
 
 const AGENT_STYLES: Record<string, { bg: string; color: string; icon: string }> = {
@@ -24,6 +25,7 @@ const AGENT_STYLES: Record<string, { bg: string; color: string; icon: string }> 
 };
 
 export default function Toolbar() {
+  const { t } = useTranslation();
   const terminalCount = useTerminalStore((s) => s.terminals.size);
   const settings = useSettingsStore((s) => s.settings);
   const openDrawer = useSettingsStore((s) => s.openDrawer);
@@ -75,12 +77,12 @@ export default function Toolbar() {
         <button
           onClick={() => {
             const name = prompt(
-              `Fork "${currentWorkspace?.name ?? "Workspace"}" to:`,
-              `${currentWorkspace?.name ?? "Workspace"} (fork)`
+              t("toolbar.forkPrompt", { name: currentWorkspace?.name ?? "Workspace" }),
+              t("toolbar.forkDefault", { name: currentWorkspace?.name ?? "Workspace" })
             );
             if (name !== null) forkWorkspace(name || undefined);
           }}
-          title="Fork current workspace"
+          title={t("toolbar.forkTitle")}
           style={{
             background: "none",
             border: "1px solid #292e42",
@@ -91,10 +93,10 @@ export default function Toolbar() {
             cursor: "pointer",
           }}
         >
-          {"\u29BE"} fork
+          {"\u29BE"} {t("toolbar.fork")}
         </button>
         <span style={{ color: "#565f89", fontSize: 12 }}>
-          {terminalCount} terminal{terminalCount !== 1 ? "s" : ""}
+          {t("toolbar.terminalCount", { count: terminalCount })}
         </span>
 
         {/* Mode toggle buttons */}
@@ -111,7 +113,7 @@ export default function Toolbar() {
             <button
               key={btn.mode}
               onClick={() => setMode(btn.mode)}
-              title={btn.title}
+              title={t(btn.titleKey)}
               style={{
                 background: currentMode === btn.mode ? "#7aa2f7" : "#1f2335",
                 color: currentMode === btn.mode ? "#1a1b26" : "#565f89",
@@ -170,8 +172,8 @@ export default function Toolbar() {
           onClick={(e) => launchTerminal({ shiftKey: e.shiftKey })}
           title={
             settings?.skip_create_dialog
-              ? "New terminal (uses last prefs; Shift+click for dialog)"
-              : "New terminal (Shift+click for quick spawn)"
+              ? t("toolbar.newTerminalTitleSkip")
+              : t("toolbar.newTerminalTitleDialog")
           }
           style={{
             background: "#7aa2f7",
@@ -184,11 +186,11 @@ export default function Toolbar() {
             cursor: "pointer",
           }}
         >
-          + Terminal
+          {t("toolbar.addTerminal")}
         </button>
         <button
           onClick={() => addNote()}
-          title="New sticky note"
+          title={t("toolbar.addNote", "New sticky note")}
           style={{
             background: "#e0af6822",
             color: "#e0af68",
@@ -200,16 +202,16 @@ export default function Toolbar() {
             cursor: "pointer",
           }}
         >
-          + Note
+          {t("toolbar.addNote")}
         </button>
         <span style={{ color: "#565f89", fontSize: 11 }}>
-          Ctrl+K
+          {t("toolbar.ctrlK")}
         </span>
 
         {/* Teams button */}
         <button
           onClick={openTeamsDrawer}
-          title="Teams"
+          title={t("toolbar.teams")}
           style={{
             background: "none",
             border: "none",
@@ -220,7 +222,7 @@ export default function Toolbar() {
         >
           <img
             src="/icons/teams.png"
-            alt="Teams"
+            alt={t("toolbar.teams")}
             width={22}
             height={22}
             style={{ display: "block", opacity: 0.85 }}
@@ -230,7 +232,7 @@ export default function Toolbar() {
         {/* Tasks button */}
         <button
           onClick={openTasksDrawer}
-          title={`Tasks (${tasksActiveCount} active)`}
+          title={t("toolbar.tasksActive", { count: tasksActiveCount })}
           style={{
             position: "relative",
             background: "none",
@@ -247,7 +249,7 @@ export default function Toolbar() {
             gap: 4,
           }}
         >
-          {"\u2713"} Tasks
+          {"\u2713"} {t("toolbar.tasks")}
           {tasksActiveCount > 0 && (
             <span
               style={{
@@ -270,7 +272,7 @@ export default function Toolbar() {
         {/* Settings gear button */}
         <button
           onClick={openDrawer}
-          title="Settings"
+          title={t("toolbar.settings")}
           style={{
             background: "none",
             border: "none",
@@ -281,7 +283,7 @@ export default function Toolbar() {
         >
           <img
             src="/icons/settings.png"
-            alt="Settings"
+            alt={t("toolbar.settings")}
             width={22}
             height={22}
             style={{ display: "block", opacity: 0.85 }}
@@ -291,7 +293,7 @@ export default function Toolbar() {
         {/* Fullscreen toggle */}
         <button
           onClick={toggleFullscreen}
-          title={isFullscreen ? "Exit fullscreen (F11)" : "Fullscreen (F11)"}
+          title={isFullscreen ? t("toolbar.exitFullscreen") : t("toolbar.fullscreen")}
           style={{
             background: "none",
             border: "1px solid #292e42",

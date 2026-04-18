@@ -27,4 +27,5 @@ export interface AppSettings {
   wire_empty_spawn_enabled: boolean;
   /** Command to run in the auto-spawned terminal (defaults to "claude"). */
   wire_empty_spawn_command: string;
+  language: string;
 }

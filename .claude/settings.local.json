@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wodouyao peers *)",
+      "Bash(wodouyao send *)",
+      "Bash(wodouyao read *)"
+    ]
+  }
+}

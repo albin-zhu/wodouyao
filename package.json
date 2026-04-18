@@ -18,10 +18,12 @@
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/addon-webgl": "^0.18.0",
     "@xterm/xterm": "^5.5.0",
+    "i18next": "^26.0.5",
     "konva": "^9.3.18",
     "nanoid": "^5.1.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-i18next": "^17.0.4",
     "react-konva": "^19.2.3",
     "zustand": "^5.0.3"
   },

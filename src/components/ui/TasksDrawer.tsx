@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useTaskStore } from "../../store/taskStore";
 import { useTerminalStore } from "../../store/terminalStore";
 import type { Task, TaskStatus } from "../../types/task";
@@ -15,15 +16,15 @@ const STATUS_ORDER: Record<TaskStatus, number> = {
   completed: 2,
 };
 
-function timeAgo(ms: number): string {
+function timeAgo(ms: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const diff = Math.max(0, Date.now() - ms);
   const m = Math.floor(diff / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
+  if (m < 1) return t("tasks.justNow");
+  if (m < 60) return t("tasks.minutesAgo", { count: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return t("tasks.hoursAgo", { count: h });
   const d = Math.floor(h / 24);
-  return `${d}d ago`;
+  return t("tasks.daysAgo", { count: d });
 }
 
 const NEXT_STATUS: Record<TaskStatus, TaskStatus> = {
@@ -33,6 +34,7 @@ const NEXT_STATUS: Record<TaskStatus, TaskStatus> = {
 };
 
 function TaskRow({ task }: { task: Task }) {
+  const { t } = useTranslation();
   const updateTask = useTaskStore((s) => s.updateTask);
   const removeTask = useTaskStore((s) => s.removeTask);
   const terminals = useTerminalStore((s) => s.terminals);
@@ -41,7 +43,7 @@ function TaskRow({ task }: { task: Task }) {
 
   const owner = task.owner_term_id ? terminals.get(task.owner_term_id) : undefined;
   const ownerColor = owner?.color ?? "#3b4261";
-  const ownerName = owner?.name ?? (task.owner_term_id ? task.owner_term_id.slice(0, 8) : "unowned");
+  const ownerName = owner?.name ?? (task.owner_term_id ? task.owner_term_id.slice(0, 8) : t("tasks.unowned"));
   const blockers = task.blocked_by ?? [];
   const isPulsing = task.status === "in_progress";
 
@@ -84,7 +86,7 @@ function TaskRow({ task }: { task: Task }) {
             e.stopPropagation();
             updateTask(task.id, { status: NEXT_STATUS[task.status] });
           }}
-          title={`status: ${task.status} (click to advance)`}
+          title={t("contextMenu.statusClick", { status: task.status })}
           style={{
             width: 18,
             height: 18,
@@ -123,9 +125,9 @@ function TaskRow({ task }: { task: Task }) {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              if (confirm(`Delete "${task.subject}"?`)) removeTask(task.id);
+              if (confirm(t("tasks.deleteConfirm", { subject: task.subject }))) removeTask(task.id);
             }}
-            title="Delete"
+            title={t("settings.delete")}
             style={{
               background: "none",
               border: "none",
@@ -151,9 +153,9 @@ function TaskRow({ task }: { task: Task }) {
         }}
       >
         <span style={{ color: ownerColor }}>{"\u25CF"} {ownerName}</span>
-        <span>{timeAgo(task.created_at)}</span>
+        <span>{timeAgo(task.created_at, t)}</span>
         {blockers.length > 0 && (
-          <span style={{ color: "#e0af68" }}>blocked by {blockers.length}</span>
+          <span style={{ color: "#e0af68" }}>{t("tasks.blockedBy", { count: blockers.length })}</span>
         )}
         {(task.acceptance?.length ?? 0) > 0 && (
           <span style={{ color: "#7dcfff" }}>
@@ -188,6 +190,7 @@ function TaskRow({ task }: { task: Task }) {
 type Filter = "all" | "active" | "mine" | "done";
 
 export default function TasksDrawer() {
+  const { t } = useTranslation();
   const drawerOpen = useTaskStore((s) => s.drawerOpen);
   const closeDrawer = useTaskStore((s) => s.closeDrawer);
   const tasksMap = useTaskStore((s) => s.tasks);
@@ -269,9 +272,9 @@ export default function TasksDrawer() {
           }}
         >
           <span style={{ color: "#c0caf5", fontWeight: 600, fontSize: 14 }}>
-            Tasks
+            {t("tasks.title")}
             <span style={{ color: "#565f89", fontWeight: 400, marginLeft: 8 }}>
-              {activeCount} active · {tasks.length} total
+              {t("tasks.activeTotal", { active: activeCount, total: tasks.length })}
             </span>
           </span>
           <button
@@ -294,7 +297,7 @@ export default function TasksDrawer() {
             value={quickAdd}
             onChange={(e) => setQuickAdd(e.target.value)}
             onKeyDown={handleQuickAdd}
-            placeholder="+ Add a task (Enter)"
+            placeholder={t("tasks.addPlaceholder")}
             style={{
               width: "100%",
               background: "#13141b",
@@ -323,7 +326,7 @@ export default function TasksDrawer() {
                   cursor: "pointer",
                 }}
               >
-                {f}
+                {t(`tasks.filter${f.charAt(0).toUpperCase()}${f.slice(1)}` as "tasks.filterAll")}
               </button>
             ))}
           </div>
@@ -332,7 +335,7 @@ export default function TasksDrawer() {
         <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
           {filtered.length === 0 ? (
             <div style={{ color: "#565f89", fontSize: 12, lineHeight: 1.6 }}>
-              No tasks yet. Add one above, or from a terminal call the tasks API.
+              {t("tasks.emptyState")}
             </div>
           ) : (
             filtered.map((t) => <TaskRow key={t.id} task={t} />)

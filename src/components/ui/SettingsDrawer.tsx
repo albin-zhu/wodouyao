@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
@@ -11,6 +12,7 @@ import type {
 import IntegrationsSection from "./IntegrationsSection";
 
 export default function SettingsDrawer() {
+  const { t, i18n } = useTranslation();
   const { settings, drawerOpen, closeDrawer, updateSettings } =
     useSettingsStore();
   const workspaceCwd = useWorkspaceStore((s) => s.currentWorkspaceCwd);
@@ -133,7 +135,7 @@ export default function SettingsDrawer() {
           }}
         >
           <span style={{ color: "#c0caf5", fontWeight: 600, fontSize: 14 }}>
-            Settings
+            {t("settings.title")}
           </span>
           <button
             onClick={closeDrawer}
@@ -154,9 +156,34 @@ export default function SettingsDrawer() {
         <div
           style={{ flex: 1, overflowY: "auto", padding: "0 16px" }}
         >
+          {/* Language */}
+          <div style={sectionStyle}>
+            <div style={labelStyle}>{t("settings.language")}</div>
+            <select
+              value={settings.language ?? "en"}
+              onChange={(e) => {
+                updateSettings({ language: e.target.value });
+                i18n.changeLanguage(e.target.value);
+              }}
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                background: "#13141b",
+                border: "1px solid #292e42",
+                borderRadius: 6,
+                color: "#c0caf5",
+                fontSize: 13,
+                outline: "none",
+              }}
+            >
+              <option value="en">English</option>
+              <option value="zh">{"\u4E2D\u6587"}</option>
+            </select>
+          </div>
+
           {/* Workspace Directory */}
           <div style={sectionStyle}>
-            <div style={labelStyle}>Workspace Directory</div>
+            <div style={labelStyle}>{t("settings.workspaceDir")}</div>
             <div style={{ display: "flex", gap: 6 }}>
               <input
                 value={cwdInput}
@@ -165,7 +192,7 @@ export default function SettingsDrawer() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") setWorkspaceCwd(cwdInput || null);
                 }}
-                placeholder="Not set (system default)"
+                placeholder={t("settings.workspaceDirPlaceholder")}
                 style={{
                   flex: 1,
                   padding: "8px 10px",
@@ -185,7 +212,7 @@ export default function SettingsDrawer() {
                     setWorkspaceCwd(selected);
                   }
                 }}
-                title="Browse folder"
+                title={t("settings.browseFolder")}
                 style={{
                   background: "#292e42",
                   border: "none",
@@ -204,7 +231,7 @@ export default function SettingsDrawer() {
                     setCwdInput("");
                     setWorkspaceCwd(null);
                   }}
-                  title="Clear"
+                  title={t("settings.clear")}
                   style={{
                     background: "#292e42",
                     border: "none",
@@ -220,13 +247,13 @@ export default function SettingsDrawer() {
               )}
             </div>
             <div style={{ color: "#565f89", fontSize: 11, marginTop: 4 }}>
-              New terminals will open in this directory
+              {t("settings.workspaceDirHint")}
             </div>
           </div>
 
           {/* Font Size */}
           <div style={sectionStyle}>
-            <div style={labelStyle}>Terminal Font Size</div>
+            <div style={labelStyle}>{t("settings.fontSize")}</div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <button
                 onClick={() => handleFontSize(settings.font_size - 1)}
@@ -273,7 +300,7 @@ export default function SettingsDrawer() {
 
           {/* New Terminal flow */}
           <div style={sectionStyle}>
-            <div style={labelStyle}>New Terminal</div>
+            <div style={labelStyle}>{t("settings.newTerminal")}</div>
             <div
               style={{
                 display: "flex",
@@ -285,8 +312,8 @@ export default function SettingsDrawer() {
               }}
             >
               {[
-                { value: false, label: "Show dialog" },
-                { value: true, label: "Use last prefs" },
+                { value: false, label: t("settings.showDialog") },
+                { value: true, label: t("settings.useLastPrefs") },
               ].map((opt) => {
                 const active = (settings.skip_create_dialog ?? false) === opt.value;
                 return (
@@ -313,13 +340,13 @@ export default function SettingsDrawer() {
               })}
             </div>
             <div style={{ color: "#565f89", fontSize: 11, marginTop: 6 }}>
-              {"Shift+click the \"+ Terminal\" button to invert this setting once."}
+              {t("settings.shiftClickHint")}
             </div>
           </div>
 
           {/* Wire to empty canvas */}
           <div style={sectionStyle}>
-            <div style={labelStyle}>Wire to empty canvas</div>
+            <div style={labelStyle}>{t("settings.wireToEmpty")}</div>
             <label
               style={{
                 display: "flex",
@@ -338,7 +365,7 @@ export default function SettingsDrawer() {
                 style={{ margin: 0 }}
               />
               <span style={{ color: "#c0caf5", fontSize: 13 }}>
-                Auto-spawn terminal
+                {t("settings.autoSpawnTerminal")}
               </span>
             </label>
             {(settings.wire_empty_spawn_enabled ?? true) && (
@@ -363,13 +390,13 @@ export default function SettingsDrawer() {
               />
             )}
             <div style={{ color: "#565f89", fontSize: 11, marginTop: 6 }}>
-              Drag a wire to blank canvas to spawn this command, then auto-wire.
+              {t("settings.wireToEmptyHint")}
             </div>
           </div>
 
           {/* Background */}
           <div style={sectionStyle}>
-            <div style={labelStyle}>Background</div>
+            <div style={labelStyle}>{t("settings.background")}</div>
             <select
               value={bg.kind}
               onChange={(e) =>
@@ -387,11 +414,11 @@ export default function SettingsDrawer() {
                 marginBottom: 8,
               }}
             >
-              <option value="none">None (solid)</option>
-              <option value="image">Image</option>
-              <option value="video">Video</option>
-              <option value="url">Web page (URL)</option>
-              <option value="particles">Particles</option>
+              <option value="none">{t("settings.bgNone")}</option>
+              <option value="image">{t("settings.bgImage")}</option>
+              <option value="video">{t("settings.bgVideo")}</option>
+              <option value="url">{t("settings.bgUrl")}</option>
+              <option value="particles">{t("settings.bgParticles")}</option>
             </select>
 
             {(bg.kind === "image" || bg.kind === "video" || bg.kind === "url") && (
@@ -401,8 +428,8 @@ export default function SettingsDrawer() {
                   onChange={(e) => patchBg({ source: e.target.value || null })}
                   placeholder={
                     bg.kind === "url"
-                      ? "https://example.com"
-                      : "/absolute/path or https://..."
+                      ? t("settings.bgUrlPlaceholder")
+                      : t("settings.bgFilePlaceholder")
                   }
                   style={{
                     flex: 1,
@@ -425,7 +452,7 @@ export default function SettingsDrawer() {
                       const selected = await openDialog({ multiple: false, filters }).catch(() => null);
                       if (typeof selected === "string") patchBg({ source: selected });
                     }}
-                    title="Browse file"
+                    title={t("settings.browseFile")}
                     style={{
                       background: "#292e42",
                       border: "none",
@@ -461,17 +488,17 @@ export default function SettingsDrawer() {
                   marginBottom: 8,
                 }}
               >
-                <option value="matrix">Matrix — green rain</option>
-                <option value="starfield">Starfield — parallax</option>
-                <option value="wave">Wave — synthwave grid</option>
-                <option value="dust">Dust — slow drift</option>
+                <option value="matrix">{t("settings.particleMatrix")}</option>
+                <option value="starfield">{t("settings.particleStarfield")}</option>
+                <option value="wave">{t("settings.particleWave")}</option>
+                <option value="dust">{t("settings.particleDust")}</option>
               </select>
             )}
 
             {bg.kind !== "none" && (
               <div>
                 <div style={{ color: "#565f89", fontSize: 11, marginBottom: 4 }}>
-                  Opacity: {(bg.opacity ?? 1).toFixed(2)}
+                  {t("settings.opacity")}: {(bg.opacity ?? 1).toFixed(2)}
                 </div>
                 <input
                   type="range"
@@ -490,13 +517,13 @@ export default function SettingsDrawer() {
 
           {/* Integrations */}
           <div style={sectionStyle}>
-            <div style={labelStyle}>Integrations</div>
+            <div style={labelStyle}>{t("settings.integrations")}</div>
             <IntegrationsSection />
           </div>
 
           {/* Quick Commands */}
           <div style={sectionStyle}>
-            <div style={labelStyle}>Quick Commands</div>
+            <div style={labelStyle}>{t("settings.quickCommands")}</div>
             {settings.quick_commands.map((cmd) => (
               <div
                 key={cmd.id}
@@ -512,7 +539,7 @@ export default function SettingsDrawer() {
                     <input
                       value={editLabel}
                       onChange={(e) => setEditLabel(e.target.value)}
-                      placeholder="Label"
+                      placeholder={t("settings.label")}
                       style={{
                         background: "#1f2335",
                         border: "1px solid #292e42",
@@ -526,7 +553,7 @@ export default function SettingsDrawer() {
                     <input
                       value={editCommand}
                       onChange={(e) => setEditCommand(e.target.value)}
-                      placeholder="Command"
+                      placeholder={t("settings.command")}
                       style={{
                         background: "#1f2335",
                         border: "1px solid #292e42",
@@ -551,7 +578,7 @@ export default function SettingsDrawer() {
                           cursor: "pointer",
                         }}
                       >
-                        Save
+                        {t("settings.save")}
                       </button>
                       <button
                         onClick={() => setEditingCmd(null)}
@@ -565,7 +592,7 @@ export default function SettingsDrawer() {
                           cursor: "pointer",
                         }}
                       >
-                        Cancel
+                        {t("settings.cancel")}
                       </button>
                     </div>
                   </div>
@@ -603,11 +630,11 @@ export default function SettingsDrawer() {
                           padding: "2px 8px",
                         }}
                       >
-                        Edit
+                        {t("settings.edit")}
                       </button>
                       <button
                         onClick={() => deleteQuickCmd(cmd.id)}
-                        title="Delete"
+                        title={t("settings.delete")}
                         style={{
                           background: "none",
                           border: "none",
@@ -638,7 +665,7 @@ export default function SettingsDrawer() {
                 marginTop: 4,
               }}
             >
-              + Add quick command
+              {t("settings.addQuickCommand")}
             </button>
           </div>
         </div>

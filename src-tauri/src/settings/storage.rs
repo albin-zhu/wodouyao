@@ -25,6 +25,10 @@ fn default_opacity() -> f64 {
     1.0
 }
 
+fn default_language() -> String {
+    "en".into()
+}
+
 fn default_wire_empty_spawn() -> bool {
     true
 }
@@ -63,6 +67,8 @@ pub struct AppSettings {
     /// Command to run in the auto-spawned terminal (e.g. "claude", "codex").
     #[serde(default = "default_wire_empty_spawn_command")]
     pub wire_empty_spawn_command: String,
+    #[serde(default = "default_language")]
+    pub language: String,
 }
 
 impl Default for AppSettings {
@@ -75,6 +81,7 @@ impl Default for AppSettings {
             skip_create_dialog: false,
             wire_empty_spawn_enabled: true,
             wire_empty_spawn_command: "claude".into(),
+            language: "en".into(),
             quick_commands: vec![
                 QuickCommand {
                     id: "claude".into(),
