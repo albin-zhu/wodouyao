@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
-import { listAvailableShells } from "../../services/tauriCommands";
-import type { ShellInfo } from "../../types/terminal";
 import type {
   BackgroundKind,
   BackgroundSettings,
@@ -16,7 +14,6 @@ export default function SettingsDrawer() {
     useSettingsStore();
   const workspaceCwd = useWorkspaceStore((s) => s.currentWorkspaceCwd);
   const setWorkspaceCwd = useWorkspaceStore((s) => s.setWorkspaceCwd);
-  const [shells, setShells] = useState<ShellInfo[]>([]);
   const [editingCmd, setEditingCmd] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editCommand, setEditCommand] = useState("");
@@ -24,18 +21,11 @@ export default function SettingsDrawer() {
 
   useEffect(() => {
     if (drawerOpen) {
-      listAvailableShells()
-        .then(setShells)
-        .catch(() => {});
       setCwdInput(workspaceCwd ?? "");
     }
   }, [drawerOpen, workspaceCwd]);
 
   if (!drawerOpen || !settings) return null;
-
-  const handleShellChange = (path: string) => {
-    updateSettings({ default_shell_path: path || null });
-  };
 
   const handleFontSize = (size: number) => {
     if (size >= 8 && size <= 32) {
@@ -212,32 +202,6 @@ export default function SettingsDrawer() {
             </div>
           </div>
 
-          {/* Default Shell */}
-          <div style={sectionStyle}>
-            <div style={labelStyle}>Default Shell</div>
-            <select
-              value={settings.default_shell_path || ""}
-              onChange={(e) => handleShellChange(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px 10px",
-                background: "#13141b",
-                border: "1px solid #292e42",
-                borderRadius: 6,
-                color: "#c0caf5",
-                fontSize: 13,
-                outline: "none",
-              }}
-            >
-              <option value="">System Default</option>
-              {shells.map((s) => (
-                <option key={s.path} value={s.path}>
-                  {s.name} ({s.path})
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Font Size */}
           <div style={sectionStyle}>
             <div style={labelStyle}>Terminal Font Size</div>
@@ -328,6 +292,56 @@ export default function SettingsDrawer() {
             </div>
             <div style={{ color: "#565f89", fontSize: 11, marginTop: 6 }}>
               {"Shift+click the \"+ Terminal\" button to invert this setting once."}
+            </div>
+          </div>
+
+          {/* Wire to empty canvas */}
+          <div style={sectionStyle}>
+            <div style={labelStyle}>Wire to empty canvas</div>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                cursor: "pointer",
+                marginBottom: 8,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={settings.wire_empty_spawn_enabled ?? true}
+                onChange={(e) =>
+                  updateSettings({ wire_empty_spawn_enabled: e.target.checked })
+                }
+                style={{ margin: 0 }}
+              />
+              <span style={{ color: "#c0caf5", fontSize: 13 }}>
+                Auto-spawn terminal
+              </span>
+            </label>
+            {(settings.wire_empty_spawn_enabled ?? true) && (
+              <input
+                value={settings.wire_empty_spawn_command ?? "claude"}
+                onChange={(e) =>
+                  updateSettings({ wire_empty_spawn_command: e.target.value })
+                }
+                placeholder="claude"
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  background: "#13141b",
+                  border: "1px solid #292e42",
+                  borderRadius: 6,
+                  color: "#c0caf5",
+                  fontSize: 12,
+                  fontFamily: "monospace",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            )}
+            <div style={{ color: "#565f89", fontSize: 11, marginTop: 6 }}>
+              Drag a wire to blank canvas to spawn this command, then auto-wire.
             </div>
           </div>
 

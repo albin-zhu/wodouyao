@@ -60,7 +60,7 @@ export function useNewTerminal() {
       spawn({
         color: prefs.color,
         theme: prefs.theme,
-        shell: prefs.shell,
+        shell: prefs.shell || undefined,
         fastStart: prefs.fastStart ?? true,
         ...overrides,
         position,

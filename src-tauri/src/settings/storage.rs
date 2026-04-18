@@ -25,6 +25,14 @@ fn default_opacity() -> f64 {
     1.0
 }
 
+fn default_wire_empty_spawn() -> bool {
+    true
+}
+
+fn default_wire_empty_spawn_command() -> String {
+    "claude".into()
+}
+
 impl Default for BackgroundSettings {
     fn default() -> Self {
         BackgroundSettings {
@@ -49,6 +57,12 @@ pub struct AppSettings {
     /// Shift+click inverts this behavior per invocation.
     #[serde(default)]
     pub skip_create_dialog: bool,
+    /// When true, dragging a wire onto empty canvas auto-spawns a terminal.
+    #[serde(default = "default_wire_empty_spawn")]
+    pub wire_empty_spawn_enabled: bool,
+    /// Command to run in the auto-spawned terminal (e.g. "claude", "codex").
+    #[serde(default = "default_wire_empty_spawn_command")]
+    pub wire_empty_spawn_command: String,
 }
 
 impl Default for AppSettings {
@@ -59,6 +73,8 @@ impl Default for AppSettings {
             last_workspace_id: None,
             background: BackgroundSettings::default(),
             skip_create_dialog: false,
+            wire_empty_spawn_enabled: true,
+            wire_empty_spawn_command: "claude".into(),
             quick_commands: vec![
                 QuickCommand {
                     id: "claude".into(),

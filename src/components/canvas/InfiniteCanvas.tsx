@@ -4,6 +4,8 @@ import { useCanvasStore } from "../../store/canvasStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
 import { useWireStore } from "../../store/wireStore";
 import { useNewTerminal } from "../../hooks/useNewTerminal";
+import { useTerminal } from "../../hooks/useTerminal";
+import { useSettingsStore } from "../../store/settingsStore";
 import BackgroundLayer from "./BackgroundLayer";
 import TerminalLayer from "../terminal/TerminalLayer";
 import WireLayer from "./WireLayer";
@@ -22,6 +24,9 @@ export default function InfiniteCanvas() {
   const clearWire = useCanvasInteractionStore((s) => s.clearWire);
   const addWire = useWireStore((s) => s.addWire);
   const launchTerminal = useNewTerminal();
+  const { spawn } = useTerminal();
+  const wireEmptySpawnEnabled = useSettingsStore((s) => s.settings?.wire_empty_spawn_enabled ?? true);
+  const wireEmptySpawnCommand = useSettingsStore((s) => s.settings?.wire_empty_spawn_command ?? "claude");
   const drawingRef = useRef(false);
 
   const screenToWorld = useCallback(
@@ -106,12 +111,27 @@ export default function InfiniteCanvas() {
           if (targetId && targetId !== wireStartId) {
             addWire(wireStartId, targetId);
           }
+          clearWire();
+          setMode("select");
+        } else {
+          // Dropped on empty canvas — spawn a terminal and wire to it (if enabled)
+          if (wireEmptySpawnEnabled) {
+            const world = screenToWorld(e.clientX, e.clientY);
+            const sourceId = wireStartId;
+            const cmd = wireEmptySpawnCommand;
+            spawn({
+              command: cmd,
+              name: cmd.charAt(0).toUpperCase() + cmd.slice(1),
+              color: cmd === "claude" ? "#ff9e64" : cmd === "codex" ? "#9ece6a" : "#7aa2f7",
+              position: { x: world.x, y: world.y },
+            }).then((t) => addWire(sourceId, t.id)).catch(console.error);
+          }
+          clearWire();
+          setMode("select");
         }
-        clearWire();
-        setMode("select");
       }
     },
-    [mode, drawRect, wireStartId, clearDrawRect, launchTerminal, setMode, addWire, clearWire]
+    [mode, drawRect, wireStartId, clearDrawRect, launchTerminal, setMode, addWire, clearWire, screenToWorld, spawn, wireEmptySpawnEnabled, wireEmptySpawnCommand]
   );
 
   return (
