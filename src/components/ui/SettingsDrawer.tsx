@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import type {
@@ -176,6 +177,27 @@ export default function SettingsDrawer() {
                   outline: "none",
                 }}
               />
+              <button
+                onClick={async () => {
+                  const selected = await openDialog({ directory: true, multiple: false }).catch(() => null);
+                  if (typeof selected === "string") {
+                    setCwdInput(selected);
+                    setWorkspaceCwd(selected);
+                  }
+                }}
+                title="Browse folder"
+                style={{
+                  background: "#292e42",
+                  border: "none",
+                  color: "#c0caf5",
+                  borderRadius: 6,
+                  padding: "0 10px",
+                  cursor: "pointer",
+                  fontSize: 14,
+                }}
+              >
+                {"\uD83D\uDCC2"}
+              </button>
               {cwdInput && (
                 <button
                   onClick={() => {
@@ -373,27 +395,52 @@ export default function SettingsDrawer() {
             </select>
 
             {(bg.kind === "image" || bg.kind === "video" || bg.kind === "url") && (
-              <input
-                value={bg.source ?? ""}
-                onChange={(e) => patchBg({ source: e.target.value || null })}
-                placeholder={
-                  bg.kind === "url"
-                    ? "https://example.com"
-                    : "/absolute/path or https://..."
-                }
-                style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  background: "#13141b",
-                  border: "1px solid #292e42",
-                  borderRadius: 6,
-                  color: "#c0caf5",
-                  fontSize: 12,
-                  fontFamily: "monospace",
-                  outline: "none",
-                  marginBottom: 8,
-                }}
-              />
+              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                <input
+                  value={bg.source ?? ""}
+                  onChange={(e) => patchBg({ source: e.target.value || null })}
+                  placeholder={
+                    bg.kind === "url"
+                      ? "https://example.com"
+                      : "/absolute/path or https://..."
+                  }
+                  style={{
+                    flex: 1,
+                    padding: "8px 10px",
+                    background: "#13141b",
+                    border: "1px solid #292e42",
+                    borderRadius: 6,
+                    color: "#c0caf5",
+                    fontSize: 12,
+                    fontFamily: "monospace",
+                    outline: "none",
+                  }}
+                />
+                {(bg.kind === "image" || bg.kind === "video") && (
+                  <button
+                    onClick={async () => {
+                      const filters = bg.kind === "image"
+                        ? [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "avif", "bmp"] }]
+                        : [{ name: "Videos", extensions: ["mp4", "webm", "mov", "mkv", "avi"] }];
+                      const selected = await openDialog({ multiple: false, filters }).catch(() => null);
+                      if (typeof selected === "string") patchBg({ source: selected });
+                    }}
+                    title="Browse file"
+                    style={{
+                      background: "#292e42",
+                      border: "none",
+                      color: "#c0caf5",
+                      borderRadius: 6,
+                      padding: "0 10px",
+                      cursor: "pointer",
+                      fontSize: 14,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {"\uD83D\uDCC2"}
+                  </button>
+                )}
+              </div>
             )}
 
             {bg.kind === "particles" && (

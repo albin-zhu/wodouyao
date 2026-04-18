@@ -1,3 +1,5 @@
+import { useState, useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useTeamStore } from "../../store/teamStore";
@@ -25,6 +27,21 @@ export default function Toolbar() {
   const launchTerminal = useNewTerminal();
   const currentMode = useCanvasInteractionStore((s) => s.mode);
   const setMode = useCanvasInteractionStore((s) => s.setMode);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const win = getCurrentWindow();
+    win.isFullscreen().then(setIsFullscreen).catch(() => {});
+    const unlisten = win.onResized(() => {
+      win.isFullscreen().then(setIsFullscreen).catch(() => {});
+    });
+    return () => { unlisten.then((fn) => fn()).catch(() => {}); };
+  }, []);
+
+  const toggleFullscreen = () => {
+    const win = getCurrentWindow();
+    win.setFullscreen(!isFullscreen).then(() => setIsFullscreen(!isFullscreen)).catch(() => {});
+  };
 
   const quickCommands = settings?.quick_commands ?? [];
 
@@ -182,6 +199,27 @@ export default function Toolbar() {
             height={22}
             style={{ display: "block", opacity: 0.85 }}
           />
+        </button>
+
+        {/* Fullscreen toggle */}
+        <button
+          onClick={toggleFullscreen}
+          title={isFullscreen ? "Exit fullscreen (F11)" : "Fullscreen (F11)"}
+          style={{
+            background: "none",
+            border: "1px solid #292e42",
+            borderRadius: 4,
+            color: "#565f89",
+            cursor: "pointer",
+            width: 26,
+            height: 26,
+            fontSize: 13,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {isFullscreen ? "\u29C4" : "\u26F6"}
         </button>
       </div>
     </div>
