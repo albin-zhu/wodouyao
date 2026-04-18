@@ -811,6 +811,7 @@ fn wire_new_member(
             source_id,
             target_id,
             forward_output: true,
+            kind: Some("team".to_string()),
         });
     }
 }

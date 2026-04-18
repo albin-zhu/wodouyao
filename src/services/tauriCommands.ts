@@ -67,6 +67,7 @@ export interface WireIpc {
   source_id: string;
   target_id: string;
   forward_output: boolean;
+  kind?: string | null;
 }
 
 export async function wireList(): Promise<WireIpc[]> {
@@ -75,11 +76,13 @@ export async function wireList(): Promise<WireIpc[]> {
 
 export async function wireCreate(
   sourceId: string,
-  targetId: string
+  targetId: string,
+  kind?: string
 ): Promise<WireIpc> {
   return invoke<WireIpc>("wire_create", {
     sourceId,
     targetId,
+    kind: kind ?? null,
   });
 }
 
@@ -161,4 +164,33 @@ export interface TeamsLeaveParams {
 
 export async function teamsLeave(params: TeamsLeaveParams): Promise<void> {
   return invoke<void>("teams_leave", { ...params });
+}
+
+// File preview / inspection
+export interface DirEntryInfo {
+  name: string;
+  is_dir: boolean;
+}
+
+export interface DirListing {
+  entries: DirEntryInfo[];
+  truncated: boolean;
+}
+
+export interface FileInspect {
+  is_dir: boolean;
+  size: number;
+  exists: boolean;
+}
+
+export async function filePreviewText(path: string, maxBytes?: number): Promise<string> {
+  return invoke<string>("file_preview_text", { path, maxBytes: maxBytes ?? null });
+}
+
+export async function filePreviewDir(path: string): Promise<DirListing> {
+  return invoke<DirListing>("file_preview_dir", { path });
+}
+
+export async function fileInspect(path: string): Promise<FileInspect> {
+  return invoke<FileInspect>("file_inspect", { path });
 }

@@ -12,7 +12,7 @@ interface WireStore {
   wires: Map<string, Wire>;
 
   hydrate: () => Promise<void>;
-  addWire: (sourceId: string, targetId: string) => Promise<Wire | null>;
+  addWire: (sourceId: string, targetId: string, kind?: string) => Promise<Wire | null>;
   removeWire: (wireId: string) => Promise<void>;
   getWiresForTerminal: (terminalId: string) => Wire[];
   getWires: () => Wire[];
@@ -24,6 +24,7 @@ function fromIpc(w: WireIpc): Wire {
     id: w.id,
     sourceId: w.source_id,
     targetId: w.target_id,
+    kind: w.kind ?? undefined,
   };
 }
 
@@ -44,9 +45,9 @@ export const useWireStore = create<WireStore>((set, get) => ({
     }
   },
 
-  addWire: async (sourceId, targetId) => {
+  addWire: async (sourceId, targetId, kind) => {
     try {
-      const ipc = await wireCreate(sourceId, targetId);
+      const ipc = await wireCreate(sourceId, targetId, kind);
       const wire = fromIpc(ipc);
       const next = new Map(get().wires);
       next.set(wire.id, wire);

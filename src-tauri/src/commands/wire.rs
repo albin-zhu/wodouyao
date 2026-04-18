@@ -14,12 +14,14 @@ pub fn wire_create(
     state: State<'_, AppState>,
     source_id: String,
     target_id: String,
+    kind: Option<String>,
 ) -> Wire {
     let wire = Wire {
         id: Uuid::new_v4().to_string(),
         source_id,
         target_id,
         forward_output: true,
+        kind,
     };
     state.topology.insert(wire)
 }

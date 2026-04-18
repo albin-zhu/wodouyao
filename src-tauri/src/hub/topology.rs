@@ -9,6 +9,10 @@ pub struct Wire {
     pub target_id: String,
     #[serde(default = "default_forward")]
     pub forward_output: bool,
+    /// Resource type carried by this wire: "io" (terminal↔terminal),
+    /// "note", "file", "team", or other custom kinds. None for legacy wires.
+    #[serde(default)]
+    pub kind: Option<String>,
 }
 
 fn default_forward() -> bool {

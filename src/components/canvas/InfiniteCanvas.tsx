@@ -1,15 +1,52 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useCanvas } from "../../hooks/useCanvas";
 import { useCanvasStore } from "../../store/canvasStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
 import { useWireStore } from "../../store/wireStore";
+import { useTerminalStore } from "../../store/terminalStore";
+import { useNoteStore } from "../../store/noteStore";
+import { useFileNodeStore } from "../../store/fileNodeStore";
 import { useNewTerminal } from "../../hooks/useNewTerminal";
 import { useTerminal } from "../../hooks/useTerminal";
 import { useSettingsStore } from "../../store/settingsStore";
+import { fileInspect } from "../../services/tauriCommands";
+import type { FileKind } from "../../types/fileNode";
 import BackgroundLayer from "./BackgroundLayer";
+import ResourceLayer from "./ResourceLayer";
 import TerminalLayer from "../terminal/TerminalLayer";
 import WireLayer from "./WireLayer";
 import CanvasControls from "./CanvasControls";
+
+const TEXT_EXTS = new Set([
+  "txt", "md", "json", "yaml", "yml", "toml", "ini", "env",
+  "ts", "tsx", "js", "jsx", "mjs", "cjs",
+  "py", "rs", "go", "java", "kt", "swift", "c", "cc", "cpp", "h", "hpp",
+  "rb", "php", "sh", "bash", "zsh", "fish", "ps1",
+  "html", "css", "scss", "sass", "less", "svg",
+  "xml", "csv", "log", "lock",
+]);
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "ico", "tiff"]);
+const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "mkv", "avi", "m4v"]);
+
+function basename(p: string): string {
+  const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+  return i >= 0 ? p.slice(i + 1) : p;
+}
+
+function extOf(p: string): string {
+  const name = basename(p);
+  const i = name.lastIndexOf(".");
+  return i > 0 ? name.slice(i + 1).toLowerCase() : "";
+}
+
+function classifyByExt(path: string): FileKind {
+  const e = extOf(path);
+  if (IMAGE_EXTS.has(e)) return "image";
+  if (VIDEO_EXTS.has(e)) return "video";
+  if (TEXT_EXTS.has(e)) return "text";
+  return "other";
+}
 
 export default function InfiniteCanvas() {
   const { handleWheel, handleCanvasMouseDown } = useCanvas();
@@ -27,7 +64,23 @@ export default function InfiniteCanvas() {
   const { spawn } = useTerminal();
   const wireEmptySpawnEnabled = useSettingsStore((s) => s.settings?.wire_empty_spawn_enabled ?? true);
   const wireEmptySpawnCommand = useSettingsStore((s) => s.settings?.wire_empty_spawn_command ?? "claude");
+  const addFileNode = useFileNodeStore((s) => s.addFileNode);
   const drawingRef = useRef(false);
+
+  // Compute kind ("io" | "note" | "file" | derived) for a wire between two nodes.
+  const deriveWireKind = useCallback((a: string, b: string): string => {
+    const t = useTerminalStore.getState().terminals;
+    const n = useNoteStore.getState().notes;
+    const f = useFileNodeStore.getState().fileNodes;
+    const kindOf = (id: string) =>
+      t.has(id) ? "terminal" : n.has(id) ? "note" : f.has(id) ? "file" : "unknown";
+    const ka = kindOf(a);
+    const kb = kindOf(b);
+    if (ka === "terminal" && kb === "terminal") return "io";
+    if (ka === "terminal") return kb;
+    if (kb === "terminal") return ka;
+    return `${ka}-${kb}`;
+  }, []);
 
   const screenToWorld = useCallback(
     (screenX: number, screenY: number) => {
@@ -54,7 +107,7 @@ export default function InfiniteCanvas() {
       if (mode !== "draw") return;
       if (e.button !== 0) return;
       const target = e.target as HTMLElement;
-      if (target.closest(".terminal-node") || target.closest("button")) return;
+      if (target.closest("[data-node-id], [data-terminal-id]") || target.closest("button")) return;
 
       e.preventDefault();
       const world = screenToWorld(e.clientX, e.clientY);
@@ -102,14 +155,17 @@ export default function InfiniteCanvas() {
         }
       }
 
-      // Wire mode: check if dropped on a terminal
+      // Wire mode: check if dropped on a node (terminal/note/file)
       if (mode === "wire" && wireStartId) {
         const target = e.target as HTMLElement;
-        const terminalNode = target.closest(".terminal-node");
-        if (terminalNode) {
-          const targetId = terminalNode.getAttribute("data-terminal-id");
-          if (targetId && targetId !== wireStartId) {
-            addWire(wireStartId, targetId);
+        const node =
+          target.closest("[data-node-id]") ?? target.closest("[data-terminal-id]");
+        const targetId =
+          node?.getAttribute("data-node-id") ?? node?.getAttribute("data-terminal-id") ?? null;
+        if (targetId) {
+          if (targetId !== wireStartId) {
+            const kind = deriveWireKind(wireStartId, targetId);
+            addWire(wireStartId, targetId, kind);
           }
           clearWire();
           setMode("select");
@@ -124,15 +180,59 @@ export default function InfiniteCanvas() {
               name: cmd.charAt(0).toUpperCase() + cmd.slice(1),
               color: cmd === "claude" ? "#ff9e64" : cmd === "codex" ? "#9ece6a" : "#7aa2f7",
               position: { x: world.x, y: world.y },
-            }).then((t) => addWire(sourceId, t.id)).catch(console.error);
+            }).then((t) => {
+              const kind = deriveWireKind(sourceId, t.id);
+              return addWire(sourceId, t.id, kind);
+            }).catch(console.error);
           }
           clearWire();
           setMode("select");
         }
       }
     },
-    [mode, drawRect, wireStartId, clearDrawRect, launchTerminal, setMode, addWire, clearWire, screenToWorld, spawn, wireEmptySpawnEnabled, wireEmptySpawnCommand]
+    [mode, drawRect, wireStartId, clearDrawRect, launchTerminal, setMode, addWire, clearWire, screenToWorld, spawn, wireEmptySpawnEnabled, wireEmptySpawnCommand, deriveWireKind]
   );
+
+  // OS-level file/folder drop onto the canvas → spawn FileNodes.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    const webview = getCurrentWebview();
+    webview
+      .onDragDropEvent(async (event) => {
+        if (event.payload.type !== "drop") return;
+        const paths: string[] = (event.payload as { paths: string[] }).paths ?? [];
+        if (!paths.length) return;
+        const pos = (event.payload as { position?: { x: number; y: number } }).position;
+        const viewport = document.getElementById("canvas-viewport");
+        const rect = viewport?.getBoundingClientRect();
+        const baseScreenX = pos?.x ?? rect?.left ?? 0;
+        const baseScreenY = pos?.y ?? rect?.top ?? 0;
+        const baseWorld = screenToWorld(baseScreenX, baseScreenY);
+        for (let i = 0; i < paths.length; i++) {
+          const p = paths[i];
+          let kind: FileKind = classifyByExt(p);
+          try {
+            const info = await fileInspect(p);
+            if (info.exists && info.is_dir) kind = "directory";
+          } catch {
+            // ignore — fall back to extension classification
+          }
+          addFileNode({
+            path: p,
+            name: basename(p),
+            kind,
+            position: { x: baseWorld.x + i * 28, y: baseWorld.y + i * 28 },
+          });
+        }
+      })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [screenToWorld, addFileNode]);
 
   return (
     <div
@@ -142,8 +242,9 @@ export default function InfiniteCanvas() {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onContextMenu={(e) => {
-        // Only prevent default on empty canvas, not on terminal nodes
-        if (!(e.target as HTMLElement).closest(".terminal-node")) {
+        // Only prevent default on empty canvas, not on terminal/note/file nodes
+        const target = e.target as HTMLElement;
+        if (!target.closest("[data-node-id], [data-terminal-id]")) {
           e.preventDefault();
         }
       }}
@@ -158,6 +259,7 @@ export default function InfiniteCanvas() {
     >
       <BackgroundLayer />
       <WireLayer />
+      <ResourceLayer />
       <TerminalLayer />
       <CanvasControls />
     </div>

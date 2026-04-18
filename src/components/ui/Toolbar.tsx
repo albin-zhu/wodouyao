@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useTeamStore } from "../../store/teamStore";
+import { useNoteStore } from "../../store/noteStore";
 import { useNewTerminal } from "../../hooks/useNewTerminal";
 import { useCanvasInteractionStore, type CanvasMode } from "../../store/canvasInteractionStore";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
@@ -25,6 +26,7 @@ export default function Toolbar() {
   const openDrawer = useSettingsStore((s) => s.openDrawer);
   const openTeamsDrawer = useTeamStore((s) => s.openDrawer);
   const launchTerminal = useNewTerminal();
+  const addNote = useNoteStore((s) => s.addNote);
   const currentMode = useCanvasInteractionStore((s) => s.mode);
   const setMode = useCanvasInteractionStore((s) => s.setMode);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -154,6 +156,22 @@ export default function Toolbar() {
           }}
         >
           + Terminal
+        </button>
+        <button
+          onClick={() => addNote()}
+          title="New sticky note"
+          style={{
+            background: "#e0af6822",
+            color: "#e0af68",
+            border: "1px solid #e0af6866",
+            borderRadius: 6,
+            padding: "6px 12px",
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          + Note
         </button>
         <span style={{ color: "#565f89", fontSize: 11 }}>
           Ctrl+K

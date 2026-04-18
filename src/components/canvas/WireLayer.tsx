@@ -1,6 +1,8 @@
 import { useMemo, useCallback, useRef, useState } from "react";
 import { useWireStore } from "../../store/wireStore";
 import { useTerminalStore } from "../../store/terminalStore";
+import { useNoteStore } from "../../store/noteStore";
+import { useFileNodeStore } from "../../store/fileNodeStore";
 import { useCanvasStore } from "../../store/canvasStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
 import { useTeamStore } from "../../store/teamStore";
@@ -50,6 +52,8 @@ export default function WireLayer() {
   const wires = useMemo(() => Array.from(wiresMap.values()), [wiresMap]);
   const removeWire = useWireStore((s) => s.removeWire);
   const terminals = useTerminalStore((s) => s.terminals);
+  const notes = useNoteStore((s) => s.notes);
+  const fileNodes = useFileNodeStore((s) => s.fileNodes);
   const { panX, panY, zoom } = useCanvasStore();
   const wireStartId = useCanvasInteractionStore((s) => s.wireStartId);
   const wireEndPos = useCanvasInteractionStore((s) => s.wireEndPos);
@@ -76,21 +80,43 @@ export default function WireLayer() {
   }, []);
 
   const getAnchor = useCallback(
-    (terminalId: string, side: "right" | "left") => {
-      const t = terminals.get(terminalId);
-      if (!t) return null;
-      if (side === "right") {
-        return {
-          x: t.position.x + t.size.width,
-          y: t.position.y + (t.isFolded ? 18 : t.size.height / 2),
-        };
+    (nodeId: string, side: "right" | "left") => {
+      const t = terminals.get(nodeId);
+      if (t) {
+        const cy = t.position.y + (t.isFolded ? 18 : t.size.height / 2);
+        return side === "right"
+          ? { x: t.position.x + t.size.width, y: cy }
+          : { x: t.position.x, y: cy };
       }
-      return {
-        x: t.position.x,
-        y: t.position.y + (t.isFolded ? 18 : t.size.height / 2),
-      };
+      const n = notes.get(nodeId);
+      if (n) {
+        const cy = n.position.y + n.size.height / 2;
+        return side === "right"
+          ? { x: n.position.x + n.size.width, y: cy }
+          : { x: n.position.x, y: cy };
+      }
+      const f = fileNodes.get(nodeId);
+      if (f) {
+        const cy = f.position.y + f.size.height / 2;
+        return side === "right"
+          ? { x: f.position.x + f.size.width, y: cy }
+          : { x: f.position.x, y: cy };
+      }
+      return null;
     },
-    [terminals]
+    [terminals, notes, fileNodes]
+  );
+
+  const nodeName = useCallback(
+    (nodeId: string): string => {
+      return (
+        terminals.get(nodeId)?.name ??
+        (notes.get(nodeId) ? "Note" : null) ??
+        fileNodes.get(nodeId)?.name ??
+        nodeId
+      );
+    },
+    [terminals, notes, fileNodes]
   );
 
   const makeBezier = (
@@ -106,12 +132,8 @@ export default function WireLayer() {
   const hoveredWire = hoveredWireId
     ? wiresMap.get(hoveredWireId) ?? null
     : null;
-  const sourceName = hoveredWire
-    ? terminals.get(hoveredWire.sourceId)?.name ?? hoveredWire.sourceId
-    : "";
-  const targetName = hoveredWire
-    ? terminals.get(hoveredWire.targetId)?.name ?? hoveredWire.targetId
-    : "";
+  const sourceName = hoveredWire ? nodeName(hoveredWire.sourceId) : "";
+  const targetName = hoveredWire ? nodeName(hoveredWire.targetId) : "";
 
   return (
     <>

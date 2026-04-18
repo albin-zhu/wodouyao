@@ -113,6 +113,9 @@ pub fn run() {
             commands::team::teams_create,
             commands::team::teams_join,
             commands::team::teams_leave,
+            commands::file_preview::file_preview_text,
+            commands::file_preview::file_preview_dir,
+            commands::file_preview::file_inspect,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
