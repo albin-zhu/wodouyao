@@ -30,7 +30,6 @@ export default function Toolbar() {
   const anyMaximized = useTerminalStore((s) =>
     Array.from(s.terminals.values()).some((t) => !!t.prevBounds)
   );
-  if (anyMaximized) return null;
   const settings = useSettingsStore((s) => s.settings);
   const openDrawer = useSettingsStore((s) => s.openDrawer);
   const openTeamsDrawer = useTeamStore((s) => s.openDrawer);
@@ -60,6 +59,8 @@ export default function Toolbar() {
   };
 
   const quickCommands = settings?.quick_commands ?? [];
+
+  if (anyMaximized) return null;
 
   return (
     <div
