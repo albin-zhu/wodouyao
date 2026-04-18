@@ -273,8 +273,8 @@ export default function InfiniteCanvas() {
     >
       <BackgroundLayer />
       <WireLayer />
-      <ResourceLayer />
       <TerminalLayer />
+      <ResourceLayer />
       <CanvasControls />
     </div>
   );
