@@ -130,6 +130,10 @@ impl NoteStore {
         self.inner.lock().unwrap().0.remove(id).is_some()
     }
 
+    pub fn get(&self, id: &str) -> Option<Note> {
+        self.inner.lock().unwrap().0.get(id).cloned()
+    }
+
     pub fn replace_all(&self, notes: Vec<Note>) {
         let mut guard = self.inner.lock().unwrap();
         let (map, next_z) = &mut *guard;

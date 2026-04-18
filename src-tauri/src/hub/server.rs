@@ -98,12 +98,12 @@ fn handle(
     let (path, query) = split_query(&url);
 
     match (&method, path) {
-        (&Method::Get, "/v1/peers") => peers(request, topology, identities, pty_manager, &query),
+        (&Method::Get, "/v1/peers") => peers(request, topology, identities, pty_manager, note_store, &query),
         (&Method::Get, "/v1/whoami") => whoami(request, identities, &query),
         (&Method::Post, "/v1/self") => register_self(request, identities),
         (&Method::Post, "/v1/spawn") => spawn(request, topology, team_registry, app_handle),
         (&Method::Post, "/v1/send") => send(request, topology, pty_manager),
-        (&Method::Get, "/v1/read") => read(request, topology, pty_manager, &query),
+        (&Method::Get, "/v1/read") => read(request, topology, pty_manager, note_store, &query),
         (&Method::Get, "/v1/watch") => watch(request, topology, pty_manager, &query),
         (&Method::Post, "/v1/teams") => teams_create(request, team_registry, app_handle),
         (&Method::Get, "/v1/teams") => teams_list(request, team_registry),
@@ -291,6 +291,7 @@ fn peers(
     topology: &WireTopology,
     identities: &IdentityRegistry,
     pty_manager: &Arc<Mutex<PtyManager>>,
+    note_store: &NoteStore,
     query: &[(String, String)],
 ) {
     let from = query
@@ -302,19 +303,28 @@ fn peers(
         return;
     };
     let peer_ids = topology.peers_for(&from);
-    // Lazy liveness filter: drop any peer whose PTY is gone so stale wires
-    // don't surface on the frontend.
-    let peer_entries: Vec<Identity> = {
-        let live = pty_manager
-            .lock()
-            .map(|m| m.live_ids())
-            .unwrap_or_default();
-        peer_ids
-            .into_iter()
-            .filter(|id| live.iter().any(|l| l == id))
-            .map(|id| identities.get(&id))
-            .collect()
-    };
+    let live: Vec<String> = pty_manager
+        .lock()
+        .map(|m| m.live_ids())
+        .unwrap_or_default();
+    let mut peer_entries: Vec<Identity> = peer_ids
+        .iter()
+        .filter(|id| live.iter().any(|l| l == *id))
+        .map(|id| identities.get(id))
+        .collect();
+    // Also include notes that are wired to `from`
+    for id in &peer_ids {
+        if let Some(note) = note_store.get(id) {
+            let preview = note.text.chars().take(60).collect::<String>();
+            peer_entries.push(Identity {
+                id: note.id.clone(),
+                name: Some(if preview.is_empty() { "(empty note)".into() } else { preview }),
+                agent_kind: Some("note".into()),
+                capabilities: vec!["read".into()],
+                registered_at: 0,
+            });
+        }
+    }
     let body = serde_json::to_string(&peer_entries).unwrap_or_else(|_| "[]".into());
     let _ = request.respond(json(200, body));
 }
@@ -594,6 +604,7 @@ fn read(
     request: tiny_http::Request,
     topology: &WireTopology,
     pty_manager: &Arc<Mutex<PtyManager>>,
+    note_store: &NoteStore,
     query: &[(String, String)],
 ) {
     let from = query.iter().find(|(k, _)| k == "from").map(|(_, v)| v.clone());
@@ -626,6 +637,13 @@ fn read(
 
     if !topology.peers_for(&from).iter().any(|p| p == &to) {
         let _ = request.respond(text(403, "no wire between 'from' and 'to'"));
+        return;
+    }
+
+    // If target is a note, return its text content directly.
+    if let Some(note) = note_store.get(&to) {
+        let content = note.text.clone();
+        let _ = request.respond(plain_bytes(200, content.into_bytes()));
         return;
     }
 
