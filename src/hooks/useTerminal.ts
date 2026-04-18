@@ -5,7 +5,7 @@ import { useWorkspaceStore } from "../store/workspaceStore";
 import { createTerminal, destroyTerminal } from "../services/tauriCommands";
 import { generateId } from "../utils/id";
 import { DEFAULT_COLS, DEFAULT_ROWS } from "../utils/constants";
-import type { TerminalNode, TerminalTheme } from "../types/terminal";
+import type { TerminalNode, TerminalTheme, TerminalRole } from "../types/terminal";
 
 export interface SpawnOptions {
   id?: string;
@@ -15,6 +15,7 @@ export interface SpawnOptions {
   size?: { width: number; height: number };
   color?: string;
   theme?: TerminalTheme;
+  role?: TerminalRole;
   shell?: string;
   cwd?: string;
   fastStart?: boolean;
@@ -49,6 +50,7 @@ export function useTerminal() {
       if (options?.size) overrides.size = options.size;
       if (options?.color) overrides.color = options.color;
       if (options?.theme) overrides.theme = options.theme;
+      if (options?.role) overrides.role = options.role;
 
       const terminal = addTerminal(overrides);
 

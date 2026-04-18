@@ -64,7 +64,6 @@ export default function InfiniteCanvas() {
   const { spawn } = useTerminal();
   const wireEmptySpawnEnabled = useSettingsStore((s) => s.settings?.wire_empty_spawn_enabled ?? true);
   const wireEmptySpawnCommand = useSettingsStore((s) => s.settings?.wire_empty_spawn_command ?? "claude");
-  const addFileNode = useFileNodeStore((s) => s.addFileNode);
   const drawingRef = useRef(false);
 
   // Compute kind ("io" | "note" | "file" | derived) for a wire between two nodes.
@@ -194,7 +193,11 @@ export default function InfiniteCanvas() {
   );
 
   // OS-level file/folder drop onto the canvas → spawn FileNodes.
+  // Register exactly ONCE; read pan/zoom via store.getState() inside the
+  // handler so the effect doesn't re-register on every viewport change
+  // (the async unlisten Promise made re-registration leak listeners).
   useEffect(() => {
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
     const webview = getCurrentWebview();
     webview
@@ -205,9 +208,15 @@ export default function InfiniteCanvas() {
         const pos = (event.payload as { position?: { x: number; y: number } }).position;
         const viewport = document.getElementById("canvas-viewport");
         const rect = viewport?.getBoundingClientRect();
-        const baseScreenX = pos?.x ?? rect?.left ?? 0;
-        const baseScreenY = pos?.y ?? rect?.top ?? 0;
-        const baseWorld = screenToWorld(baseScreenX, baseScreenY);
+        const { panX, panY, zoom } = useCanvasStore.getState();
+        const offsetX = rect?.left ?? 0;
+        const offsetY = rect?.top ?? 0;
+        const screenX = pos?.x ?? offsetX;
+        const screenY = pos?.y ?? offsetY;
+        const baseWorld = {
+          x: (screenX - offsetX - panX) / zoom,
+          y: (screenY - offsetY - panY) / zoom,
+        };
         for (let i = 0; i < paths.length; i++) {
           const p = paths[i];
           let kind: FileKind = classifyByExt(p);
@@ -217,7 +226,7 @@ export default function InfiniteCanvas() {
           } catch {
             // ignore — fall back to extension classification
           }
-          addFileNode({
+          useFileNodeStore.getState().addFileNode({
             path: p,
             name: basename(p),
             kind,
@@ -226,13 +235,18 @@ export default function InfiniteCanvas() {
         }
       })
       .then((fn) => {
-        unlisten = fn;
+        if (cancelled) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
       })
       .catch(() => {});
     return () => {
+      cancelled = true;
       if (unlisten) unlisten();
     };
-  }, [screenToWorld, addFileNode]);
+  }, []);
 
   return (
     <div

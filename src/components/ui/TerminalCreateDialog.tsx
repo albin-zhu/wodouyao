@@ -5,7 +5,9 @@ import { useWorkspaceStore } from "../../store/workspaceStore";
 import { listAvailableShells, detectCliAgents } from "../../services/tauriCommands";
 import type { CliAgent } from "../../services/tauriCommands";
 import { ACCENT_COLORS, TERMINAL_THEMES } from "../../utils/terminalThemes";
-import type { TerminalTheme, ShellInfo } from "../../types/terminal";
+import RolePicker from "./RolePicker";
+import { TERMINAL_ROLES } from "../../utils/terminalRoles";
+import type { TerminalTheme, TerminalRole, ShellInfo } from "../../types/terminal";
 
 // Fields that persist between dialog opens (remembered from last Create).
 // Name/command/cwd vary per terminal, so they're explicitly NOT carried over.
@@ -41,6 +43,7 @@ export default function TerminalCreateDialog() {
   const [name, setName] = useState("");
   const [color, setColor] = useState(ACCENT_COLORS[0].hex);
   const [theme, setTheme] = useState<TerminalTheme>("tokyonight");
+  const [role, setRole] = useState<TerminalRole | undefined>(undefined);
   const [shell, setShell] = useState("");
   const [cwd, setCwd] = useState("");
   const [command, setCommand] = useState("");
@@ -77,6 +80,7 @@ export default function TerminalCreateDialog() {
       name: name || undefined,
       color,
       theme,
+      role,
       shell: shell || undefined,
       cwd: cwd || undefined,
       command: command || undefined,
@@ -257,6 +261,22 @@ export default function TerminalCreateDialog() {
             </option>
           ))}
         </select>
+
+        {/* Role */}
+        <label style={labelStyle}>Role</label>
+        <div style={{ marginBottom: 14 }}>
+          <RolePicker
+            value={role}
+            onChange={(r) => {
+              setRole(r);
+              if (r) {
+                const meta = TERMINAL_ROLES[r];
+                setColor(meta.color);
+              }
+            }}
+            compact
+          />
+        </div>
 
         {/* Working Directory */}
         <label style={labelStyle}>Working Directory</label>

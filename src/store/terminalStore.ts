@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { TerminalNode, TerminalStatus } from "../types/terminal";
+import type { TerminalNode, TerminalRole, TerminalStatus } from "../types/terminal";
 import {
   DEFAULT_TERMINAL_WIDTH,
   DEFAULT_TERMINAL_HEIGHT,
@@ -23,6 +23,9 @@ interface TerminalStore {
   unfoldAll: () => void;
   bringToFront: (id: string) => void;
   setStatus: (id: string, status: TerminalStatus) => void;
+  setRole: (id: string, role: TerminalRole | undefined) => void;
+  markActivity: (id: string, ts: number) => void;
+  setExitCode: (id: string, code: number) => void;
   getTerminals: () => TerminalNode[];
   clearAll: () => void;
 }
@@ -50,6 +53,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       color: overrides?.color ?? DEFAULT_COLOR,
       theme: overrides?.theme ?? DEFAULT_THEME,
       cwd: overrides?.cwd,
+      role: overrides?.role,
       ...overrides,
       // Ensure id is not overwritten by spread
     };
@@ -137,6 +141,35 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       if (!term) return state;
       const newMap = new Map(state.terminals);
       newMap.set(id, { ...term, status });
+      return { terminals: newMap };
+    }),
+
+  setRole: (id, role) =>
+    set((state) => {
+      const term = state.terminals.get(id);
+      if (!term) return state;
+      const newMap = new Map(state.terminals);
+      newMap.set(id, { ...term, role });
+      return { terminals: newMap };
+    }),
+
+  markActivity: (id, ts) => {
+    // Mutate in place to avoid re-rendering every TerminalNode on each output
+    // chunk; the activity tick in useTerminalActivity reads this lazily and
+    // calls setStatus only when the derived state actually flips.
+    const term = get().terminals.get(id);
+    if (term) {
+      term.lastOutputAt = ts;
+    }
+  },
+
+  setExitCode: (id, code) =>
+    set((state) => {
+      const term = state.terminals.get(id);
+      if (!term) return state;
+      const newMap = new Map(state.terminals);
+      const status: TerminalStatus = code === 0 ? "terminated" : "error";
+      newMap.set(id, { ...term, lastExitCode: code, status });
       return { terminals: newMap };
     }),
 

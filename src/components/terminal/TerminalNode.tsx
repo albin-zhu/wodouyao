@@ -2,6 +2,7 @@ import { memo, useRef, useCallback, useState } from "react";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
 import { useTeamStore } from "../../store/teamStore";
+import { useTaskStore } from "../../store/taskStore";
 import { showTerminalContextMenu } from "./TerminalContextMenu";
 import TerminalTitleBar from "./TerminalTitleBar";
 import TerminalBody from "./TerminalBody";
@@ -18,6 +19,8 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
   const setMode = useCanvasInteractionStore((s) => s.setMode);
   const setWireStart = useCanvasInteractionStore((s) => s.setWireStart);
   const team = useTeamStore((s) => s.getTeamForTerminal(terminal.id));
+  const updateTask = useTaskStore((s) => s.updateTask);
+  const [taskDropOver, setTaskDropOver] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
   const resizeStartRef = useRef<{
     mouseX: number;
@@ -136,10 +139,27 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
     <div
       className="terminal-node"
       data-terminal-id={terminal.id}
+      data-node-id={terminal.id}
       onMouseDown={handleMouseDown}
       onContextMenu={handleContextMenu}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("application/x-wd-task")) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          setTaskDropOver(true);
+        }
+      }}
+      onDragLeave={() => setTaskDropOver(false)}
+      onDrop={(e) => {
+        const taskId = e.dataTransfer.getData("application/x-wd-task");
+        if (taskId) {
+          e.preventDefault();
+          updateTask(taskId, { owner_term_id: terminal.id, status: "in_progress" });
+        }
+        setTaskDropOver(false);
+      }}
       style={{
         position: "absolute",
         left: terminal.position.x,
@@ -150,7 +170,11 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
         display: "flex",
         flexDirection: "column",
         borderRadius: 8,
-        border: mode === "wire" ? `1px solid ${terminal.color}` : `1px solid ${terminal.color}40`,
+        border: taskDropOver
+          ? `2px dashed #e0af68`
+          : mode === "wire"
+          ? `1px solid ${terminal.color}`
+          : `1px solid ${terminal.color}40`,
         overflow: "hidden",
         boxShadow: team
           ? `0 4px 24px rgba(0,0,0,0.4), 0 0 0 3px ${team.palette.base}55`

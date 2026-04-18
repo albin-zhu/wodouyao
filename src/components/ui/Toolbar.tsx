@@ -5,7 +5,9 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useTeamStore } from "../../store/teamStore";
 import { useNoteStore } from "../../store/noteStore";
 import { useTaskStore } from "../../store/taskStore";
+import { useWorkspaceStore } from "../../store/workspaceStore";
 import { useNewTerminal } from "../../hooks/useNewTerminal";
+import { useForkWorkspace } from "../../hooks/useForkWorkspace";
 import { useCanvasInteractionStore, type CanvasMode } from "../../store/canvasInteractionStore";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 
@@ -31,6 +33,8 @@ export default function Toolbar() {
   const openTasksDrawer = useTaskStore((s) => s.openDrawer);
   const tasksMap = useTaskStore((s) => s.tasks);
   const tasksActiveCount = Array.from(tasksMap.values()).filter((t) => t.status !== "completed").length;
+  const currentWorkspace = useWorkspaceStore((s) => s.currentWorkspace);
+  const forkWorkspace = useForkWorkspace();
   const currentMode = useCanvasInteractionStore((s) => s.mode);
   const setMode = useCanvasInteractionStore((s) => s.setMode);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -68,6 +72,27 @@ export default function Toolbar() {
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <span style={{ color: "#7aa2f7", fontWeight: 600, fontSize: 14 }}>Wodouyao</span>
         <WorkspaceSwitcher />
+        <button
+          onClick={() => {
+            const name = prompt(
+              `Fork "${currentWorkspace?.name ?? "Workspace"}" to:`,
+              `${currentWorkspace?.name ?? "Workspace"} (fork)`
+            );
+            if (name !== null) forkWorkspace(name || undefined);
+          }}
+          title="Fork current workspace"
+          style={{
+            background: "none",
+            border: "1px solid #292e42",
+            color: "#565f89",
+            borderRadius: 4,
+            padding: "2px 8px",
+            fontSize: 11,
+            cursor: "pointer",
+          }}
+        >
+          {"\u29BE"} fork
+        </button>
         <span style={{ color: "#565f89", fontSize: 12 }}>
           {terminalCount} terminal{terminalCount !== 1 ? "s" : ""}
         </span>

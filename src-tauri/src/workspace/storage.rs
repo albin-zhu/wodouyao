@@ -41,6 +41,8 @@ pub struct TerminalNodeLayout {
     pub theme: Option<String>,
     #[serde(default)]
     pub cwd: Option<String>,
+    #[serde(default)]
+    pub role: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

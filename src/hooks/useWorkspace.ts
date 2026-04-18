@@ -7,7 +7,8 @@ import { useWireStore } from "../store/wireStore";
 import { useTaskStore } from "../store/taskStore";
 import type { Workspace, WorkspaceTerminalLayout, WorkspaceWireLayout } from "../types/workspace";
 import type { TerminalNode, ShellType } from "../types/terminal";
-import { destroyTerminal, createTerminal } from "../services/tauriCommands";
+import { destroyTerminal, createTerminal, saveWorkspace } from "../services/tauriCommands";
+import { generateId } from "../utils/id";
 import { DEFAULT_COLS, DEFAULT_ROWS } from "../utils/constants";
 
 export function useWorkspace() {
@@ -44,6 +45,7 @@ export function useWorkspace() {
       color: t.color,
       theme: t.theme,
       cwd: t.cwd,
+      role: t.role,
     }));
 
     const wireLayouts: WorkspaceWireLayout[] = Array.from(wiresMap.values()).map((w) => ({
@@ -104,6 +106,7 @@ export function useWorkspace() {
           color: layout.color,
           theme: (layout.theme as TerminalNode["theme"]) ?? "tokyonight",
           cwd: layout.cwd,
+          role: layout.role as TerminalNode["role"],
         };
 
         addTerminal(overrides);
@@ -127,6 +130,26 @@ export function useWorkspace() {
       await useTaskStore.getState().hydrate();
     },
     [getTerminals, removeTerminal, addTerminal, setPan]
+  );
+
+  const forkCurrentWorkspace = useCallback(
+    async (newName?: string) => {
+      const { currentWorkspace, loadWorkspaceList, loadWorkspaceById } =
+        useWorkspaceStore.getState();
+      const base = buildWorkspace();
+      const forkedId = generateId();
+      const forked: Workspace = {
+        ...base,
+        id: forkedId,
+        name: newName ?? `${currentWorkspace?.name ?? "Workspace"} (fork)`,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      };
+      await saveWorkspace(forked);
+      await loadWorkspaceList();
+      await loadWorkspaceById(forkedId, applyWorkspace);
+    },
+    [buildWorkspace, applyWorkspace]
   );
 
   // Auto-save: debounce 3s on terminal/canvas changes
@@ -175,5 +198,5 @@ export function useWorkspace() {
     }
   }, [currentWorkspace?.id]);
 
-  return { buildWorkspace, applyWorkspace };
+  return { buildWorkspace, applyWorkspace, forkCurrentWorkspace };
 }

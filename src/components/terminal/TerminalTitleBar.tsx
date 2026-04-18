@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasStore } from "../../store/canvasStore";
 import { useTerminal } from "../../hooks/useTerminal";
 import { useTeamStore } from "../../store/teamStore";
 import TerminalStatusBadge from "./TerminalStatusBadge";
+import RolePicker from "../ui/RolePicker";
+import { TERMINAL_ROLES } from "../../utils/terminalRoles";
 import type { TerminalNode } from "../../types/terminal";
 
 interface TerminalTitleBarProps {
@@ -13,9 +16,12 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
   const foldTerminal = useTerminalStore((s) => s.foldTerminal);
   const unfoldTerminal = useTerminalStore((s) => s.unfoldTerminal);
   const updateTerminal = useTerminalStore((s) => s.updateTerminal);
+  const setRole = useTerminalStore((s) => s.setRole);
   const bringToFront = useTerminalStore((s) => s.bringToFront);
   const { kill } = useTerminal();
   const team = useTeamStore((s) => s.getTeamForTerminal(terminal.id));
+  const [rolePickerOpen, setRolePickerOpen] = useState(false);
+  const roleMeta = terminal.role ? TERMINAL_ROLES[terminal.role] : undefined;
 
   const isMaximized = !!terminal.prevBounds;
 
@@ -72,6 +78,7 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
         background: "#1f2335",
         borderBottom: terminal.isFolded ? "none" : "1px solid #292e42",
         borderLeft: `3px solid ${terminal.color}`,
+        position: "relative",
         cursor: "grab",
         userSelect: "none",
         borderRadius: terminal.isFolded ? "8px" : "8px 8px 0 0",
@@ -115,6 +122,28 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
           </span>
         )}
         {terminal.name}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setRolePickerOpen((v) => !v);
+          }}
+          title={roleMeta ? `${roleMeta.label} — ${roleMeta.hint} (click to change)` : "Set role"}
+          style={{
+            marginLeft: 6,
+            background: roleMeta ? `${roleMeta.color}22` : "transparent",
+            color: roleMeta?.color ?? "#3b4261",
+            border: `1px solid ${roleMeta?.color ?? "#3b4261"}66`,
+            borderRadius: 4,
+            padding: "0 5px",
+            fontSize: 10,
+            fontWeight: 600,
+            lineHeight: "16px",
+            cursor: "pointer",
+            verticalAlign: "middle",
+          }}
+        >
+          {roleMeta ? `${roleMeta.glyph} ${roleMeta.label}` : "+ role"}
+        </button>
       </span>
       <button
         onClick={handleFoldToggle}
@@ -161,6 +190,30 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
       >
         {"\u2715"}
       </button>
+      {rolePickerOpen && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            position: "absolute",
+            top: 32,
+            left: 24,
+            background: "#1f2335",
+            border: "1px solid #292e42",
+            borderRadius: 6,
+            padding: 8,
+            zIndex: 100,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+          }}
+        >
+          <RolePicker
+            value={terminal.role}
+            onChange={(r) => {
+              setRole(terminal.id, r);
+              setRolePickerOpen(false);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

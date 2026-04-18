@@ -14,18 +14,36 @@ import { useWorkspace } from "./hooks/useWorkspace";
 import { useHubSpawn } from "./hooks/useHubSpawn";
 import { useTeamsSync } from "./hooks/useTeamsSync";
 import { useTasksSync } from "./hooks/useTasksSync";
+import { useTerminalActivity } from "./hooks/useTerminalActivity";
+import { loadWorkspace } from "./services/tauriCommands";
 
 export default function App() {
   useKeyboard();
-  useWorkspace();
+  const { applyWorkspace } = useWorkspace();
   useHubSpawn();
   useTeamsSync();
   useTasksSync();
+  useTerminalActivity();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
 
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  // Handle fork-workspace events dispatched by useForkWorkspace
+  useEffect(() => {
+    const handler = async (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      try {
+        const ws = await loadWorkspace(id);
+        await applyWorkspace(ws);
+      } catch (err) {
+        console.error("[fork] failed to load forked workspace:", err);
+      }
+    };
+    window.addEventListener("wodouyao:fork-workspace", handler);
+    return () => window.removeEventListener("wodouyao:fork-workspace", handler);
+  }, [applyWorkspace]);
 
   return (
     <div

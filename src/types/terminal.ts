@@ -1,6 +1,7 @@
 export type TerminalStatus = "starting" | "running" | "idle" | "error" | "terminated";
 export type ShellType = "Bash" | "Zsh" | "PowerShell" | "Pwsh" | "Cmd" | "Fish" | "Custom";
 export type TerminalTheme = "tokyonight" | "dracula" | "nord" | "monokai" | "solarized";
+export type TerminalRole = "planner" | "generator" | "evaluator" | "researcher" | "shell";
 
 export interface TerminalNode {
   id: string;
@@ -18,6 +19,11 @@ export interface TerminalNode {
   color: string;
   theme: TerminalTheme;
   cwd?: string;
+  role?: TerminalRole;
+  /** Last time the PTY emitted output (ms). In-memory only. */
+  lastOutputAt?: number;
+  /** Last process exit code, if the shell has terminated. In-memory only. */
+  lastExitCode?: number;
   /** Saved position/size to restore from a maximize. Present = currently maximized. */
   prevBounds?: { position: { x: number; y: number }; size: { width: number; height: number } };
 }

@@ -18,8 +18,14 @@ export function useCanvas() {
         setZoom(zoom + delta, e.clientX, e.clientY);
         return;
       }
-      // Over a terminal body: let xterm handle wheel for its own scrollback.
-      if ((e.target as HTMLElement).closest(".terminal-body")) {
+      // Over a node's interior (terminal body, note textarea, file preview):
+      // let the inner element scroll instead of panning the canvas.
+      const target = e.target as HTMLElement;
+      if (
+        target.closest(".terminal-body") ||
+        target.closest(".note-node") ||
+        target.closest(".file-node")
+      ) {
         return;
       }
       adjustPan(-e.deltaX, -e.deltaY);

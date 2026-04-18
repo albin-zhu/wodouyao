@@ -27,6 +27,7 @@ export interface WorkspaceTerminalLayout {
   color?: string;
   theme?: string;
   cwd?: string;
+  role?: string;
 }
 
 export interface WorkspaceWireLayout {

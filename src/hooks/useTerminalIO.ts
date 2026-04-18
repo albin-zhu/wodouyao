@@ -78,10 +78,12 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
 
     listenTerminalOutput(terminalId, (bytes) => {
       term.write(bytes);
+      // Piggyback: mark activity timestamp for status tracking.
+      useTerminalStore.getState().markActivity(terminalId, Date.now());
     }).then((fn) => unlistenFns.push(fn)).catch(() => {});
 
-    listenTerminalExit(terminalId, (_exitCode) => {
-      setStatus(terminalId, "terminated");
+    listenTerminalExit(terminalId, (exitCode) => {
+      useTerminalStore.getState().setExitCode(terminalId, exitCode ?? 0);
       // Shell exited on its own; reap the backend session and then drop the
       // node from the canvas so the UI matches reality. Brief delay so the
       // final output + "terminated" badge are visible for a moment.

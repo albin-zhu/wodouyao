@@ -47,6 +47,11 @@ function TaskRow({ task }: { task: Task }) {
 
   return (
     <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/x-wd-task", task.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -56,7 +61,7 @@ function TaskRow({ task }: { task: Task }) {
         borderRadius: 6,
         marginBottom: 6,
         padding: "8px 10px 8px 14px",
-        cursor: "pointer",
+        cursor: "grab",
         animation: isPulsing ? "wd-pulse 1.4s ease-in-out infinite" : undefined,
       }}
       onClick={() => setExpanded((v) => !v)}
