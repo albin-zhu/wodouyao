@@ -1,15 +1,19 @@
 import { useMemo } from "react";
 import { useNoteStore } from "../../store/noteStore";
 import { useFileNodeStore } from "../../store/fileNodeStore";
+import { useTaskBoardStore } from "../../store/taskBoardStore";
 import { useCanvasStore } from "../../store/canvasStore";
 import NoteNode from "./NoteNode";
 import FileNode from "./FileNode";
+import TaskBoardNode from "./TaskBoardNode";
 
 export default function ResourceLayer() {
   const notesMap = useNoteStore((s) => s.notes);
   const filesMap = useFileNodeStore((s) => s.fileNodes);
+  const boardsMap = useTaskBoardStore((s) => s.boards);
   const notes = useMemo(() => Array.from(notesMap.values()), [notesMap]);
   const files = useMemo(() => Array.from(filesMap.values()), [filesMap]);
+  const boards = useMemo(() => Array.from(boardsMap.values()), [boardsMap]);
   const { panX, panY, zoom } = useCanvasStore();
 
   return (
@@ -32,6 +36,9 @@ export default function ResourceLayer() {
       ))}
       {files.map((f) => (
         <FileNode key={f.id} file={f} />
+      ))}
+      {boards.map((b) => (
+        <TaskBoardNode key={b.id} board={b} />
       ))}
     </div>
   );

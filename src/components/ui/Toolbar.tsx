@@ -6,6 +6,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { useTeamStore } from "../../store/teamStore";
 import { useNoteStore } from "../../store/noteStore";
 import { useTaskStore } from "../../store/taskStore";
+import { useTaskBoardStore } from "../../store/taskBoardStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import { useNewTerminal } from "../../hooks/useNewTerminal";
 import { useForkWorkspace } from "../../hooks/useForkWorkspace";
@@ -35,6 +36,7 @@ export default function Toolbar() {
   const openTeamsDrawer = useTeamStore((s) => s.openDrawer);
   const launchTerminal = useNewTerminal();
   const addNote = useNoteStore((s) => s.addNote);
+  const addBoard = useTaskBoardStore((s) => s.addBoard);
   const openTasksDrawer = useTaskStore((s) => s.openDrawer);
   const tasksMap = useTaskStore((s) => s.tasks);
   const tasksActiveCount = Array.from(tasksMap.values()).filter((t) => t.status !== "completed").length;
@@ -208,6 +210,22 @@ export default function Toolbar() {
           }}
         >
           {t("toolbar.addNote")}
+        </button>
+        <button
+          onClick={() => addBoard()}
+          title="New task board"
+          style={{
+            background: "#7aa2f722",
+            color: "#7aa2f7",
+            border: "1px solid #7aa2f766",
+            borderRadius: 6,
+            padding: "6px 12px",
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          {"\u2713"} Board
         </button>
         <span style={{ color: "#565f89", fontSize: 11 }}>
           {t("toolbar.ctrlK")}
