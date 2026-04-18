@@ -223,8 +223,8 @@ function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }
 
   const canBeLead = focusedTerminalId !== null;
   const leadTooltip = canBeLead
-    ? "Join the new team as lead using the focused terminal"
-    : "Requires the currently-focused terminal; auto-picks topmost";
+    ? t("teams.leadTooltipAvailable")
+    : t("teams.leadTooltipUnavailable");
 
   if (!expanded) {
     return (
@@ -243,7 +243,7 @@ function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }
           textAlign: "left",
         }}
       >
-        + New team
+        {t("teams.newTeam")}
       </button>
     );
   }
