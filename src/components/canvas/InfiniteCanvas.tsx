@@ -63,6 +63,9 @@ export default function InfiniteCanvas() {
   const launchTerminal = useNewTerminal();
   const { spawn } = useTerminal();
   const wireEmptySpawnEnabled = useSettingsStore((s) => s.settings?.wire_empty_spawn_enabled ?? true);
+  const anyMaximized = useTerminalStore((s) =>
+    Array.from(s.terminals.values()).some((t) => !!t.prevBounds)
+  );
   const wireEmptySpawnCommand = useSettingsStore((s) => s.settings?.wire_empty_spawn_command ?? "claude");
   const drawingRef = useRef(false);
 
@@ -272,10 +275,10 @@ export default function InfiniteCanvas() {
       }}
     >
       <BackgroundLayer />
-      <WireLayer />
+      {!anyMaximized && <WireLayer />}
       <TerminalLayer />
-      <ResourceLayer />
-      <CanvasControls />
+      {!anyMaximized && <ResourceLayer />}
+      {!anyMaximized && <CanvasControls />}
     </div>
   );
 }

@@ -27,6 +27,10 @@ const AGENT_STYLES: Record<string, { bg: string; color: string; icon: string }> 
 export default function Toolbar() {
   const { t } = useTranslation();
   const terminalCount = useTerminalStore((s) => s.terminals.size);
+  const anyMaximized = useTerminalStore((s) =>
+    Array.from(s.terminals.values()).some((t) => !!t.prevBounds)
+  );
+  if (anyMaximized) return null;
   const settings = useSettingsStore((s) => s.settings);
   const openDrawer = useSettingsStore((s) => s.openDrawer);
   const openTeamsDrawer = useTeamStore((s) => s.openDrawer);

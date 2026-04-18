@@ -7,6 +7,10 @@ import DrawPreview from "../canvas/DrawPreview";
 export default function TerminalLayer() {
   const terminalsMap = useTerminalStore((s) => s.terminals);
   const terminals = useMemo(() => Array.from(terminalsMap.values()), [terminalsMap]);
+  const maximizedId = useMemo(
+    () => terminals.find((t) => !!t.prevBounds)?.id ?? null,
+    [terminals]
+  );
   const { panX, panY, zoom } = useCanvasStore();
 
   return (
@@ -25,7 +29,16 @@ export default function TerminalLayer() {
       }
     >
       {terminals.map((t) => (
-        <TerminalNode key={t.id} terminal={t} />
+        <div
+          key={t.id}
+          style={
+            maximizedId !== null && t.id !== maximizedId
+              ? { visibility: "hidden", pointerEvents: "none" }
+              : undefined
+          }
+        >
+          <TerminalNode terminal={t} />
+        </div>
       ))}
       <DrawPreview />
     </div>
