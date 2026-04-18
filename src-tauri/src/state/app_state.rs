@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::hub::{HubHandle, IdentityRegistry, TeamRegistry, WireTopology};
+use crate::notes::NoteStore;
 use crate::pty::manager::PtyManager;
 use crate::tasks::TaskStore;
 
@@ -10,6 +11,7 @@ pub struct AppState {
     pub identities: IdentityRegistry,
     pub team_registry: TeamRegistry,
     pub tasks: TaskStore,
+    pub notes: NoteStore,
     pub hub: HubHandle,
 }
 
@@ -21,6 +23,7 @@ impl AppState {
         identities: IdentityRegistry,
         team_registry: TeamRegistry,
         tasks: TaskStore,
+        notes: NoteStore,
     ) -> Self {
         AppState {
             pty_manager,
@@ -28,6 +31,7 @@ impl AppState {
             identities,
             team_registry,
             tasks,
+            notes,
             hub,
         }
     }

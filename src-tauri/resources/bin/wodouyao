@@ -21,6 +21,24 @@ Usage: wodouyao <subcommand> [args]
   send <peer> [--raw|--keys] <text>  send text (default mode: keys)
   read <peer> [--bytes N]            read recent output (default N=16384)
   watch <peer>                       stream a peer's output until Ctrl+C
+  task list                          list all global tasks
+  task add "<subject>" [--desc "..."] [--blocked-by id,id]
+                                     create a task; prints new task id
+  task take <task-id>                claim a task (owner + in_progress)
+  task done <task-id>                mark a task completed
+  task update <task-id> [--status S] [--owner O] [--desc D]
+                                     patch a task
+  task remove <task-id>              delete a task
+  wire list                          list all wires
+  wire add <source-id> <target-id> [--kind K]
+                                     create a wire
+  wire remove <wire-id>              remove a wire
+  note list                          list all notes
+  note add "<text>" [--color C]      create a note
+  note update <note-id> "<text>"     update note text
+  note remove <note-id>              remove a note
+  terminal list                      list all live terminals
+  terminal close <terminal-id>       close a terminal
   team create <name> [--palette K] [--as-lead]
                                      create a team; prints new team id
   team list                          list teams, one per line
@@ -806,6 +824,500 @@ print(json.dumps(obj))
     rm -f "$_tmp"
 }
 
+# ── Global task commands ─────────────────────────────────────────────
+
+cmd_task_list() {
+    load_endpoint
+    _body=$(curl_auth -f "$URL/v1/tasks") || die "task list failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_body" | python3 -c '
+import json, sys
+try:
+    tasks = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for t in tasks:
+    line = "%s  %s  %s" % (
+        t.get("id", ""), t.get("status", ""), t.get("subject", ""))
+    owner = t.get("owner_term_id") or ""
+    if owner:
+        line += "  [owner=%s]" % owner
+    print(line)
+'
+    else
+        printf '%s\n' "$_body"
+    fi
+}
+
+cmd_task_add() {
+    _subject=""
+    _desc=""
+    _blocked=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --desc)       [ $# -ge 2 ] || die "--desc requires a value"
+                          _desc=$2; shift 2 ;;
+            --blocked-by) [ $# -ge 2 ] || die "--blocked-by requires a value"
+                          _blocked=$2; shift 2 ;;
+            -*)           die "unknown flag: $1" ;;
+            *)            [ -z "$_subject" ] || die "task add: too many arguments"
+                          _subject=$1; shift ;;
+        esac
+    done
+    [ -n "$_subject" ] || die "task add: missing <subject>"
+    load_endpoint
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WODOUYAO_T_SUBJ=$_subject \
+                WODOUYAO_T_DESC=$_desc \
+                WODOUYAO_T_BY=${WODOUYAO_ID:-user} \
+                WODOUYAO_T_BLOCK=$_blocked \
+                python3 -c '
+import json, os
+obj = {"subject": os.environ["WODOUYAO_T_SUBJ"],
+       "created_by": os.environ.get("WODOUYAO_T_BY", "user")}
+d = os.environ.get("WODOUYAO_T_DESC", "")
+if d:
+    obj["description"] = d
+b = os.environ.get("WODOUYAO_T_BLOCK", "")
+blk = [x.strip() for x in b.split(",") if x.strip()]
+if blk:
+    obj["blocked_by"] = blk
+print(json.dumps(obj))
+')
+    else
+        _s_j=$(json_escape "$_subject")
+        _by_j=$(json_escape "${WODOUYAO_ID:-user}")
+        _body="{\"subject\":$_s_j,\"created_by\":$_by_j"
+        if [ -n "$_desc" ]; then
+            _d_j=$(json_escape "$_desc")
+            _body="$_body,\"description\":$_d_j"
+        fi
+        _body="$_body}"
+    fi
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/tasks") \
+        || { rm -f "$_tmp"; die "task add failed"; }
+    case $_code in
+        200|201)
+            _tid=$(extract_field id "$_tmp")
+            rm -f "$_tmp"
+            [ -n "$_tid" ] || die "task add: response missing id"
+            printf '%s\n' "$_tid"
+            ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "task add failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_task_take() {
+    [ $# -ge 1 ] || die "task take: usage <task-id>"
+    _tid=$1
+    load_endpoint
+    _by_j=$(json_escape "${WODOUYAO_ID:-}")
+    _body="{\"owner_term_id\":$_by_j,\"status\":\"in_progress\"}"
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X PATCH -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/tasks/$_tid") \
+        || { rm -f "$_tmp"; die "task take failed"; }
+    case $_code in
+        200) rm -f "$_tmp" ;;
+        404) rm -f "$_tmp"; die "task not found: $_tid" ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "task take failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_task_done() {
+    [ $# -ge 1 ] || die "task done: usage <task-id>"
+    _tid=$1
+    load_endpoint
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X PATCH -H 'Content-Type: application/json' \
+        --data-binary '{"status":"completed"}' "$URL/v1/tasks/$_tid") \
+        || { rm -f "$_tmp"; die "task done failed"; }
+    case $_code in
+        200) rm -f "$_tmp" ;;
+        404) rm -f "$_tmp"; die "task not found: $_tid" ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "task done failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_task_update() {
+    [ $# -ge 1 ] || die "task update: usage <task-id> [--status S] [--owner O] [--desc D]"
+    _tid=$1; shift
+    _status=""
+    _owner=""
+    _desc=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --status) [ $# -ge 2 ] || die "--status requires a value"
+                      _status=$2; shift 2 ;;
+            --owner)  [ $# -ge 2 ] || die "--owner requires a value"
+                      _owner=$2; shift 2 ;;
+            --desc)   [ $# -ge 2 ] || die "--desc requires a value"
+                      _desc=$2; shift 2 ;;
+            *) die "unknown flag: $1" ;;
+        esac
+    done
+    load_endpoint
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WODOUYAO_P_STATUS=$_status \
+                WODOUYAO_P_OWNER=$_owner \
+                WODOUYAO_P_DESC=$_desc \
+                python3 -c '
+import json, os
+obj = {}
+s = os.environ.get("WODOUYAO_P_STATUS", "")
+if s:
+    obj["status"] = s
+o = os.environ.get("WODOUYAO_P_OWNER", "")
+if o:
+    obj["owner_term_id"] = o
+d = os.environ.get("WODOUYAO_P_DESC", "")
+if d:
+    obj["description"] = d
+print(json.dumps(obj))
+')
+    else
+        _body="{"
+        _sep=""
+        if [ -n "$_status" ]; then
+            _s_j=$(json_escape "$_status")
+            _body="$_body\"status\":$_s_j"
+            _sep=","
+        fi
+        if [ -n "$_owner" ]; then
+            _o_j=$(json_escape "$_owner")
+            _body="$_body${_sep}\"owner_term_id\":$_o_j"
+            _sep=","
+        fi
+        if [ -n "$_desc" ]; then
+            _d_j=$(json_escape "$_desc")
+            _body="$_body${_sep}\"description\":$_d_j"
+        fi
+        _body="$_body}"
+    fi
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X PATCH -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/tasks/$_tid") \
+        || { rm -f "$_tmp"; die "task update failed"; }
+    case $_code in
+        200) rm -f "$_tmp" ;;
+        404) rm -f "$_tmp"; die "task not found: $_tid" ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "task update failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_task_remove() {
+    [ $# -ge 1 ] || die "task remove: usage <task-id>"
+    _tid=$1
+    load_endpoint
+    _code=$(curl_auth -o /dev/null -w '%{http_code}' \
+        -X DELETE "$URL/v1/tasks/$_tid") \
+        || die "task remove failed"
+    case $_code in
+        204) : ;;
+        404) die "task not found: $_tid" ;;
+        *)   die "task remove failed (HTTP $_code)" ;;
+    esac
+}
+
+cmd_task() {
+    [ $# -gt 0 ] || die "task: missing subcommand (list|add|take|done|update|remove)"
+    _sub=$1; shift
+    case $_sub in
+        list)   cmd_task_list   "$@" ;;
+        add)    cmd_task_add    "$@" ;;
+        take)   cmd_task_take   "$@" ;;
+        done)   cmd_task_done   "$@" ;;
+        update) cmd_task_update "$@" ;;
+        remove) cmd_task_remove "$@" ;;
+        *)      die "task: unknown subcommand: $_sub" ;;
+    esac
+}
+
+# ── Wire commands ────────────────────────────────────────────────────
+
+cmd_wire_list() {
+    load_endpoint
+    _body=$(curl_auth -f "$URL/v1/wires") || die "wire list failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_body" | python3 -c '
+import json, sys
+try:
+    wires = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for w in wires:
+    kind = w.get("kind") or ""
+    line = "%s  %s -> %s" % (w.get("id", ""), w.get("source_id", ""), w.get("target_id", ""))
+    if kind:
+        line += "  [%s]" % kind
+    print(line)
+'
+    else
+        printf '%s\n' "$_body"
+    fi
+}
+
+cmd_wire_add() {
+    _source=""
+    _target=""
+    _kind=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --kind) [ $# -ge 2 ] || die "--kind requires a value"
+                    _kind=$2; shift 2 ;;
+            -*)     die "unknown flag: $1" ;;
+            *)      if [ -z "$_source" ]; then _source=$1
+                    elif [ -z "$_target" ]; then _target=$1
+                    else die "wire add: too many arguments"
+                    fi
+                    shift ;;
+        esac
+    done
+    [ -n "$_source" ] || die "wire add: missing <source-id>"
+    [ -n "$_target" ] || die "wire add: missing <target-id>"
+    load_endpoint
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WODOUYAO_W_SRC=$_source \
+                WODOUYAO_W_TGT=$_target \
+                WODOUYAO_W_KIND=$_kind \
+                python3 -c '
+import json, os
+obj = {"source_id": os.environ["WODOUYAO_W_SRC"],
+       "target_id": os.environ["WODOUYAO_W_TGT"]}
+k = os.environ.get("WODOUYAO_W_KIND", "")
+if k:
+    obj["kind"] = k
+print(json.dumps(obj))
+')
+    else
+        _s_j=$(json_escape "$_source")
+        _t_j=$(json_escape "$_target")
+        _body="{\"source_id\":$_s_j,\"target_id\":$_t_j"
+        if [ -n "$_kind" ]; then
+            _k_j=$(json_escape "$_kind")
+            _body="$_body,\"kind\":$_k_j"
+        fi
+        _body="$_body}"
+    fi
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/wires") \
+        || { rm -f "$_tmp"; die "wire add failed"; }
+    case $_code in
+        200)
+            _wid=$(extract_field id "$_tmp")
+            rm -f "$_tmp"
+            printf '%s\n' "$_wid"
+            ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "wire add failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_wire_remove() {
+    [ $# -ge 1 ] || die "wire remove: usage <wire-id>"
+    _wid=$1
+    load_endpoint
+    _code=$(curl_auth -o /dev/null -w '%{http_code}' \
+        -X DELETE "$URL/v1/wires/$_wid") \
+        || die "wire remove failed"
+    case $_code in
+        204) : ;;
+        404) die "wire not found: $_wid" ;;
+        *)   die "wire remove failed (HTTP $_code)" ;;
+    esac
+}
+
+cmd_wire() {
+    [ $# -gt 0 ] || die "wire: missing subcommand (list|add|remove)"
+    _sub=$1; shift
+    case $_sub in
+        list)   cmd_wire_list   "$@" ;;
+        add)    cmd_wire_add    "$@" ;;
+        remove) cmd_wire_remove "$@" ;;
+        *)      die "wire: unknown subcommand: $_sub" ;;
+    esac
+}
+
+# ── Note commands ────────────────────────────────────────────────────
+
+cmd_note_list() {
+    load_endpoint
+    _body=$(curl_auth -f "$URL/v1/notes") || die "note list failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_body" | python3 -c '
+import json, sys
+try:
+    notes = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for n in notes:
+    text = (n.get("text") or "")[:60].replace("\n", "\\n")
+    print("%s  %s" % (n.get("id", ""), text))
+'
+    else
+        printf '%s\n' "$_body"
+    fi
+}
+
+cmd_note_add() {
+    _text=""
+    _color=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --color) [ $# -ge 2 ] || die "--color requires a value"
+                     _color=$2; shift 2 ;;
+            -*)      die "unknown flag: $1" ;;
+            *)       [ -z "$_text" ] || die "note add: too many arguments"
+                     _text=$1; shift ;;
+        esac
+    done
+    [ -n "$_text" ] || die "note add: missing <text>"
+    load_endpoint
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WODOUYAO_N_TEXT=$_text \
+                WODOUYAO_N_COLOR=$_color \
+                python3 -c '
+import json, os
+obj = {"text": os.environ["WODOUYAO_N_TEXT"]}
+c = os.environ.get("WODOUYAO_N_COLOR", "")
+if c:
+    obj["color"] = c
+print(json.dumps(obj))
+')
+    else
+        _t_j=$(json_escape "$_text")
+        _body="{\"text\":$_t_j"
+        if [ -n "$_color" ]; then
+            _c_j=$(json_escape "$_color")
+            _body="$_body,\"color\":$_c_j"
+        fi
+        _body="$_body}"
+    fi
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/notes") \
+        || { rm -f "$_tmp"; die "note add failed"; }
+    case $_code in
+        200)
+            _nid=$(extract_field id "$_tmp")
+            rm -f "$_tmp"
+            printf '%s\n' "$_nid"
+            ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "note add failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_note_update() {
+    [ $# -ge 2 ] || die "note update: usage <note-id> <text>"
+    _nid=$1; shift
+    _text=$*
+    load_endpoint
+    _t_j=$(json_escape "$_text")
+    _body="{\"text\":$_t_j}"
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X PATCH -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/notes/$_nid") \
+        || { rm -f "$_tmp"; die "note update failed"; }
+    case $_code in
+        200) rm -f "$_tmp" ;;
+        404) rm -f "$_tmp"; die "note not found: $_nid" ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "note update failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_note_remove() {
+    [ $# -ge 1 ] || die "note remove: usage <note-id>"
+    _nid=$1
+    load_endpoint
+    _code=$(curl_auth -o /dev/null -w '%{http_code}' \
+        -X DELETE "$URL/v1/notes/$_nid") \
+        || die "note remove failed"
+    case $_code in
+        204) : ;;
+        404) die "note not found: $_nid" ;;
+        *)   die "note remove failed (HTTP $_code)" ;;
+    esac
+}
+
+cmd_note() {
+    [ $# -gt 0 ] || die "note: missing subcommand (list|add|update|remove)"
+    _sub=$1; shift
+    case $_sub in
+        list)   cmd_note_list   "$@" ;;
+        add)    cmd_note_add    "$@" ;;
+        update) cmd_note_update "$@" ;;
+        remove) cmd_note_remove "$@" ;;
+        *)      die "note: unknown subcommand: $_sub" ;;
+    esac
+}
+
+# ── Terminal commands ────────────────────────────────────────────────
+
+cmd_terminal_list() {
+    load_endpoint
+    _body=$(curl_auth -f "$URL/v1/terminals") || die "terminal list failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_body" | python3 -c '
+import json, sys
+try:
+    terms = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for t in terms:
+    line = t.get("id", "")
+    name = t.get("name") or ""
+    kind = t.get("agent_kind") or ""
+    if name:
+        line += "  %s" % name
+    if kind:
+        line += "  [%s]" % kind
+    print(line)
+'
+    else
+        printf '%s\n' "$_body"
+    fi
+}
+
+cmd_terminal_close() {
+    [ $# -ge 1 ] || die "terminal close: usage <terminal-id>"
+    _tid=$1
+    load_endpoint
+    _code=$(curl_auth -o /dev/null -w '%{http_code}' \
+        -X DELETE "$URL/v1/terminals/$_tid") \
+        || die "terminal close failed"
+    case $_code in
+        204) : ;;
+        404) die "terminal not found: $_tid" ;;
+        *)   die "terminal close failed (HTTP $_code)" ;;
+    esac
+}
+
+cmd_terminal() {
+    [ $# -gt 0 ] || die "terminal: missing subcommand (list|close)"
+    _sub=$1; shift
+    case $_sub in
+        list)  cmd_terminal_list  "$@" ;;
+        close) cmd_terminal_close "$@" ;;
+        *)     die "terminal: unknown subcommand: $_sub" ;;
+    esac
+}
+
 [ $# -gt 0 ] || usage
 sub=$1; shift
 case $sub in
@@ -817,6 +1329,10 @@ case $sub in
     read)           cmd_read  "$@" ;;
     watch)          cmd_watch "$@" ;;
     team)           cmd_team  "$@" ;;
+    task)           cmd_task  "$@" ;;
+    wire)           cmd_wire  "$@" ;;
+    note)           cmd_note  "$@" ;;
+    terminal)       cmd_terminal "$@" ;;
     -h|--help|help) usage 0 ;;
     *)              die "unknown subcommand: $sub" ;;
 esac

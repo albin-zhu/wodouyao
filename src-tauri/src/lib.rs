@@ -4,12 +4,14 @@ mod integrations;
 pub mod pty;
 mod settings;
 mod state;
+pub mod notes;
 pub mod tasks;
 pub mod workspace;
 
 use std::sync::{Arc, Mutex, OnceLock};
 
 use hub::{server, AppHandleSlot, IdentityRegistry, TeamRegistry, WireTopology};
+use notes::NoteStore;
 use pty::manager::PtyManager;
 use state::AppState;
 use tasks::TaskStore;
@@ -20,6 +22,7 @@ pub fn run() {
     let identities = IdentityRegistry::new();
     let team_registry = TeamRegistry::new();
     let task_store = TaskStore::new();
+    let note_store = NoteStore::new();
     let pty_manager = Arc::new(Mutex::new(PtyManager::new()));
     let app_handle_slot: AppHandleSlot = Arc::new(OnceLock::new());
     let hub_handle = server::start(
@@ -27,6 +30,7 @@ pub fn run() {
         identities.clone(),
         team_registry.clone(),
         task_store.clone(),
+        note_store.clone(),
         pty_manager.clone(),
         app_handle_slot.clone(),
     )
@@ -40,6 +44,7 @@ pub fn run() {
         identities,
         team_registry,
         task_store,
+        note_store,
     );
     let setup_slot = app_handle_slot.clone();
 
@@ -131,6 +136,11 @@ pub fn run() {
             commands::tasks::tasks_create,
             commands::tasks::tasks_update,
             commands::tasks::tasks_remove,
+            commands::notes::notes_list,
+            commands::notes::notes_create,
+            commands::notes::notes_update,
+            commands::notes::notes_remove,
+            commands::notes::notes_replace_all,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -5,7 +5,8 @@ import { useWorkspaceStore } from "../store/workspaceStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { useWireStore } from "../store/wireStore";
 import { useTaskStore } from "../store/taskStore";
-import type { Workspace, WorkspaceTerminalLayout, WorkspaceWireLayout } from "../types/workspace";
+import { useNoteStore } from "../store/noteStore";
+import type { Workspace, WorkspaceTerminalLayout, WorkspaceWireLayout, WorkspaceNoteLayout } from "../types/workspace";
 import type { TerminalNode, ShellType } from "../types/terminal";
 import { destroyTerminal, createTerminal, saveWorkspace } from "../services/tauriCommands";
 import { generateId } from "../utils/id";
@@ -55,6 +56,16 @@ export function useWorkspace() {
       forward_output: true,
     }));
 
+    const noteLayouts: WorkspaceNoteLayout[] = useNoteStore.getState().getNotes().map((n) => ({
+      id: n.id,
+      text: n.text,
+      color: n.color,
+      position: n.position,
+      size: n.size,
+      z_index: n.zIndex,
+      created_at: n.createdAt,
+    }));
+
     return {
       id: "",
       name: "",
@@ -68,6 +79,7 @@ export function useWorkspace() {
       },
       terminals: termLayouts,
       wires: wireLayouts,
+      notes: noteLayouts,
       created_at: Date.now(),
       updated_at: Date.now(),
     };
@@ -128,6 +140,27 @@ export function useWorkspace() {
       await useWireStore.getState().hydrate();
       // Backend's task store was replaced by load_workspace; mirror to FE.
       await useTaskStore.getState().hydrate();
+      // Hydrate notes from workspace
+      if (ws.notes && ws.notes.length > 0) {
+        const newMap = new Map<string, import("../types/note").NoteNode>();
+        let maxZ = 0;
+        for (const n of ws.notes) {
+          const node = {
+            id: n.id,
+            text: n.text,
+            color: n.color,
+            position: n.position,
+            size: n.size,
+            zIndex: n.z_index,
+            createdAt: n.created_at,
+          };
+          newMap.set(node.id, node);
+          if (node.zIndex > maxZ) maxZ = node.zIndex;
+        }
+        useNoteStore.setState({ notes: newMap, nextZIndex: maxZ + 1 });
+      } else {
+        useNoteStore.setState({ notes: new Map(), nextZIndex: 1 });
+      }
     },
     [getTerminals, removeTerminal, addTerminal, setPan]
   );

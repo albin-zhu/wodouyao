@@ -3,7 +3,8 @@ import { useWorkspaceStore } from "../store/workspaceStore";
 import { useTerminalStore } from "../store/terminalStore";
 import { useCanvasStore } from "../store/canvasStore";
 import { useWireStore } from "../store/wireStore";
-import type { Workspace, WorkspaceTerminalLayout, WorkspaceWireLayout } from "../types/workspace";
+import { useNoteStore } from "../store/noteStore";
+import type { Workspace, WorkspaceTerminalLayout, WorkspaceWireLayout, WorkspaceNoteLayout } from "../types/workspace";
 import { saveWorkspace } from "../services/tauriCommands";
 import { generateId } from "../utils/id";
 
@@ -11,6 +12,7 @@ export function useForkWorkspace() {
   const { currentWorkspace, loadWorkspaceList, loadWorkspaceById } = useWorkspaceStore();
   const getTerminals = useTerminalStore((s) => s.getTerminals);
   const wiresMap = useWireStore((s) => s.wires);
+  const getNotes = useNoteStore((s) => s.getNotes);
   const { panX, panY, zoom, gridVisible, gridSize } = useCanvasStore();
 
   return useCallback(
@@ -35,6 +37,15 @@ export function useForkWorkspace() {
         target_id: w.targetId,
         forward_output: true,
       }));
+      const noteLayouts: WorkspaceNoteLayout[] = getNotes().map((n) => ({
+        id: n.id,
+        text: n.text,
+        color: n.color,
+        position: n.position,
+        size: n.size,
+        z_index: n.zIndex,
+        created_at: n.createdAt,
+      }));
       const forkedId = generateId();
       const forked: Workspace = {
         id: forkedId,
@@ -43,6 +54,7 @@ export function useForkWorkspace() {
         canvas: { pan_x: panX, pan_y: panY, zoom, grid_visible: gridVisible, grid_size: gridSize },
         terminals: termLayouts,
         wires: wireLayouts,
+        notes: noteLayouts,
         created_at: Date.now(),
         updated_at: Date.now(),
       };
@@ -52,6 +64,6 @@ export function useForkWorkspace() {
       // so App.tsx (which owns applyWorkspace) handles the actual switch.
       window.dispatchEvent(new CustomEvent("wodouyao:fork-workspace", { detail: forkedId }));
     },
-    [currentWorkspace, getTerminals, wiresMap, panX, panY, zoom, gridVisible, gridSize, loadWorkspaceList, loadWorkspaceById]
+    [currentWorkspace, getTerminals, wiresMap, getNotes, panX, panY, zoom, gridVisible, gridSize, loadWorkspaceList, loadWorkspaceById]
   );
 }

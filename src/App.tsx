@@ -15,6 +15,8 @@ import { useHubSpawn } from "./hooks/useHubSpawn";
 import { useTeamsSync } from "./hooks/useTeamsSync";
 import { useTasksSync } from "./hooks/useTasksSync";
 import { useTerminalActivity } from "./hooks/useTerminalActivity";
+import { useNotesSync } from "./hooks/useNotesSync";
+import { useWiresSync } from "./hooks/useWiresSync";
 import { loadWorkspace } from "./services/tauriCommands";
 
 export default function App() {
@@ -24,6 +26,8 @@ export default function App() {
   useTeamsSync();
   useTasksSync();
   useTerminalActivity();
+  useNotesSync();
+  useWiresSync();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
 
   useEffect(() => {

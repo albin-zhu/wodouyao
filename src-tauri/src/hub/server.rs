@@ -13,6 +13,7 @@ use super::identity::{Identity, IdentityRegistry};
 use super::keys;
 use super::team::{Role, TaskPatch, TeamRegistry};
 use super::topology::WireTopology;
+use crate::notes::{NoteCreate, NotePatch as NoteStorePatch, NoteStore};
 use crate::pty::manager::PtyManager;
 use crate::tasks::{TaskCreate, TaskPatch as TaskStorePatch, TaskStore};
 
@@ -30,6 +31,7 @@ pub fn start(
     identities: IdentityRegistry,
     team_registry: TeamRegistry,
     task_store: TaskStore,
+    note_store: NoteStore,
     pty_manager: Arc<Mutex<PtyManager>>,
     app_handle: AppHandleSlot,
 ) -> Result<HubHandle, String> {
@@ -60,6 +62,7 @@ pub fn start(
                 &identities,
                 &team_registry,
                 &task_store,
+                &note_store,
                 &pty_manager,
                 &app_handle,
                 &token_for_thread,
@@ -80,6 +83,7 @@ fn handle(
     identities: &IdentityRegistry,
     team_registry: &TeamRegistry,
     task_store: &TaskStore,
+    note_store: &NoteStore,
     pty_manager: &Arc<Mutex<PtyManager>>,
     app_handle: &AppHandleSlot,
     token: &str,
@@ -105,11 +109,40 @@ fn handle(
         (&Method::Get, "/v1/teams") => teams_list(request, team_registry),
         (&Method::Get, "/v1/tasks") => tasks_list_route(request, task_store),
         (&Method::Post, "/v1/tasks") => tasks_create_route(request, task_store, app_handle),
+        (&Method::Get, "/v1/wires") => wires_list_route(request, topology),
+        (&Method::Post, "/v1/wires") => wires_create_route(request, topology, app_handle),
+        (&Method::Get, "/v1/terminals") => terminals_list_route(request, pty_manager, identities),
+        (&Method::Get, "/v1/notes") => notes_list_route(request, note_store),
+        (&Method::Post, "/v1/notes") => notes_create_route(request, note_store, app_handle),
         _ => {
             if let Some(task_id) = path.strip_prefix("/v1/tasks/") {
                 match &method {
                     &Method::Patch => tasks_patch_route(request, task_store, task_id, app_handle),
                     &Method::Delete => tasks_delete_route(request, task_store, task_id, app_handle),
+                    _ => {
+                        let _ = request.respond(empty(404));
+                    }
+                }
+            } else if let Some(wire_id) = path.strip_prefix("/v1/wires/") {
+                match &method {
+                    &Method::Delete => wires_delete_route(request, topology, wire_id, app_handle),
+                    _ => {
+                        let _ = request.respond(empty(404));
+                    }
+                }
+            } else if let Some(term_id) = path.strip_prefix("/v1/terminals/") {
+                match &method {
+                    &Method::Delete => terminals_close_route(
+                        request, pty_manager, topology, identities, term_id, app_handle,
+                    ),
+                    _ => {
+                        let _ = request.respond(empty(404));
+                    }
+                }
+            } else if let Some(note_id) = path.strip_prefix("/v1/notes/") {
+                match &method {
+                    &Method::Patch => notes_patch_route(request, note_store, note_id, app_handle),
+                    &Method::Delete => notes_delete_route(request, note_store, note_id, app_handle),
                     _ => {
                         let _ = request.respond(empty(404));
                     }
@@ -1293,5 +1326,220 @@ fn tasks_delete_route(
         let _ = request.respond(empty(204));
     } else {
         let _ = request.respond(text(404, "task not found"));
+    }
+}
+
+// ── Wire endpoints ──────────────────────────────────────────────────
+
+fn emit_wires_updated(app_handle: &AppHandleSlot) {
+    if let Some(app) = app_handle.get() {
+        let _ = app.emit("wires-updated", ());
+    }
+}
+
+fn wires_list_route(request: tiny_http::Request, topology: &WireTopology) {
+    let body = serde_json::to_string(&topology.list()).unwrap_or_else(|_| "[]".into());
+    let _ = request.respond(json(200, body));
+}
+
+#[derive(Deserialize)]
+struct WireCreateBody {
+    source_id: String,
+    target_id: String,
+    #[serde(default)]
+    kind: Option<String>,
+}
+
+fn wires_create_route(
+    mut request: tiny_http::Request,
+    topology: &WireTopology,
+    app_handle: &AppHandleSlot,
+) {
+    let mut body = String::new();
+    if request.as_reader().read_to_string(&mut body).is_err() {
+        let _ = request.respond(text(400, "unable to read body"));
+        return;
+    }
+    let parsed: WireCreateBody = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = request.respond(text(400, &format!("invalid json: {}", e)));
+            return;
+        }
+    };
+    let wire = super::topology::Wire {
+        id: format!("w_{}", Uuid::new_v4().simple()),
+        source_id: parsed.source_id,
+        target_id: parsed.target_id,
+        forward_output: true,
+        kind: parsed.kind,
+    };
+    let created = topology.insert(wire);
+    emit_wires_updated(app_handle);
+    let body = serde_json::to_string(&created).unwrap_or_else(|_| "{}".into());
+    let _ = request.respond(json(200, body));
+}
+
+fn wires_delete_route(
+    request: tiny_http::Request,
+    topology: &WireTopology,
+    wire_id: &str,
+    app_handle: &AppHandleSlot,
+) {
+    if topology.remove(wire_id) {
+        emit_wires_updated(app_handle);
+        let _ = request.respond(empty(204));
+    } else {
+        let _ = request.respond(text(404, "wire not found"));
+    }
+}
+
+// ── Terminal endpoints ──────────────────────────────────────────────
+
+#[derive(Serialize)]
+struct TerminalInfo {
+    id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agent_kind: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    capabilities: Vec<String>,
+}
+
+fn terminals_list_route(
+    request: tiny_http::Request,
+    pty_manager: &Arc<Mutex<PtyManager>>,
+    identities: &IdentityRegistry,
+) {
+    let ids = pty_manager
+        .lock()
+        .map(|m| m.live_ids())
+        .unwrap_or_default();
+    let infos: Vec<TerminalInfo> = ids
+        .into_iter()
+        .map(|id| {
+            let ident = identities.get(&id);
+            TerminalInfo {
+                id,
+                name: ident.name,
+                agent_kind: ident.agent_kind,
+                capabilities: ident.capabilities,
+            }
+        })
+        .collect();
+    let body = serde_json::to_string(&infos).unwrap_or_else(|_| "[]".into());
+    let _ = request.respond(json(200, body));
+}
+
+fn terminals_close_route(
+    request: tiny_http::Request,
+    pty_manager: &Arc<Mutex<PtyManager>>,
+    topology: &WireTopology,
+    identities: &IdentityRegistry,
+    term_id: &str,
+    app_handle: &AppHandleSlot,
+) {
+    let destroyed = pty_manager
+        .lock()
+        .map(|mut m| m.destroy_session(term_id).is_ok())
+        .unwrap_or(false);
+    if destroyed {
+        topology.remove_for_terminal(term_id);
+        identities.remove(term_id);
+        if let Some(app) = app_handle.get() {
+            let _ = app.emit(&format!("terminal-exit-{}", term_id), 0i32);
+        }
+        let _ = request.respond(empty(204));
+    } else {
+        let _ = request.respond(text(404, "terminal not found"));
+    }
+}
+
+// ── Note endpoints ──────────────────────────────────────────────────
+
+fn emit_notes_updated(app_handle: &AppHandleSlot) {
+    if let Some(app) = app_handle.get() {
+        let _ = app.emit("notes-updated", ());
+    }
+}
+
+fn notes_list_route(request: tiny_http::Request, note_store: &NoteStore) {
+    let body = serde_json::to_string(&note_store.list()).unwrap_or_else(|_| "[]".into());
+    let _ = request.respond(json(200, body));
+}
+
+fn notes_create_route(
+    mut request: tiny_http::Request,
+    note_store: &NoteStore,
+    app_handle: &AppHandleSlot,
+) {
+    let mut body = String::new();
+    if request.as_reader().read_to_string(&mut body).is_err() {
+        let _ = request.respond(text(400, "unable to read body"));
+        return;
+    }
+    let parsed: NoteCreate = if body.trim().is_empty() {
+        NoteCreate::default()
+    } else {
+        match serde_json::from_str(&body) {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = request.respond(text(400, &format!("invalid json: {}", e)));
+                return;
+            }
+        }
+    };
+    let note = note_store.create(parsed);
+    emit_notes_updated(app_handle);
+    let body = serde_json::to_string(&note).unwrap_or_else(|_| "{}".into());
+    let _ = request.respond(json(200, body));
+}
+
+fn notes_patch_route(
+    mut request: tiny_http::Request,
+    note_store: &NoteStore,
+    note_id: &str,
+    app_handle: &AppHandleSlot,
+) {
+    let mut body = String::new();
+    if request.as_reader().read_to_string(&mut body).is_err() {
+        let _ = request.respond(text(400, "unable to read body"));
+        return;
+    }
+    let patch: NoteStorePatch = if body.trim().is_empty() {
+        NoteStorePatch::default()
+    } else {
+        match serde_json::from_str(&body) {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = request.respond(text(400, &format!("invalid json: {}", e)));
+                return;
+            }
+        }
+    };
+    match note_store.update(note_id, patch) {
+        Some(note) => {
+            emit_notes_updated(app_handle);
+            let body = serde_json::to_string(&note).unwrap_or_else(|_| "{}".into());
+            let _ = request.respond(json(200, body));
+        }
+        None => {
+            let _ = request.respond(text(404, "note not found"));
+        }
+    }
+}
+
+fn notes_delete_route(
+    request: tiny_http::Request,
+    note_store: &NoteStore,
+    note_id: &str,
+    app_handle: &AppHandleSlot,
+) {
+    if note_store.remove(note_id) {
+        emit_notes_updated(app_handle);
+        let _ = request.respond(empty(204));
+    } else {
+        let _ = request.respond(text(404, "note not found"));
     }
 }

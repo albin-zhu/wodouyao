@@ -212,3 +212,48 @@ export async function tasksUpdate(id: string, patch: TaskPatchInput): Promise<Ta
 export async function tasksRemove(id: string): Promise<boolean> {
   return invoke<boolean>("tasks_remove", { id });
 }
+
+// Notes
+export interface NoteIpc {
+  id: string;
+  text: string;
+  color: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  z_index: number;
+  created_at: number;
+}
+
+export interface NoteCreateInput {
+  text?: string;
+  color?: string;
+  position?: { x: number; y: number };
+  size?: { width: number; height: number };
+}
+
+export interface NotePatchInput {
+  text?: string;
+  color?: string;
+  position?: { x: number; y: number };
+  size?: { width: number; height: number };
+}
+
+export async function notesList(): Promise<NoteIpc[]> {
+  return invoke<NoteIpc[]>("notes_list");
+}
+
+export async function notesCreate(input: NoteCreateInput): Promise<NoteIpc> {
+  return invoke<NoteIpc>("notes_create", { input });
+}
+
+export async function notesUpdate(id: string, patch: NotePatchInput): Promise<NoteIpc | null> {
+  return invoke<NoteIpc | null>("notes_update", { id, patch });
+}
+
+export async function notesRemove(id: string): Promise<boolean> {
+  return invoke<boolean>("notes_remove", { id });
+}
+
+export async function notesReplaceAll(notes: NoteIpc[]): Promise<void> {
+  return invoke<void>("notes_replace_all", { notes });
+}

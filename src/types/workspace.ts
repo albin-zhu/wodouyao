@@ -12,6 +12,7 @@ export interface Workspace {
   terminals: WorkspaceTerminalLayout[];
   wires: WorkspaceWireLayout[];
   tasks?: import("./task").Task[];
+  notes?: WorkspaceNoteLayout[];
   created_at: number;
   updated_at: number;
 }
@@ -35,6 +36,16 @@ export interface WorkspaceWireLayout {
   source_id: string;
   target_id: string;
   forward_output: boolean;
+}
+
+export interface WorkspaceNoteLayout {
+  id: string;
+  text: string;
+  color: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  z_index: number;
+  created_at: number;
 }
 
 export interface WorkspaceMeta {
