@@ -13,6 +13,7 @@ pub fn save_workspace(
     // frontend sent with the live state before persisting.
     workspace.wires = state.topology.list();
     workspace.teams = state.team_registry.list();
+    workspace.tasks = state.tasks.list();
     storage::save(&workspace)
 }
 
@@ -24,6 +25,7 @@ pub fn load_workspace(
     let workspace = storage::load(&id)?;
     state.topology.replace_all(workspace.wires.clone());
     state.team_registry.replace_all(workspace.teams.clone());
+    state.tasks.replace_all(workspace.tasks.clone());
     Ok(workspace)
 }
 

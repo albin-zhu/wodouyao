@@ -3,6 +3,7 @@ import type { CreateTerminalRequest, ShellInfo } from "../types/terminal";
 import type { Workspace, WorkspaceMeta } from "../types/workspace";
 import type { AppSettings } from "../types/settings";
 import type { Team } from "../types/team";
+import type { Task, TaskCreateInput, TaskPatchInput } from "../types/task";
 
 export async function createTerminal(request: CreateTerminalRequest): Promise<string> {
   return invoke<string>("create_terminal", { request });
@@ -193,4 +194,21 @@ export async function filePreviewDir(path: string): Promise<DirListing> {
 
 export async function fileInspect(path: string): Promise<FileInspect> {
   return invoke<FileInspect>("file_inspect", { path });
+}
+
+// Tasks
+export async function tasksList(): Promise<Task[]> {
+  return invoke<Task[]>("tasks_list");
+}
+
+export async function tasksCreate(input: TaskCreateInput): Promise<Task> {
+  return invoke<Task>("tasks_create", { input });
+}
+
+export async function tasksUpdate(id: string, patch: TaskPatchInput): Promise<Task> {
+  return invoke<Task>("tasks_update", { id, patch });
+}
+
+export async function tasksRemove(id: string): Promise<boolean> {
+  return invoke<boolean>("tasks_remove", { id });
 }

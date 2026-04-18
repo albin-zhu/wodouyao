@@ -4,6 +4,7 @@ import { useCanvasStore } from "../store/canvasStore";
 import { useWorkspaceStore } from "../store/workspaceStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { useWireStore } from "../store/wireStore";
+import { useTaskStore } from "../store/taskStore";
 import type { Workspace, WorkspaceTerminalLayout, WorkspaceWireLayout } from "../types/workspace";
 import type { TerminalNode, ShellType } from "../types/terminal";
 import { destroyTerminal, createTerminal } from "../services/tauriCommands";
@@ -122,6 +123,8 @@ export function useWorkspace() {
 
       // Pull the freshly seeded wire topology from the backend.
       await useWireStore.getState().hydrate();
+      // Backend's task store was replaced by load_workspace; mirror to FE.
+      await useTaskStore.getState().hydrate();
     },
     [getTerminals, removeTerminal, addTerminal, setPan]
   );

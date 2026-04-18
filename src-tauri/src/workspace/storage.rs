@@ -3,6 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::hub::{Team, Wire};
+use crate::tasks::Task;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Position {
@@ -54,6 +55,8 @@ pub struct Workspace {
     pub wires: Vec<Wire>,
     #[serde(default)]
     pub teams: Vec<Team>,
+    #[serde(default)]
+    pub tasks: Vec<Task>,
     pub created_at: u64,
     pub updated_at: u64,
 }

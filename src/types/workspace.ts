@@ -11,6 +11,7 @@ export interface Workspace {
   };
   terminals: WorkspaceTerminalLayout[];
   wires: WorkspaceWireLayout[];
+  tasks?: import("./task").Task[];
   created_at: number;
   updated_at: number;
 }

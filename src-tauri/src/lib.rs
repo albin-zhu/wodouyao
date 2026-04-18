@@ -4,6 +4,7 @@ mod integrations;
 pub mod pty;
 mod settings;
 mod state;
+pub mod tasks;
 pub mod workspace;
 
 use std::sync::{Arc, Mutex, OnceLock};
@@ -11,25 +12,35 @@ use std::sync::{Arc, Mutex, OnceLock};
 use hub::{server, AppHandleSlot, IdentityRegistry, TeamRegistry, WireTopology};
 use pty::manager::PtyManager;
 use state::AppState;
+use tasks::TaskStore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let topology = WireTopology::new();
     let identities = IdentityRegistry::new();
     let team_registry = TeamRegistry::new();
+    let task_store = TaskStore::new();
     let pty_manager = Arc::new(Mutex::new(PtyManager::new()));
     let app_handle_slot: AppHandleSlot = Arc::new(OnceLock::new());
     let hub_handle = server::start(
         topology.clone(),
         identities.clone(),
         team_registry.clone(),
+        task_store.clone(),
         pty_manager.clone(),
         app_handle_slot.clone(),
     )
     .expect("failed to start hub server");
     log::info!("hub listening at {}", hub_handle.url);
 
-    let app_state = AppState::new(hub_handle, pty_manager, topology, identities, team_registry);
+    let app_state = AppState::new(
+        hub_handle,
+        pty_manager,
+        topology,
+        identities,
+        team_registry,
+        task_store,
+    );
     let setup_slot = app_handle_slot.clone();
 
     tauri::Builder::default()
@@ -116,6 +127,10 @@ pub fn run() {
             commands::file_preview::file_preview_text,
             commands::file_preview::file_preview_dir,
             commands::file_preview::file_inspect,
+            commands::tasks::tasks_list,
+            commands::tasks::tasks_create,
+            commands::tasks::tasks_update,
+            commands::tasks::tasks_remove,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -2,6 +2,7 @@ pub mod agents;
 pub mod file_preview;
 pub mod integrations;
 pub mod settings;
+pub mod tasks;
 pub mod team;
 pub mod terminal;
 pub mod wire;

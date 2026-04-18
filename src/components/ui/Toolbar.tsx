@@ -4,6 +4,7 @@ import { useTerminalStore } from "../../store/terminalStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useTeamStore } from "../../store/teamStore";
 import { useNoteStore } from "../../store/noteStore";
+import { useTaskStore } from "../../store/taskStore";
 import { useNewTerminal } from "../../hooks/useNewTerminal";
 import { useCanvasInteractionStore, type CanvasMode } from "../../store/canvasInteractionStore";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
@@ -27,6 +28,9 @@ export default function Toolbar() {
   const openTeamsDrawer = useTeamStore((s) => s.openDrawer);
   const launchTerminal = useNewTerminal();
   const addNote = useNoteStore((s) => s.addNote);
+  const openTasksDrawer = useTaskStore((s) => s.openDrawer);
+  const tasksMap = useTaskStore((s) => s.tasks);
+  const tasksActiveCount = Array.from(tasksMap.values()).filter((t) => t.status !== "completed").length;
   const currentMode = useCanvasInteractionStore((s) => s.mode);
   const setMode = useCanvasInteractionStore((s) => s.setMode);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -196,6 +200,46 @@ export default function Toolbar() {
             height={22}
             style={{ display: "block", opacity: 0.85 }}
           />
+        </button>
+
+        {/* Tasks button */}
+        <button
+          onClick={openTasksDrawer}
+          title={`Tasks (${tasksActiveCount} active)`}
+          style={{
+            position: "relative",
+            background: "none",
+            border: "1px solid #292e42",
+            borderRadius: 4,
+            color: "#c0caf5",
+            cursor: "pointer",
+            padding: "2px 8px",
+            fontSize: 12,
+            fontWeight: 600,
+            lineHeight: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          {"\u2713"} Tasks
+          {tasksActiveCount > 0 && (
+            <span
+              style={{
+                background: "#7aa2f7",
+                color: "#1a1b26",
+                fontSize: 10,
+                fontWeight: 700,
+                borderRadius: 8,
+                padding: "0 5px",
+                lineHeight: "14px",
+                minWidth: 14,
+                textAlign: "center",
+              }}
+            >
+              {tasksActiveCount}
+            </span>
+          )}
         </button>
 
         {/* Settings gear button */}

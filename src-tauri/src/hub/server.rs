@@ -14,6 +14,7 @@ use super::keys;
 use super::team::{Role, TaskPatch, TeamRegistry};
 use super::topology::WireTopology;
 use crate::pty::manager::PtyManager;
+use crate::tasks::{TaskCreate, TaskPatch as TaskStorePatch, TaskStore};
 
 pub type AppHandleSlot = Arc<OnceLock<AppHandle>>;
 
@@ -28,6 +29,7 @@ pub fn start(
     topology: WireTopology,
     identities: IdentityRegistry,
     team_registry: TeamRegistry,
+    task_store: TaskStore,
     pty_manager: Arc<Mutex<PtyManager>>,
     app_handle: AppHandleSlot,
 ) -> Result<HubHandle, String> {
@@ -57,6 +59,7 @@ pub fn start(
                 &topology,
                 &identities,
                 &team_registry,
+                &task_store,
                 &pty_manager,
                 &app_handle,
                 &token_for_thread,
@@ -76,6 +79,7 @@ fn handle(
     topology: &WireTopology,
     identities: &IdentityRegistry,
     team_registry: &TeamRegistry,
+    task_store: &TaskStore,
     pty_manager: &Arc<Mutex<PtyManager>>,
     app_handle: &AppHandleSlot,
     token: &str,
@@ -99,8 +103,18 @@ fn handle(
         (&Method::Get, "/v1/watch") => watch(request, topology, pty_manager, &query),
         (&Method::Post, "/v1/teams") => teams_create(request, team_registry, app_handle),
         (&Method::Get, "/v1/teams") => teams_list(request, team_registry),
+        (&Method::Get, "/v1/tasks") => tasks_list_route(request, task_store),
+        (&Method::Post, "/v1/tasks") => tasks_create_route(request, task_store, app_handle),
         _ => {
-            if let Some((team_id, sub)) = parse_team_path(path) {
+            if let Some(task_id) = path.strip_prefix("/v1/tasks/") {
+                match &method {
+                    &Method::Patch => tasks_patch_route(request, task_store, task_id, app_handle),
+                    &Method::Delete => tasks_delete_route(request, task_store, task_id, app_handle),
+                    _ => {
+                        let _ = request.respond(empty(404));
+                    }
+                }
+            } else if let Some((team_id, sub)) = parse_team_path(path) {
                 match (&method, sub) {
                     (&Method::Get, None) => team_get(request, team_registry, team_id),
                     (&Method::Post, Some("join")) => {
@@ -1193,4 +1207,91 @@ fn json(code: u16, body: String) -> Response<Cursor<Vec<u8>>> {
         Some(len),
         None,
     )
+}
+
+fn emit_tasks_updated(app_handle: &AppHandleSlot) {
+    if let Some(app) = app_handle.get() {
+        let _ = app.emit("tasks-updated", ());
+    }
+}
+
+fn tasks_list_route(request: tiny_http::Request, task_store: &TaskStore) {
+    let body = serde_json::to_string(&task_store.list()).unwrap_or_else(|_| "[]".into());
+    let _ = request.respond(json(200, body));
+}
+
+fn tasks_create_route(
+    mut request: tiny_http::Request,
+    task_store: &TaskStore,
+    app_handle: &AppHandleSlot,
+) {
+    let mut body = String::new();
+    if request.as_reader().read_to_string(&mut body).is_err() {
+        let _ = request.respond(text(400, "unable to read body"));
+        return;
+    }
+    let parsed: TaskCreate = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = request.respond(text(400, &format!("invalid json: {}", e)));
+            return;
+        }
+    };
+    if parsed.subject.trim().is_empty() {
+        let _ = request.respond(text(400, "subject is required"));
+        return;
+    }
+    let task = task_store.create(parsed);
+    emit_tasks_updated(app_handle);
+    let body = serde_json::to_string(&task).unwrap_or_else(|_| "{}".into());
+    let _ = request.respond(json(200, body));
+}
+
+fn tasks_patch_route(
+    mut request: tiny_http::Request,
+    task_store: &TaskStore,
+    task_id: &str,
+    app_handle: &AppHandleSlot,
+) {
+    let mut body = String::new();
+    if request.as_reader().read_to_string(&mut body).is_err() {
+        let _ = request.respond(text(400, "unable to read body"));
+        return;
+    }
+    let patch: TaskStorePatch = if body.trim().is_empty() {
+        TaskStorePatch::default()
+    } else {
+        match serde_json::from_str(&body) {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = request.respond(text(400, &format!("invalid json: {}", e)));
+                return;
+            }
+        }
+    };
+    match task_store.update(task_id, patch) {
+        Some(task) => {
+            emit_tasks_updated(app_handle);
+            let body = serde_json::to_string(&task).unwrap_or_else(|_| "{}".into());
+            let _ = request.respond(json(200, body));
+        }
+        None => {
+            let _ = request.respond(text(404, "task not found"));
+        }
+    }
+}
+
+fn tasks_delete_route(
+    request: tiny_http::Request,
+    task_store: &TaskStore,
+    task_id: &str,
+    app_handle: &AppHandleSlot,
+) {
+    let removed = task_store.remove(task_id);
+    if removed {
+        emit_tasks_updated(app_handle);
+        let _ = request.respond(empty(204));
+    } else {
+        let _ = request.respond(text(404, "task not found"));
+    }
 }
