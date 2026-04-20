@@ -3,7 +3,6 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { CanvasAddon } from "@xterm/addon-canvas";
-import { WebglAddon } from "@xterm/addon-webgl";
 import { writeTerminal, resizeTerminal, destroyTerminal } from "../services/tauriCommands";
 import { listenTerminalOutput, listenTerminalExit } from "../services/tauriEvents";
 import { registerXterm, unregisterXterm } from "../services/terminalRegistry";
@@ -37,11 +36,7 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
       letterSpacing: 0,
       fontFamily:
         "'JetBrainsMono Nerd Font Mono', 'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Fira Code', 'Consolas', monospace",
-      fontWeight: "400",
-      fontWeightBold: "600",
       theme: xtermTheme,
-      allowProposedApi: true,
-      smoothScrollDuration: 0,
     });
 
     const fitAddon = new FitAddon();
@@ -50,25 +45,16 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
 
     term.open(container);
 
-    // Prefer WebGL renderer (crisper on HiDPI). Fall back to Canvas if the
-    // GPU context can't initialize (software fallback, old GPUs, etc.).
-    let rendererLoaded = false;
+    // Canvas renderer — required for xterm.js v5.5+ to render text. We
+    // intentionally do NOT use the WebGL addon: the whole TerminalLayer
+    // lives under a CSS `transform: scale()` (canvas pan/zoom), which the
+    // WebGL renderer can't handle correctly — glyphs and ANSI colors drop
+    // out on some GPUs (notably inside Tauri's webview), which is why
+    // Claude's output looked colorless. Canvas renderer is transform-safe.
     try {
-      const webgl = new WebglAddon();
-      webgl.onContextLoss(() => {
-        webgl.dispose();
-      });
-      term.loadAddon(webgl);
-      rendererLoaded = true;
+      term.loadAddon(new CanvasAddon());
     } catch (e) {
-      console.warn("[xterm] WebGL renderer unavailable, falling back to Canvas:", e);
-    }
-    if (!rendererLoaded) {
-      try {
-        term.loadAddon(new CanvasAddon());
-      } catch (e) {
-        console.error("[xterm] Canvas renderer failed:", e);
-      }
+      console.error("[xterm] Canvas renderer failed:", e);
     }
 
     term.focus();
