@@ -18,6 +18,12 @@ Usage: wodouyao <subcommand> [args]
         [--team T] [--team-role R]
                                      create a new terminal (auto-wired from caller
                                      by default); prints the new id on stdout
+  fork --kind claude|codex [--name N] [--peer <id>]
+                                     resume the caller's (or --peer's) agent
+                                     session in a new terminal at $(pwd) and
+                                     drive its /fork slash command. Requires
+                                     --kind because the hub doesn't track which
+                                     CLI a terminal is currently running.
   send <peer> [--raw|--keys] <text>  send text (keys mode always appends Enter)
   read <peer> [--bytes N]            read recent output (default N=16384)
   watch <peer>                       stream a peer's output until Ctrl+C
@@ -881,6 +887,63 @@ print(json.dumps(obj))
     rm -f "$_tmp"
 }
 
+cmd_fork() {
+    _name=""
+    _kind=""
+    _from="$WODOUYAO_ID"
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --name)  [ $# -ge 2 ] || die "--name requires a value"
+                     _name=$2; shift 2 ;;
+            --kind)  [ $# -ge 2 ] || die "--kind requires a value"
+                     _kind=$2; shift 2 ;;
+            --peer)  [ $# -ge 2 ] || die "--peer requires a value"
+                     _from=$2; shift 2 ;;
+            *) die "unknown argument: $1" ;;
+        esac
+    done
+    [ -n "$_from" ] || die "fork: missing source terminal id (set WODOUYAO_ID or pass --peer)"
+    if [ -z "$_kind" ]; then
+        die "fork: --kind required (claude|codex)"
+    fi
+    load_endpoint
+
+    _cwd=$(pwd)
+    _name_j=$(json_escape "$_name")
+    _kind_j=$(json_escape "$_kind")
+    _from_j=$(json_escape "$_from")
+    _cwd_j=$(json_escape "$_cwd")
+    if [ -z "$_name" ]; then
+        _body=$(printf '{"from":%s,"kind":%s,"cwd":%s}' "$_from_j" "$_kind_j" "$_cwd_j")
+    else
+        _body=$(printf '{"from":%s,"kind":%s,"cwd":%s,"name":%s}' \
+            "$_from_j" "$_kind_j" "$_cwd_j" "$_name_j")
+    fi
+
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/fork") || { rm -f "$_tmp"; die "fork failed"; }
+    case $_code in
+        200) _new_id=$(extract_field id "$_tmp")
+             rm -f "$_tmp"
+             [ -n "$_new_id" ] || die "fork: hub returned no id"
+             # Wait for the resumed agent to come up, then drive its
+             # /fork slash command. 1.5s is a reasonable starting point;
+             # claude / codex usually print their prompt within a second.
+             sleep 1.5
+             if [ -n "$_name" ]; then
+                 cmd_send "$_new_id" "/fork \"$_name\""
+             else
+                 cmd_send "$_new_id" "/fork"
+             fi
+             printf '%s\n' "$_new_id" ;;
+        503) rm -f "$_tmp"; die "fork failed: frontend not ready yet (try again in a moment)" ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "fork failed (HTTP $_code): $_err" ;;
+    esac
+}
+
 # ── Global task commands ─────────────────────────────────────────────
 
 cmd_task_list() {
@@ -1382,6 +1445,7 @@ case $sub in
     whoami)         cmd_whoami "$@" ;;
     hello)          cmd_hello "$@" ;;
     spawn)          cmd_spawn "$@" ;;
+    fork)           cmd_fork  "$@" ;;
     send)           cmd_send  "$@" ;;
     read)           cmd_read  "$@" ;;
     watch)          cmd_watch "$@" ;;

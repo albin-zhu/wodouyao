@@ -121,6 +121,7 @@ fn handle(
         (&Method::Get, "/v1/whoami") => whoami(request, identities, &query),
         (&Method::Post, "/v1/self") => register_self(request, identities),
         (&Method::Post, "/v1/spawn") => spawn(request, topology, team_registry, app_handle),
+        (&Method::Post, "/v1/fork") => fork(request, topology, identities, app_handle),
         (&Method::Post, "/v1/send") => send(request, topology, pty_manager, identities),
         (&Method::Get, "/v1/read") => read(
             request,
@@ -579,6 +580,114 @@ fn spawn(
         auto_wire_from: parsed.auto_wire_from,
         team_id,
         team_role: team_role_out,
+    };
+
+    if let Err(e) = app.emit("hub-spawn-request", payload) {
+        let _ = request.respond(text(500, &format!("emit failed: {}", e)));
+        return;
+    }
+
+    let resp_body = serde_json::to_string(&SpawnResponse { id: new_id })
+        .unwrap_or_else(|_| "{}".into());
+    let _ = request.respond(json(200, resp_body));
+}
+
+#[derive(Deserialize)]
+struct ForkBody {
+    /// Source terminal whose agent session is being forked. Defaults to
+    /// the implicit caller (the hub doesn't know who that is — clients
+    /// should always pass it explicitly via `from`).
+    from: String,
+    /// Optional human label for the new fork (becomes the new node's name).
+    #[serde(default)]
+    name: Option<String>,
+    /// Agent CLI to use. "claude" or "codex" today. Required because the
+    /// hub doesn't track which CLI the source terminal is currently
+    /// running — only the caller knows.
+    kind: String,
+    /// Working directory for the new fork. Strongly recommended to pass
+    /// the caller's $(pwd) so the resumed session lands in the same repo.
+    #[serde(default)]
+    cwd: Option<String>,
+}
+
+fn fork(
+    mut request: tiny_http::Request,
+    topology: &WireTopology,
+    identities: &IdentityRegistry,
+    app_handle: &AppHandleSlot,
+) {
+    let Some(app) = app_handle.get() else {
+        let _ = request.respond(text(503, "frontend not ready yet; fork again in a moment"));
+        return;
+    };
+
+    let mut body = String::new();
+    if request.as_reader().read_to_string(&mut body).is_err() {
+        let _ = request.respond(text(400, "unable to read body"));
+        return;
+    }
+    let parsed: ForkBody = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = request.respond(text(400, &format!("invalid json: {}", e)));
+            return;
+        }
+    };
+
+    if parsed.from.is_empty() {
+        let _ = request.respond(text(400, "missing 'from' (source terminal id)"));
+        return;
+    }
+
+    // Build the resume command for the requested agent. The fork happens
+    // inside the agent's TUI via /fork, so we just need to drop the user
+    // back into a continued session at the same cwd. The agent's slash
+    // command (driven by the caller via `wodouyao send`) takes it from
+    // there.
+    let agent_kind = parsed.kind.to_ascii_lowercase();
+    let resume_command = match agent_kind.as_str() {
+        "claude" => "claude --dangerously-skip-permissions -c".to_string(),
+        "codex" => "codex --dangerously-bypass-approvals-and-sandbox --resume".to_string(),
+        other => {
+            let _ = request.respond(text(
+                400,
+                &format!("fork: unsupported kind '{}' (claude|codex)", other),
+            ));
+            return;
+        }
+    };
+
+    // Source identity gives us a name hint if the caller didn't supply one.
+    let source = identities.get(&parsed.from);
+    let new_id = format!("t_{}", Uuid::new_v4().simple());
+    let display_name = parsed
+        .name
+        .clone()
+        .or_else(|| source.name.as_ref().map(|n| format!("{} (fork)", n)))
+        .unwrap_or_else(|| format!("{} (fork)", agent_kind));
+
+    // Auto-wire the new fork back to its source terminal so the caller
+    // can immediately drive `/fork "<name>"` via `wodouyao send`.
+    let wire = super::topology::Wire {
+        id: format!("w_{}", Uuid::new_v4().simple()),
+        source_id: parsed.from.clone(),
+        target_id: new_id.clone(),
+        forward_output: true,
+        kind: Some("io".to_string()),
+    };
+    topology.insert(wire);
+    let _ = app.emit("wires-updated", ());
+
+    let payload = SpawnEventPayload {
+        id: new_id.clone(),
+        name: Some(display_name),
+        kind: Some(agent_kind),
+        command: Some(resume_command),
+        cwd: parsed.cwd,
+        auto_wire_from: None, // we already inserted the wire above
+        team_id: None,
+        team_role: None,
     };
 
     if let Err(e) = app.emit("hub-spawn-request", payload) {

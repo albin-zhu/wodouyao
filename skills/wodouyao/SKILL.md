@@ -65,6 +65,31 @@ new_id=$(wodouyao spawn --name "Codex" --kind codex --command codex)
 
 Failure: exit 1 with "frontend not ready yet" if the app just booted and the renderer hasn't attached — retry after a moment.
 
+### `wodouyao fork --kind claude|codex [--name N] [--peer <id>]`
+
+Fork the current (or a named peer's) agent session into a fresh canvas terminal at the same cwd. The new terminal resumes the session then has the agent's `/fork` (or `/branch`) slash command sent to it automatically.
+
+- `--kind` **(required)** — `claude` or `codex`. Determines the resume command and slash command used.
+- `--name` — label for the new terminal and the argument passed to the agent's fork command. Defaults to empty (agent picks its own name).
+- `--peer` — fork from a specific peer instead of `$WODOUYAO_ID`. Must be wired.
+
+What happens under the hood:
+1. Hub spawns a new terminal running `claude --dangerously-skip-permissions -c` (claude) or `codex --dangerously-bypass-approvals-and-sandbox --resume` (codex).
+2. A wire is inserted from the source terminal to the new one so you can send/read immediately.
+3. The CLI waits ~1.5 s for the agent TUI to start up.
+4. Sends `/fork "name"` (claude) or `/fork "name"` (codex) to the new terminal — Enter is appended automatically.
+5. Prints the new terminal id.
+
+```sh
+# Fork this claude session into a branch called "refactor"
+new_id=$(wodouyao fork --kind claude --name "refactor")
+
+# Fork a peer's codex session
+new_id=$(wodouyao fork --kind codex --peer "$other_id" --name "experiment")
+```
+
+Exit codes: `0` success, `1` unknown kind or hub error, `2` env unset, `4` no wire to peer.
+
 ## Team mode
 
 Terminals can be grouped into named teams. The hub tracks members and an accent palette; the canvas renders the team outline and colorizes wires between members. Team commands all live under `wodouyao team <sub>`.
