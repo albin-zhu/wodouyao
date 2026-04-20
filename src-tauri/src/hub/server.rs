@@ -629,6 +629,14 @@ fn send(
         }
     };
 
+    // Keys mode ALWAYS ends with a CR. Modern agent CLIs (claude, codex,
+    // opencode) queue messages internally, so a trailing Enter never breaks
+    // anything — but a missing one silently swallows the command. Enforce
+    // at the server so callers that skip the CLI wrapper can't forget.
+    if mode == "keys" && !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
+        bytes.push(b'\r');
+    }
+
     // Prepend a visible "from" header so whoever (human or agent) is
     // watching the receiving terminal can see who sent the payload.
     // Only for keys mode — raw is for pre-formatted data where a prefix
@@ -1312,6 +1320,9 @@ fn team_broadcast(
         }
     };
     if mode.unwrap_or("keys") == "keys" {
+        if !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
+            bytes.push(b'\r');
+        }
         let mut header = sender_header_bytes(identities, &parsed.from);
         header.append(&mut bytes);
         bytes = header;
@@ -1374,6 +1385,9 @@ fn team_dm(
         }
     };
     if mode.unwrap_or("keys") == "keys" {
+        if !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
+            bytes.push(b'\r');
+        }
         let mut header = sender_header_bytes(identities, &parsed.from);
         header.append(&mut bytes);
         bytes = header;

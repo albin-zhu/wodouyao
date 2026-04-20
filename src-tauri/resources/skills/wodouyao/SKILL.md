@@ -111,25 +111,20 @@ lead$ wodouyao team dm alpha worker "see new task"
 worker$ wodouyao team task take alpha task_xyz123
 ```
 
-### `wodouyao send <peer> [--raw|--keys] [--no-enter] <text...>`
+### `wodouyao send <peer> [--raw|--keys] <text...>`
 
 Write to a peer's PTY stdin.
 
 - Default mode `--keys`: tmux `send-keys` style. Supports key literals like `Enter`, `C-c`, `M-x`, arrows, `PageUp`, etc. See [send-keys reference](references/send-keys.md) for the full table — load only when sending non-text keystrokes.
-- `--raw`: bytes are written verbatim. Use when forwarding pre-formatted data (JSON, escape sequences). Implies `--no-enter`.
-- **Auto-Enter**: in `--keys` mode the CLI appends a trailing ` Enter` automatically unless the text already ends with `Enter` / `C-m`. Pass `--no-enter` to opt out (e.g. feeding a prompt that still expects more input).
-
-Common patterns:
+- `--raw`: bytes are written verbatim. Use when forwarding pre-formatted data (JSON, escape sequences).
+- **Enter is always appended** in `--keys` mode. Every modern agent CLI (claude, codex, opencode) queues messages internally, so a trailing Enter is safe even if the peer is still mid-task. If you need to send a control key alone or hold input without submitting, use `--raw` and emit the raw bytes yourself.
 
 ```sh
 # Run a command — Enter is implicit.
 wodouyao send bob "pwd"
 
-# Send a prompt without submitting it yet (still editable on the peer).
-wodouyao send bob --no-enter "What is t"
-
-# Send a control key on its own.
-wodouyao send bob --no-enter C-c
+# Raw control byte (no Enter).
+printf '\003' | wodouyao send bob --raw "$(cat)"
 ```
 
 Exit codes: `0` success, `2` env unset, `3` malformed endpoint file, `4` no wire to peer (HTTP 403), `1` other.
