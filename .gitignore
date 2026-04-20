@@ -22,3 +22,4 @@ Thumbs.db
 !public/**/*.svg
 !assets/screen-snapshot.png
 .playwright-mcp/
+bun.lock
