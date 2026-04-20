@@ -7,8 +7,6 @@ import { useTeamStore } from "../../store/teamStore";
 import { useNoteStore } from "../../store/noteStore";
 import { useTaskStore } from "../../store/taskStore";
 import { useTaskBoardStore } from "../../store/taskBoardStore";
-import { useWebNodeStore } from "../../store/webNodeStore";
-import { webNodesFetchMeta } from "../../services/tauriCommands";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import { useNewTerminal } from "../../hooks/useNewTerminal";
 import { useForkWorkspace } from "../../hooks/useForkWorkspace";
@@ -39,30 +37,6 @@ export default function Toolbar() {
   const launchTerminal = useNewTerminal();
   const addNote = useNoteStore((s) => s.addNote);
   const addBoard = useTaskBoardStore((s) => s.addBoard);
-  const addWebNode = useWebNodeStore((s) => s.addWebNode);
-  const updateWebNode = useWebNodeStore((s) => s.updateWebNode);
-  const [webDialogOpen, setWebDialogOpen] = useState(false);
-  const [webUrlDraft, setWebUrlDraft] = useState("");
-
-  const submitWebNode = async () => {
-    const raw = webUrlDraft.trim();
-    if (!raw) return;
-    const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-    const node = addWebNode({ url });
-    setWebDialogOpen(false);
-    setWebUrlDraft("");
-    try {
-      const meta = await webNodesFetchMeta(url);
-      if (meta.title || meta.description) {
-        updateWebNode(node.id, {
-          title: meta.title || null,
-          description: meta.description || null,
-        });
-      }
-    } catch {
-      // swallow — user can still see the URL card
-    }
-  };
   const openTasksDrawer = useTaskStore((s) => s.openDrawer);
   const tasksMap = useTaskStore((s) => s.tasks);
   const tasksActiveCount = Array.from(tasksMap.values()).filter((t) => t.status !== "completed").length;
@@ -253,22 +227,6 @@ export default function Toolbar() {
         >
           {"\u2713"} Board
         </button>
-        <button
-          onClick={() => setWebDialogOpen(true)}
-          title="New web node"
-          style={{
-            background: "#7dcfff22",
-            color: "#7dcfff",
-            border: "1px solid #7dcfff66",
-            borderRadius: 6,
-            padding: "6px 12px",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          {"\u{1F310}"} Web
-        </button>
         <span style={{ color: "#565f89", fontSize: 11 }}>
           {t("toolbar.ctrlK")}
         </span>
@@ -376,102 +334,6 @@ export default function Toolbar() {
           {isFullscreen ? "\u29C4" : "\u26F6"}
         </button>
       </div>
-      {webDialogOpen && (
-        <div
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) {
-              setWebDialogOpen(false);
-              setWebUrlDraft("");
-            }
-          }}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.4)",
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "center",
-            paddingTop: "18vh",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              background: "#1a1b26",
-              border: "1px solid #292e42",
-              borderRadius: 10,
-              padding: 16,
-              width: 420,
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-              boxShadow: "0 12px 48px rgba(0,0,0,0.5)",
-            }}
-          >
-            <div style={{ color: "#c0caf5", fontSize: 13, fontWeight: 600 }}>
-              New Web Node
-            </div>
-            <input
-              autoFocus
-              value={webUrlDraft}
-              onChange={(e) => setWebUrlDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submitWebNode();
-                if (e.key === "Escape") {
-                  setWebDialogOpen(false);
-                  setWebUrlDraft("");
-                }
-              }}
-              placeholder="https://example.com"
-              style={{
-                background: "#13141b",
-                border: "1px solid #3b4261",
-                borderRadius: 6,
-                color: "#c0caf5",
-                padding: "8px 10px",
-                fontSize: 13,
-                outline: "none",
-              }}
-            />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button
-                onClick={() => {
-                  setWebDialogOpen(false);
-                  setWebUrlDraft("");
-                }}
-                style={{
-                  background: "none",
-                  border: "1px solid #292e42",
-                  borderRadius: 4,
-                  color: "#565f89",
-                  padding: "6px 12px",
-                  fontSize: 12,
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitWebNode}
-                disabled={!webUrlDraft.trim()}
-                style={{
-                  background: "#7dcfff",
-                  color: "#1a1b26",
-                  border: "none",
-                  borderRadius: 4,
-                  padding: "6px 14px",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: webUrlDraft.trim() ? "pointer" : "not-allowed",
-                  opacity: webUrlDraft.trim() ? 1 : 0.5,
-                }}
-              >
-                Add
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

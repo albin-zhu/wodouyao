@@ -18,7 +18,6 @@ use crate::notes::{NoteCreate, NotePatch as NoteStorePatch, NoteStore};
 use crate::pty::manager::PtyManager;
 use crate::task_boards::TaskBoardStore;
 use crate::tasks::{TaskCreate, TaskPatch as TaskStorePatch, TaskStore};
-use crate::web_nodes::WebNodeStore;
 
 pub type AppHandleSlot = Arc<OnceLock<AppHandle>>;
 
@@ -38,7 +37,6 @@ pub fn start(
     note_store: NoteStore,
     file_node_store: FileNodeStore,
     task_board_store: TaskBoardStore,
-    web_node_store: WebNodeStore,
     pty_manager: Arc<Mutex<PtyManager>>,
     app_handle: AppHandleSlot,
 ) -> Result<HubHandle, String> {
@@ -72,7 +70,6 @@ pub fn start(
                 &note_store,
                 &file_node_store,
                 &task_board_store,
-                &web_node_store,
                 &pty_manager,
                 &app_handle,
                 &token_for_thread,
@@ -97,7 +94,6 @@ fn handle(
     note_store: &NoteStore,
     file_node_store: &FileNodeStore,
     task_board_store: &TaskBoardStore,
-    web_node_store: &WebNodeStore,
     pty_manager: &Arc<Mutex<PtyManager>>,
     app_handle: &AppHandleSlot,
     token: &str,
@@ -120,7 +116,6 @@ fn handle(
             note_store,
             file_node_store,
             task_board_store,
-            web_node_store,
             &query,
         ),
         (&Method::Get, "/v1/whoami") => whoami(request, identities, &query),
@@ -134,7 +129,6 @@ fn handle(
             note_store,
             file_node_store,
             task_board_store,
-            web_node_store,
             task_store,
             &query,
         ),
@@ -329,7 +323,6 @@ fn peers(
     note_store: &NoteStore,
     file_node_store: &FileNodeStore,
     task_board_store: &TaskBoardStore,
-    web_node_store: &WebNodeStore,
     query: &[(String, String)],
 ) {
     let from = query
@@ -373,15 +366,6 @@ fn peers(
                 id: board.id.clone(),
                 name: Some(board.label.clone()),
                 agent_kind: Some("board".into()),
-                capabilities: vec!["read".into()],
-                registered_at: 0,
-            });
-        } else if let Some(web) = web_node_store.get(id) {
-            let label = web.title.clone().unwrap_or_else(|| web.url.clone());
-            peer_entries.push(Identity {
-                id: web.id.clone(),
-                name: Some(label),
-                agent_kind: Some("web".into()),
                 capabilities: vec!["read".into()],
                 registered_at: 0,
             });
@@ -670,7 +654,6 @@ fn read(
     note_store: &NoteStore,
     file_node_store: &FileNodeStore,
     task_board_store: &TaskBoardStore,
-    web_node_store: &WebNodeStore,
     task_store: &TaskStore,
     query: &[(String, String)],
 ) {
@@ -762,24 +745,6 @@ fn read(
         let tasks = task_store.list();
         let body = serde_json::to_string(&tasks).unwrap_or_else(|_| "[]".into());
         let _ = request.respond(json(200, body));
-        return;
-    }
-
-    if let Some(web) = web_node_store.get(&to) {
-        match crate::web_nodes::fetch_text(&web.url, max_bytes) {
-            Ok((body, content_type)) => {
-                let mut resp = Response::from_string(body).with_status_code(StatusCode(200));
-                if let Ok(hdr) =
-                    Header::from_bytes(&b"content-type"[..], content_type.as_bytes())
-                {
-                    resp = resp.with_header(hdr);
-                }
-                let _ = request.respond(resp);
-            }
-            Err(e) => {
-                let _ = request.respond(text(502, &format!("fetch {}: {}", web.url, e)));
-            }
-        }
         return;
     }
 

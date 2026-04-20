@@ -15,7 +15,6 @@ export interface Workspace {
   notes?: WorkspaceNoteLayout[];
   file_nodes?: WorkspaceFileNodeLayout[];
   task_boards?: WorkspaceTaskBoardLayout[];
-  web_nodes?: WorkspaceWebNodeLayout[];
   created_at: number;
   updated_at: number;
 }
@@ -34,17 +33,6 @@ export interface WorkspaceFileNodeLayout {
 export interface WorkspaceTaskBoardLayout {
   id: string;
   label: string;
-  position: { x: number; y: number };
-  size: { width: number; height: number };
-  z_index: number;
-  created_at: number;
-}
-
-export interface WorkspaceWebNodeLayout {
-  id: string;
-  url: string;
-  title: string | null;
-  description: string | null;
   position: { x: number; y: number };
   size: { width: number; height: number };
   z_index: number;

@@ -6,7 +6,6 @@ use crate::notes::NoteStore;
 use crate::pty::manager::PtyManager;
 use crate::task_boards::TaskBoardStore;
 use crate::tasks::TaskStore;
-use crate::web_nodes::WebNodeStore;
 
 pub struct AppState {
     pub pty_manager: Arc<Mutex<PtyManager>>,
@@ -17,7 +16,6 @@ pub struct AppState {
     pub notes: NoteStore,
     pub file_nodes: FileNodeStore,
     pub task_boards: TaskBoardStore,
-    pub web_nodes: WebNodeStore,
     pub hub: HubHandle,
 }
 
@@ -33,7 +31,6 @@ impl AppState {
         notes: NoteStore,
         file_nodes: FileNodeStore,
         task_boards: TaskBoardStore,
-        web_nodes: WebNodeStore,
     ) -> Self {
         AppState {
             pty_manager,
@@ -44,7 +41,6 @@ impl AppState {
             notes,
             file_nodes,
             task_boards,
-            web_nodes,
             hub,
         }
     }

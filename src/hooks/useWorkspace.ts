@@ -8,7 +8,6 @@ import { useTaskStore } from "../store/taskStore";
 import { useNoteStore } from "../store/noteStore";
 import { useFileNodeStore } from "../store/fileNodeStore";
 import { useTaskBoardStore } from "../store/taskBoardStore";
-import { useWebNodeStore } from "../store/webNodeStore";
 import type {
   Workspace,
   WorkspaceTerminalLayout,
@@ -16,7 +15,6 @@ import type {
   WorkspaceNoteLayout,
   WorkspaceFileNodeLayout,
   WorkspaceTaskBoardLayout,
-  WorkspaceWebNodeLayout,
 } from "../types/workspace";
 import type { TerminalNode, ShellType } from "../types/terminal";
 import { destroyTerminal, createTerminal, saveWorkspace } from "../services/tauriCommands";
@@ -102,20 +100,6 @@ export function useWorkspace() {
       created_at: Date.now(),
     }));
 
-    const webNodeLayouts: WorkspaceWebNodeLayout[] = useWebNodeStore
-      .getState()
-      .getWebNodes()
-      .map((w) => ({
-        id: w.id,
-        url: w.url,
-        title: w.title,
-        description: w.description,
-        position: w.position,
-        size: w.size,
-        z_index: w.zIndex,
-        created_at: w.createdAt,
-      }));
-
     return {
       id: "",
       name: "",
@@ -132,7 +116,6 @@ export function useWorkspace() {
       notes: noteLayouts,
       file_nodes: fileNodeLayouts,
       task_boards: taskBoardLayouts,
-      web_nodes: webNodeLayouts,
       created_at: Date.now(),
       updated_at: Date.now(),
     };
@@ -236,18 +219,6 @@ export function useWorkspace() {
           size: b.size,
           z_index: b.z_index,
           created_at: b.created_at,
-        }))
-      );
-      useWebNodeStore.getState().syncFromRust(
-        (ws.web_nodes ?? []).map((w) => ({
-          id: w.id,
-          url: w.url,
-          title: w.title,
-          description: w.description,
-          position: w.position,
-          size: w.size,
-          z_index: w.z_index,
-          created_at: w.created_at,
         }))
       );
     },

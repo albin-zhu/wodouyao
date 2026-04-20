@@ -117,3 +117,11 @@
 - [ ] Recording/replay terminal sessions
 - [ ] Collaborative canvas (multi-user via CRDT)
 - [ ] Voice control for agent orchestration
+- [ ] **Web Node** -- embed a URL on the canvas as a wireable resource.
+      Attempted in a prototype (iframe + `/v1/read` HTML fetch) but pulled
+      because the inline iframe can't carry session cookies (third-party
+      SameSite blocking) and the preview is useless for logged-in tools.
+      Real solution needs either (a) a Tauri child WebviewWindow per node
+      so each has its own cookie jar, synced to the canvas pan/zoom, or
+      (b) a screenshot-based preview via headless chromium. Both are
+      substantial; park until there's a concrete user case.

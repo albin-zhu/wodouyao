@@ -8,6 +8,5 @@ pub mod task_boards;
 pub mod tasks;
 pub mod team;
 pub mod terminal;
-pub mod web_nodes;
 pub mod wire;
 pub mod workspace;

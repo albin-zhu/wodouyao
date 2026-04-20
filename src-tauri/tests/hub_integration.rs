@@ -8,7 +8,6 @@ use wodouyao_lib::notes::NoteStore;
 use wodouyao_lib::pty::manager::PtyManager;
 use wodouyao_lib::task_boards::TaskBoardStore;
 use wodouyao_lib::tasks::TaskStore;
-use wodouyao_lib::web_nodes::WebNodeStore;
 use wodouyao_lib::workspace::storage::{self as ws_storage, CanvasState, Workspace};
 
 fn fresh_hub() -> (
@@ -25,7 +24,6 @@ fn fresh_hub() -> (
     let note_store = NoteStore::new();
     let file_node_store = FileNodeStore::new();
     let task_board_store = TaskBoardStore::new();
-    let web_node_store = WebNodeStore::new();
     let pty_manager = Arc::new(Mutex::new(PtyManager::new()));
     let app_handle_slot: AppHandleSlot = Arc::new(OnceLock::new());
     let handle = hub::server::start(
@@ -36,7 +34,6 @@ fn fresh_hub() -> (
         note_store,
         file_node_store,
         task_board_store,
-        web_node_store,
         pty_manager.clone(),
         app_handle_slot,
     )
@@ -625,7 +622,6 @@ fn workspace_teams_roundtrip() {
         notes: vec![],
         file_nodes: vec![],
         task_boards: vec![],
-        web_nodes: vec![],
         created_at: 0,
         updated_at: 0,
     };

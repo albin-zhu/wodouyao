@@ -7,7 +7,6 @@ use crate::hub::{Team, Wire};
 use crate::notes::Note;
 use crate::task_boards::TaskBoard;
 use crate::tasks::Task;
-use crate::web_nodes::WebNode;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Position {
@@ -69,8 +68,6 @@ pub struct Workspace {
     pub file_nodes: Vec<FileNode>,
     #[serde(default)]
     pub task_boards: Vec<TaskBoard>,
-    #[serde(default)]
-    pub web_nodes: Vec<WebNode>,
     pub created_at: u64,
     pub updated_at: u64,
 }
