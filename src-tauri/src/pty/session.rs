@@ -63,6 +63,39 @@ impl PtySession {
         if let Some(dir) = cwd {
             cmd.cwd(dir);
         }
+
+        // portable-pty's CommandBuilder starts with an EMPTY environment by
+        // default, which breaks a bunch of things:
+        //   - `TERM` absent → tools like Claude / git / less assume dumb
+        //     terminal and drop ANSI colors and alt-screen support.
+        //   - `HOME` / `USER` absent → shell rc files and many CLIs fail or
+        //     refuse to write caches.
+        //   - `LANG` absent → UTF-8 glyphs render as `?`.
+        //
+        // Seed a sensible baseline, then let the caller's env (and the
+        // hard-coded terminal capability advertisement below) win.
+        let baseline_keys = [
+            "HOME",
+            "USER",
+            "LOGNAME",
+            "SHELL",
+            "LANG",
+            "LC_ALL",
+            "LC_CTYPE",
+            "TMPDIR",
+            "TZ",
+            "SSH_AUTH_SOCK",
+        ];
+        for key in baseline_keys {
+            if let Ok(val) = std::env::var(key) {
+                if !val.is_empty() {
+                    cmd.env(key, val);
+                }
+            }
+        }
+        cmd.env("TERM", "xterm-256color");
+        cmd.env("COLORTERM", "truecolor");
+
         for (k, v) in env {
             cmd.env(k, v);
         }
