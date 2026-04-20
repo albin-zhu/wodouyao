@@ -11,9 +11,16 @@ html, body, #root {
   background: #13141b;
   color: #c0caf5;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  cursor: default;
+}
+
+/* Block text selection on every element inside the app. Use :where() so the
+   blocker has zero specificity — the allow-list below wins without !important. */
+:where(html, body, #root, #root *) {
   user-select: none;
   -webkit-user-select: none;
-  cursor: default;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 /* Re-enable selection where it actually makes sense: terminal scrollback,
@@ -27,6 +34,8 @@ textarea,
 .selectable * {
   user-select: text;
   -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
 }
 
 ::-webkit-scrollbar {

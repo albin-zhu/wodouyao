@@ -3,6 +3,7 @@ import { useWireStore } from "../../store/wireStore";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useNoteStore } from "../../store/noteStore";
 import { useFileNodeStore } from "../../store/fileNodeStore";
+import { useTaskBoardStore } from "../../store/taskBoardStore";
 import { useCanvasStore } from "../../store/canvasStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
 import { useTeamStore } from "../../store/teamStore";
@@ -54,6 +55,7 @@ export default function WireLayer() {
   const terminals = useTerminalStore((s) => s.terminals);
   const notes = useNoteStore((s) => s.notes);
   const fileNodes = useFileNodeStore((s) => s.fileNodes);
+  const taskBoards = useTaskBoardStore((s) => s.boards);
   const { panX, panY, zoom } = useCanvasStore();
   const wireStartId = useCanvasInteractionStore((s) => s.wireStartId);
   const wireEndPos = useCanvasInteractionStore((s) => s.wireEndPos);
@@ -102,9 +104,16 @@ export default function WireLayer() {
           ? { x: f.position.x + f.size.width, y: cy }
           : { x: f.position.x, y: cy };
       }
+      const b = taskBoards.get(nodeId);
+      if (b) {
+        const cy = b.position.y + b.size.height / 2;
+        return side === "right"
+          ? { x: b.position.x + b.size.width, y: cy }
+          : { x: b.position.x, y: cy };
+      }
       return null;
     },
-    [terminals, notes, fileNodes]
+    [terminals, notes, fileNodes, taskBoards]
   );
 
   const nodeName = useCallback(
@@ -113,10 +122,11 @@ export default function WireLayer() {
         terminals.get(nodeId)?.name ??
         (notes.get(nodeId) ? "Note" : null) ??
         fileNodes.get(nodeId)?.name ??
+        taskBoards.get(nodeId)?.label ??
         nodeId
       );
     },
-    [terminals, notes, fileNodes]
+    [terminals, notes, fileNodes, taskBoards]
   );
 
   const makeBezier = (

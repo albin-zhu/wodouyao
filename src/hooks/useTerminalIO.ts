@@ -3,10 +3,12 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { CanvasAddon } from "@xterm/addon-canvas";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { writeTerminal, resizeTerminal, destroyTerminal } from "../services/tauriCommands";
 import { listenTerminalOutput, listenTerminalExit } from "../services/tauriEvents";
 import { registerXterm, unregisterXterm } from "../services/terminalRegistry";
 import { useTerminalStore } from "../store/terminalStore";
+import { useWireStore } from "../store/wireStore";
 import { TERMINAL_THEMES } from "../utils/terminalThemes";
 import type { TerminalTheme } from "../types/terminal";
 
@@ -30,9 +32,16 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
 
     const term = new Terminal({
       cursorBlink: true,
-      fontSize: 14,
-      fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+      fontSize: 13,
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      fontFamily:
+        "'JetBrainsMono Nerd Font Mono', 'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+      fontWeight: "400",
+      fontWeightBold: "600",
       theme: xtermTheme,
+      allowProposedApi: true,
+      smoothScrollDuration: 0,
     });
 
     const fitAddon = new FitAddon();
@@ -41,11 +50,25 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
 
     term.open(container);
 
-    // Load Canvas renderer — required for xterm.js v5.5+ to render text
+    // Prefer WebGL renderer (crisper on HiDPI). Fall back to Canvas if the
+    // GPU context can't initialize (software fallback, old GPUs, etc.).
+    let rendererLoaded = false;
     try {
-      term.loadAddon(new CanvasAddon());
+      const webgl = new WebglAddon();
+      webgl.onContextLoss(() => {
+        webgl.dispose();
+      });
+      term.loadAddon(webgl);
+      rendererLoaded = true;
     } catch (e) {
-      console.error("[xterm] Canvas renderer failed:", e);
+      console.warn("[xterm] WebGL renderer unavailable, falling back to Canvas:", e);
+    }
+    if (!rendererLoaded) {
+      try {
+        term.loadAddon(new CanvasAddon());
+      } catch (e) {
+        console.error("[xterm] Canvas renderer failed:", e);
+      }
     }
 
     term.focus();
@@ -66,11 +89,28 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
     // Register in global registry for cross-terminal operations
     registerXterm(terminalId, term);
 
-    // Send user input to backend PTY
+    // Send user input to backend PTY, and mirror it to any io-wired peer
+    // terminals so Enter / Ctrl keys / arrow keys travel together.
+    const encoder = new TextEncoder();
     term.onData((data) => {
-      const encoder = new TextEncoder();
       const bytes = Array.from(encoder.encode(data));
       writeTerminal(terminalId, bytes).catch(console.error);
+
+      const wires = useWireStore.getState().wires;
+      if (wires.size === 0) return;
+      const terminals = useTerminalStore.getState().terminals;
+      for (const w of wires.values()) {
+        if (w.kind !== "io") continue;
+        let peerId: string | null = null;
+        if (w.sourceId === terminalId && terminals.has(w.targetId)) {
+          peerId = w.targetId;
+        } else if (w.targetId === terminalId && terminals.has(w.sourceId)) {
+          peerId = w.sourceId;
+        }
+        if (peerId) {
+          writeTerminal(peerId, bytes).catch(console.error);
+        }
+      }
     });
 
     // Listen for PTY output and exit

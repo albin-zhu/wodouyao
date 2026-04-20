@@ -22,12 +22,6 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
   const updateTask = useTaskStore((s) => s.updateTask);
   const [taskDropOver, setTaskDropOver] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
-  const resizeStartRef = useRef<{
-    mouseX: number;
-    mouseY: number;
-    startW: number;
-    startH: number;
-  } | null>(null);
   const [hovered, setHovered] = useState(false);
 
   const handleContextMenu = useCallback(
@@ -83,43 +77,84 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
     [terminal.id, terminal.position, bringToFront, updateTerminal]
   );
 
-  // Resize handle
-  const handleResizeStart = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      resizeStartRef.current = {
-        mouseX: e.clientX,
-        mouseY: e.clientY,
-        startW: terminal.size.width,
-        startH: terminal.size.height,
-      };
+  // Resize from any edge or corner. `dir` is a subset of n/s/e/w.
+  // Uses rAF coalescing so rapid mouse events collapse into one update
+  // per frame, which keeps the drag feeling smooth.
+  const startResize = useCallback(
+    (dir: { n?: boolean; s?: boolean; e?: boolean; w?: boolean }) =>
+      (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        bringToFront(terminal.id);
 
-      const onMouseMove = (ev: MouseEvent) => {
-        if (!resizeStartRef.current) return;
-        const zoom = parseFloat(
-          document.getElementById("terminal-layer")?.style.getPropertyValue("--zoom") ?? "1"
-        );
-        const dw = (ev.clientX - resizeStartRef.current.mouseX) / zoom;
-        const dh = (ev.clientY - resizeStartRef.current.mouseY) / zoom;
-        updateTerminal(terminal.id, {
-          size: {
-            width: Math.max(300, resizeStartRef.current.startW + dw),
-            height: Math.max(100, resizeStartRef.current.startH + dh),
-          },
-        });
-      };
+        const start = {
+          mouseX: e.clientX,
+          mouseY: e.clientY,
+          x: terminal.position.x,
+          y: terminal.position.y,
+          w: terminal.size.width,
+          h: terminal.size.height,
+        };
+        const MIN_W = 300;
+        const MIN_H = 100;
 
-      const onMouseUp = () => {
-        resizeStartRef.current = null;
-        window.removeEventListener("mousemove", onMouseMove);
-        window.removeEventListener("mouseup", onMouseUp);
-      };
+        let pendingFrame = 0;
+        let latest: MouseEvent | null = null;
 
-      window.addEventListener("mousemove", onMouseMove);
-      window.addEventListener("mouseup", onMouseUp);
-    },
-    [terminal.id, terminal.size, updateTerminal]
+        const flush = () => {
+          pendingFrame = 0;
+          if (!latest) return;
+          const zoom = parseFloat(
+            document
+              .getElementById("terminal-layer")
+              ?.style.getPropertyValue("--zoom") ?? "1"
+          );
+          const dx = (latest.clientX - start.mouseX) / zoom;
+          const dy = (latest.clientY - start.mouseY) / zoom;
+
+          let x = start.x;
+          let y = start.y;
+          let w = start.w;
+          let h = start.h;
+          if (dir.e) w = start.w + dx;
+          if (dir.s) h = start.h + dy;
+          if (dir.w) {
+            x = start.x + dx;
+            w = start.w - dx;
+          }
+          if (dir.n) {
+            y = start.y + dy;
+            h = start.h - dy;
+          }
+          if (w < MIN_W) {
+            if (dir.w) x = start.x + start.w - MIN_W;
+            w = MIN_W;
+          }
+          if (h < MIN_H) {
+            if (dir.n) y = start.y + start.h - MIN_H;
+            h = MIN_H;
+          }
+
+          updateTerminal(terminal.id, {
+            position: { x, y },
+            size: { width: w, height: h },
+          });
+        };
+
+        const onMouseMove = (ev: MouseEvent) => {
+          latest = ev;
+          if (pendingFrame) return;
+          pendingFrame = requestAnimationFrame(flush);
+        };
+        const onMouseUp = () => {
+          if (pendingFrame) cancelAnimationFrame(pendingFrame);
+          window.removeEventListener("mousemove", onMouseMove);
+          window.removeEventListener("mouseup", onMouseUp);
+        };
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+      },
+    [terminal.id, terminal.position, terminal.size, updateTerminal, bringToFront]
   );
 
   const handleWireAnchorDown = useCallback(
@@ -188,22 +223,70 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
       </div>
       {!terminal.isFolded && <TerminalBody terminalId={terminal.id} />}
       {!terminal.isFolded && (
-        <div
-          onMouseDown={handleResizeStart}
-          title="Drag to resize"
-          style={{
-            position: "absolute",
-            right: 0,
-            bottom: 0,
-            width: 18,
-            height: 18,
-            cursor: "se-resize",
-            pointerEvents: "auto",
-            zIndex: 5,
-            background: `linear-gradient(135deg, transparent 0 55%, ${terminal.color}66 55% 63%, transparent 63% 72%, ${terminal.color}99 72% 80%, transparent 80%)`,
-            borderBottomRightRadius: 8,
-          }}
-        />
+        <>
+          {/* Edge handles — invisible, 6px hit-strips. Corners stacked on top. */}
+          <div
+            onMouseDown={startResize({ n: true })}
+            style={{ position: "absolute", top: -3, left: 10, right: 10, height: 6, cursor: "ns-resize", zIndex: 15 }}
+          />
+          <div
+            onMouseDown={startResize({ s: true })}
+            style={{ position: "absolute", bottom: -3, left: 10, right: 10, height: 6, cursor: "ns-resize", zIndex: 15 }}
+          />
+          <div
+            onMouseDown={startResize({ w: true })}
+            style={{ position: "absolute", left: -3, top: 10, bottom: 10, width: 6, cursor: "ew-resize", zIndex: 15 }}
+          />
+          <div
+            onMouseDown={startResize({ e: true })}
+            style={{ position: "absolute", right: -3, top: 10, bottom: 10, width: 6, cursor: "ew-resize", zIndex: 15 }}
+          />
+          {/* Corners */}
+          <div
+            onMouseDown={startResize({ n: true, w: true })}
+            style={{ position: "absolute", top: -3, left: -3, width: 12, height: 12, cursor: "nwse-resize", zIndex: 21 }}
+          />
+          <div
+            onMouseDown={startResize({ n: true, e: true })}
+            style={{ position: "absolute", top: -3, right: -3, width: 12, height: 12, cursor: "nesw-resize", zIndex: 21 }}
+          />
+          <div
+            onMouseDown={startResize({ s: true, w: true })}
+            style={{ position: "absolute", bottom: -3, left: -3, width: 12, height: 12, cursor: "nesw-resize", zIndex: 21 }}
+          />
+          {/* Bottom-right corner with visible grow-box */}
+          <div
+            onMouseDown={startResize({ s: true, e: true })}
+            title="Drag to resize"
+            style={{
+              position: "absolute",
+              right: 0,
+              bottom: 0,
+              width: 16,
+              height: 16,
+              cursor: "nwse-resize",
+              pointerEvents: "auto",
+              zIndex: 21,
+              borderBottomRightRadius: 8,
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              style={{
+                display: "block",
+                opacity: hovered ? 0.65 : 0.25,
+                transition: "opacity 0.15s",
+                pointerEvents: "none",
+              }}
+            >
+              <line x1="12" y1="4" x2="4" y2="12" stroke="#c0caf5" strokeWidth="1.25" strokeLinecap="round" />
+              <line x1="13.5" y1="7.5" x2="7.5" y2="13.5" stroke="#c0caf5" strokeWidth="1.25" strokeLinecap="round" />
+              <line x1="15" y1="11" x2="11" y2="15" stroke="#c0caf5" strokeWidth="1.25" strokeLinecap="round" />
+            </svg>
+          </div>
+        </>
       )}
       {/* Wire connection anchor (right side) — visible on hover or wire mode */}
       {(hovered || mode === "wire") && (
