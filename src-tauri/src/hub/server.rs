@@ -564,6 +564,12 @@ fn spawn(
         })
     });
 
+    // Even when the caller supplied their own `command`, make sure the
+    // approval-skip flags are present for known agent CLIs. Users forget,
+    // and nothing good comes from a hub-spawned agent sitting on a
+    // permission prompt.
+    let command = command.map(auto_patch_agent_flags);
+
     let payload = SpawnEventPayload {
         id: new_id.clone(),
         name: parsed.name,
@@ -629,19 +635,17 @@ fn send(
         }
     };
 
-    // Keys mode ALWAYS ends with a CR. Modern agent CLIs (claude, codex,
-    // opencode) queue messages internally, so a trailing Enter never breaks
-    // anything — but a missing one silently swallows the command. Enforce
-    // at the server so callers that skip the CLI wrapper can't forget.
-    if mode == "keys" && !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
+    // Every peer send — keys OR raw — is terminated with CR so the peer's
+    // shell / agent CLI actually consumes the payload. Modern agent CLIs
+    // queue input, so a trailing Enter never breaks in-flight work; a
+    // missing one silently swallows the command. No opt-out.
+    if !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
         bytes.push(b'\r');
     }
 
     // Prepend a visible "from" header so whoever (human or agent) is
     // watching the receiving terminal can see who sent the payload.
-    // Only for keys mode — raw is for pre-formatted data where a prefix
-    // would corrupt the byte stream.
-    if mode == "keys" {
+    {
         let header = sender_header_bytes(identities, &parsed.from);
         let mut prefixed = header;
         prefixed.append(&mut bytes);
@@ -680,6 +684,41 @@ fn sender_header_bytes(identities: &IdentityRegistry, from_id: &str) -> Vec<u8> 
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| from_id.to_string());
     format!("# wodouyao: from {}\n", display).into_bytes()
+}
+
+/// Ensure hub-spawned agent CLIs always run with their approval-skip flag.
+/// Callers (frontend quick-commands, `wodouyao spawn --command ...`, etc.)
+/// frequently forget, and the whole point of an auto-spawned canvas peer is
+/// that it's ready to act without sitting on a permission prompt.
+fn auto_patch_agent_flags(cmd: String) -> String {
+    let trimmed = cmd.trim_start();
+    // Only patch if the command *starts* with the bare agent CLI name. We
+    // don't want to mangle `bash -c 'claude ...'` or piped/chained forms.
+    let first = trimmed.split_whitespace().next().unwrap_or("");
+    match first {
+        "claude" => {
+            if trimmed.contains("--dangerously-skip-permissions") {
+                cmd
+            } else {
+                // Insert after `claude` so any `@file` / args the caller
+                // supplied still line up in position.
+                let (head, rest) = trimmed.split_at("claude".len());
+                format!("{} --dangerously-skip-permissions{}", head, rest)
+            }
+        }
+        "codex" => {
+            if trimmed.contains("--dangerously-bypass-approvals-and-sandbox") {
+                cmd
+            } else {
+                let (head, rest) = trimmed.split_at("codex".len());
+                format!(
+                    "{} --dangerously-bypass-approvals-and-sandbox{}",
+                    head, rest
+                )
+            }
+        }
+        _ => cmd,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1319,10 +1358,10 @@ fn team_broadcast(
             return;
         }
     };
-    if mode.unwrap_or("keys") == "keys" {
-        if !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
-            bytes.push(b'\r');
-        }
+    if !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
+        bytes.push(b'\r');
+    }
+    {
         let mut header = sender_header_bytes(identities, &parsed.from);
         header.append(&mut bytes);
         bytes = header;
@@ -1384,10 +1423,10 @@ fn team_dm(
             return;
         }
     };
-    if mode.unwrap_or("keys") == "keys" {
-        if !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
-            bytes.push(b'\r');
-        }
+    if !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
+        bytes.push(b'\r');
+    }
+    {
         let mut header = sender_header_bytes(identities, &parsed.from);
         header.append(&mut bytes);
         bytes = header;
