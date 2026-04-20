@@ -558,7 +558,7 @@ fn spawn(
                     Some("claude --dangerously-skip-permissions".into())
                 }
             }
-            "codex" => Some("codex --dangerously-bypass-approvals-and-sandbox".into()),
+            "codex" => Some("codex".into()),
             "opencode" => Some("opencode".into()),
             _ => None,
         })
