@@ -1,10 +1,13 @@
 pub mod agents;
+pub mod file_nodes;
 pub mod file_preview;
 pub mod integrations;
 pub mod notes;
 pub mod settings;
+pub mod task_boards;
 pub mod tasks;
 pub mod team;
 pub mod terminal;
+pub mod web_nodes;
 pub mod wire;
 pub mod workspace;

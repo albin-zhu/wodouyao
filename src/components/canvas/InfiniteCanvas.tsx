@@ -8,6 +8,7 @@ import { useTerminalStore } from "../../store/terminalStore";
 import { useNoteStore } from "../../store/noteStore";
 import { useFileNodeStore } from "../../store/fileNodeStore";
 import { useTaskBoardStore } from "../../store/taskBoardStore";
+import { useWebNodeStore } from "../../store/webNodeStore";
 import { useNewTerminal } from "../../hooks/useNewTerminal";
 import { useTerminal } from "../../hooks/useTerminal";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -76,6 +77,7 @@ export default function InfiniteCanvas() {
     const n = useNoteStore.getState().notes;
     const f = useFileNodeStore.getState().fileNodes;
     const tb = useTaskBoardStore.getState().boards;
+    const w = useWebNodeStore.getState().webNodes;
     const kindOf = (id: string) =>
       t.has(id)
         ? "terminal"
@@ -85,6 +87,8 @@ export default function InfiniteCanvas() {
         ? "file"
         : tb.has(id)
         ? "board"
+        : w.has(id)
+        ? "web"
         : "unknown";
     const ka = kindOf(a);
     const kb = kindOf(b);

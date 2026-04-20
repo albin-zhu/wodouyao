@@ -1,9 +1,14 @@
 use std::sync::{Arc, Mutex, OnceLock};
 
+use wodouyao_lib::file_nodes::FileNodeStore;
 use wodouyao_lib::hub::{
     self, AppHandleSlot, HubHandle, IdentityRegistry, Role, TeamRegistry, Wire, WireTopology,
 };
+use wodouyao_lib::notes::NoteStore;
 use wodouyao_lib::pty::manager::PtyManager;
+use wodouyao_lib::task_boards::TaskBoardStore;
+use wodouyao_lib::tasks::TaskStore;
+use wodouyao_lib::web_nodes::WebNodeStore;
 use wodouyao_lib::workspace::storage::{self as ws_storage, CanvasState, Workspace};
 
 fn fresh_hub() -> (
@@ -16,12 +21,22 @@ fn fresh_hub() -> (
     let topology = WireTopology::new();
     let identities = IdentityRegistry::new();
     let team_registry = TeamRegistry::new();
+    let task_store = TaskStore::new();
+    let note_store = NoteStore::new();
+    let file_node_store = FileNodeStore::new();
+    let task_board_store = TaskBoardStore::new();
+    let web_node_store = WebNodeStore::new();
     let pty_manager = Arc::new(Mutex::new(PtyManager::new()));
     let app_handle_slot: AppHandleSlot = Arc::new(OnceLock::new());
     let handle = hub::server::start(
         topology.clone(),
         identities.clone(),
         team_registry.clone(),
+        task_store,
+        note_store,
+        file_node_store,
+        task_board_store,
+        web_node_store,
         pty_manager.clone(),
         app_handle_slot,
     )
@@ -162,6 +177,7 @@ fn peers_returns_identity_metadata() {
         source_id: "term-a".into(),
         target_id: "term-b".into(),
         forward_output: true,
+        kind: None,
     });
     identities.upsert(wodouyao_lib::hub::Identity {
         id: "term-b".into(),
@@ -209,6 +225,7 @@ fn peers_drops_dead_terminals() {
         source_id: "term-a".into(),
         target_id: "term-dead".into(),
         forward_output: true,
+        kind: None,
     });
     // Deliberately do NOT mark term-dead as live.
     let url = format!("{}/v1/peers?from=term-a", handle.url);
@@ -404,6 +421,7 @@ fn spawn_with_team_fans_out_wires() {
             source_id: new_id.clone(),
             target_id: pid.clone(),
             forward_output: true,
+            kind: None,
         });
     }
     let peers = topology.peers_for(&new_id);
@@ -603,6 +621,11 @@ fn workspace_teams_roundtrip() {
         terminals: vec![],
         wires: vec![],
         teams: snapshot,
+        tasks: vec![],
+        notes: vec![],
+        file_nodes: vec![],
+        task_boards: vec![],
+        web_nodes: vec![],
         created_at: 0,
         updated_at: 0,
     };
@@ -658,6 +681,7 @@ fn watch_target_without_session_returns_404() {
         source_id: "term-a".into(),
         target_id: "term-b".into(),
         forward_output: true,
+        kind: None,
     });
     let url = format!("{}/v1/watch?from=term-a&to=term-b", handle.url);
     let result = ureq::get(&url)

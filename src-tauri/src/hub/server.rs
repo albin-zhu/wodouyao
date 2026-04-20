@@ -13,9 +13,12 @@ use super::identity::{Identity, IdentityRegistry};
 use super::keys;
 use super::team::{Role, TaskPatch, TeamRegistry};
 use super::topology::WireTopology;
+use crate::file_nodes::FileNodeStore;
 use crate::notes::{NoteCreate, NotePatch as NoteStorePatch, NoteStore};
 use crate::pty::manager::PtyManager;
+use crate::task_boards::TaskBoardStore;
 use crate::tasks::{TaskCreate, TaskPatch as TaskStorePatch, TaskStore};
+use crate::web_nodes::WebNodeStore;
 
 pub type AppHandleSlot = Arc<OnceLock<AppHandle>>;
 
@@ -26,12 +29,16 @@ pub struct HubHandle {
     pub endpoint_path: std::path::PathBuf,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn start(
     topology: WireTopology,
     identities: IdentityRegistry,
     team_registry: TeamRegistry,
     task_store: TaskStore,
     note_store: NoteStore,
+    file_node_store: FileNodeStore,
+    task_board_store: TaskBoardStore,
+    web_node_store: WebNodeStore,
     pty_manager: Arc<Mutex<PtyManager>>,
     app_handle: AppHandleSlot,
 ) -> Result<HubHandle, String> {
@@ -63,6 +70,9 @@ pub fn start(
                 &team_registry,
                 &task_store,
                 &note_store,
+                &file_node_store,
+                &task_board_store,
+                &web_node_store,
                 &pty_manager,
                 &app_handle,
                 &token_for_thread,
@@ -77,6 +87,7 @@ pub fn start(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle(
     request: tiny_http::Request,
     topology: &WireTopology,
@@ -84,6 +95,9 @@ fn handle(
     team_registry: &TeamRegistry,
     task_store: &TaskStore,
     note_store: &NoteStore,
+    file_node_store: &FileNodeStore,
+    task_board_store: &TaskBoardStore,
+    web_node_store: &WebNodeStore,
     pty_manager: &Arc<Mutex<PtyManager>>,
     app_handle: &AppHandleSlot,
     token: &str,
@@ -98,12 +112,32 @@ fn handle(
     let (path, query) = split_query(&url);
 
     match (&method, path) {
-        (&Method::Get, "/v1/peers") => peers(request, topology, identities, pty_manager, note_store, &query),
+        (&Method::Get, "/v1/peers") => peers(
+            request,
+            topology,
+            identities,
+            pty_manager,
+            note_store,
+            file_node_store,
+            task_board_store,
+            web_node_store,
+            &query,
+        ),
         (&Method::Get, "/v1/whoami") => whoami(request, identities, &query),
         (&Method::Post, "/v1/self") => register_self(request, identities),
         (&Method::Post, "/v1/spawn") => spawn(request, topology, team_registry, app_handle),
         (&Method::Post, "/v1/send") => send(request, topology, pty_manager),
-        (&Method::Get, "/v1/read") => read(request, topology, pty_manager, note_store, &query),
+        (&Method::Get, "/v1/read") => read(
+            request,
+            topology,
+            pty_manager,
+            note_store,
+            file_node_store,
+            task_board_store,
+            web_node_store,
+            task_store,
+            &query,
+        ),
         (&Method::Get, "/v1/watch") => watch(request, topology, pty_manager, &query),
         (&Method::Post, "/v1/teams") => teams_create(request, team_registry, app_handle),
         (&Method::Get, "/v1/teams") => teams_list(request, team_registry),
@@ -286,12 +320,16 @@ fn hex(b: u8) -> Option<u8> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn peers(
     request: tiny_http::Request,
     topology: &WireTopology,
     identities: &IdentityRegistry,
     pty_manager: &Arc<Mutex<PtyManager>>,
     note_store: &NoteStore,
+    file_node_store: &FileNodeStore,
+    task_board_store: &TaskBoardStore,
+    web_node_store: &WebNodeStore,
     query: &[(String, String)],
 ) {
     let from = query
@@ -312,7 +350,6 @@ fn peers(
         .filter(|id| live.iter().any(|l| l == *id))
         .map(|id| identities.get(id))
         .collect();
-    // Also include notes that are wired to `from`
     for id in &peer_ids {
         if let Some(note) = note_store.get(id) {
             let preview = note.text.chars().take(60).collect::<String>();
@@ -320,6 +357,31 @@ fn peers(
                 id: note.id.clone(),
                 name: Some(if preview.is_empty() { "(empty note)".into() } else { preview }),
                 agent_kind: Some("note".into()),
+                capabilities: vec!["read".into()],
+                registered_at: 0,
+            });
+        } else if let Some(fnode) = file_node_store.get(id) {
+            peer_entries.push(Identity {
+                id: fnode.id.clone(),
+                name: Some(fnode.name.clone()),
+                agent_kind: Some(format!("file/{}", fnode.kind)),
+                capabilities: vec!["read".into()],
+                registered_at: 0,
+            });
+        } else if let Some(board) = task_board_store.get(id) {
+            peer_entries.push(Identity {
+                id: board.id.clone(),
+                name: Some(board.label.clone()),
+                agent_kind: Some("board".into()),
+                capabilities: vec!["read".into()],
+                registered_at: 0,
+            });
+        } else if let Some(web) = web_node_store.get(id) {
+            let label = web.title.clone().unwrap_or_else(|| web.url.clone());
+            peer_entries.push(Identity {
+                id: web.id.clone(),
+                name: Some(label),
+                agent_kind: Some("web".into()),
                 capabilities: vec!["read".into()],
                 registered_at: 0,
             });
@@ -600,11 +662,16 @@ fn send(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn read(
     request: tiny_http::Request,
     topology: &WireTopology,
     pty_manager: &Arc<Mutex<PtyManager>>,
     note_store: &NoteStore,
+    file_node_store: &FileNodeStore,
+    task_board_store: &TaskBoardStore,
+    web_node_store: &WebNodeStore,
+    task_store: &TaskStore,
     query: &[(String, String)],
 ) {
     let from = query.iter().find(|(k, _)| k == "from").map(|(_, v)| v.clone());
@@ -640,10 +707,79 @@ fn read(
         return;
     }
 
-    // If target is a note, return its text content directly.
     if let Some(note) = note_store.get(&to) {
-        let content = note.text.clone();
-        let _ = request.respond(plain_bytes(200, content.into_bytes()));
+        let _ = request.respond(plain_bytes(200, note.text.into_bytes()));
+        return;
+    }
+
+    if let Some(fnode) = file_node_store.get(&to) {
+        let is_text = matches!(fnode.kind.as_str(), "text" | "directory");
+        if is_text && fnode.kind == "text" {
+            match std::fs::read(&fnode.path) {
+                Ok(bytes) => {
+                    let capped = if bytes.len() > max_bytes {
+                        bytes[..max_bytes].to_vec()
+                    } else {
+                        bytes
+                    };
+                    let _ = request.respond(plain_bytes(200, capped));
+                }
+                Err(e) => {
+                    let _ = request.respond(text(500, &format!("read file: {}", e)));
+                }
+            }
+            return;
+        }
+        if fnode.kind == "directory" {
+            let mut listing = String::new();
+            if let Ok(entries) = std::fs::read_dir(&fnode.path) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    let is_dir = entry
+                        .file_type()
+                        .map(|t| t.is_dir())
+                        .unwrap_or(false);
+                    listing.push_str(&format!("{}{}\n", name, if is_dir { "/" } else { "" }));
+                }
+            }
+            let _ = request.respond(plain_bytes(200, listing.into_bytes()));
+            return;
+        }
+        // image / video / other — return JSON metadata so the agent can
+        // decide what to do with it (Claude Code can use its own Read tool
+        // on the path; a shell script might pipe it through file(1)).
+        let meta = serde_json::json!({
+            "kind": "file",
+            "file_kind": fnode.kind,
+            "name": fnode.name,
+            "path": fnode.path,
+        });
+        let _ = request.respond(json(200, meta.to_string()));
+        return;
+    }
+
+    if task_board_store.get(&to).is_some() {
+        let tasks = task_store.list();
+        let body = serde_json::to_string(&tasks).unwrap_or_else(|_| "[]".into());
+        let _ = request.respond(json(200, body));
+        return;
+    }
+
+    if let Some(web) = web_node_store.get(&to) {
+        match crate::web_nodes::fetch_text(&web.url, max_bytes) {
+            Ok((body, content_type)) => {
+                let mut resp = Response::from_string(body).with_status_code(StatusCode(200));
+                if let Ok(hdr) =
+                    Header::from_bytes(&b"content-type"[..], content_type.as_bytes())
+                {
+                    resp = resp.with_header(hdr);
+                }
+                let _ = request.respond(resp);
+            }
+            Err(e) => {
+                let _ = request.respond(text(502, &format!("fetch {}: {}", web.url, e)));
+            }
+        }
         return;
     }
 

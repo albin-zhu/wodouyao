@@ -1,20 +1,26 @@
 mod commands;
+pub mod file_nodes;
 pub mod hub;
 mod integrations;
+pub mod notes;
 pub mod pty;
 mod settings;
 mod state;
-pub mod notes;
+pub mod task_boards;
 pub mod tasks;
+pub mod web_nodes;
 pub mod workspace;
 
 use std::sync::{Arc, Mutex, OnceLock};
 
+use file_nodes::FileNodeStore;
 use hub::{server, AppHandleSlot, IdentityRegistry, TeamRegistry, WireTopology};
 use notes::NoteStore;
 use pty::manager::PtyManager;
 use state::AppState;
+use task_boards::TaskBoardStore;
 use tasks::TaskStore;
+use web_nodes::WebNodeStore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -23,6 +29,9 @@ pub fn run() {
     let team_registry = TeamRegistry::new();
     let task_store = TaskStore::new();
     let note_store = NoteStore::new();
+    let file_node_store = FileNodeStore::new();
+    let task_board_store = TaskBoardStore::new();
+    let web_node_store = WebNodeStore::new();
     let pty_manager = Arc::new(Mutex::new(PtyManager::new()));
     let app_handle_slot: AppHandleSlot = Arc::new(OnceLock::new());
     let hub_handle = server::start(
@@ -31,6 +40,9 @@ pub fn run() {
         team_registry.clone(),
         task_store.clone(),
         note_store.clone(),
+        file_node_store.clone(),
+        task_board_store.clone(),
+        web_node_store.clone(),
         pty_manager.clone(),
         app_handle_slot.clone(),
     )
@@ -45,6 +57,9 @@ pub fn run() {
         team_registry,
         task_store,
         note_store,
+        file_node_store,
+        task_board_store,
+        web_node_store,
     );
     let setup_slot = app_handle_slot.clone();
 
@@ -141,6 +156,22 @@ pub fn run() {
             commands::notes::notes_update,
             commands::notes::notes_remove,
             commands::notes::notes_replace_all,
+            commands::file_nodes::file_nodes_list,
+            commands::file_nodes::file_nodes_create,
+            commands::file_nodes::file_nodes_update,
+            commands::file_nodes::file_nodes_remove,
+            commands::file_nodes::file_nodes_replace_all,
+            commands::task_boards::task_boards_list,
+            commands::task_boards::task_boards_create,
+            commands::task_boards::task_boards_update,
+            commands::task_boards::task_boards_remove,
+            commands::task_boards::task_boards_replace_all,
+            commands::web_nodes::web_nodes_list,
+            commands::web_nodes::web_nodes_create,
+            commands::web_nodes::web_nodes_update,
+            commands::web_nodes::web_nodes_remove,
+            commands::web_nodes::web_nodes_replace_all,
+            commands::web_nodes::web_nodes_fetch_meta,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

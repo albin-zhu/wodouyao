@@ -6,7 +6,18 @@ import { useSettingsStore } from "../store/settingsStore";
 import { useWireStore } from "../store/wireStore";
 import { useTaskStore } from "../store/taskStore";
 import { useNoteStore } from "../store/noteStore";
-import type { Workspace, WorkspaceTerminalLayout, WorkspaceWireLayout, WorkspaceNoteLayout } from "../types/workspace";
+import { useFileNodeStore } from "../store/fileNodeStore";
+import { useTaskBoardStore } from "../store/taskBoardStore";
+import { useWebNodeStore } from "../store/webNodeStore";
+import type {
+  Workspace,
+  WorkspaceTerminalLayout,
+  WorkspaceWireLayout,
+  WorkspaceNoteLayout,
+  WorkspaceFileNodeLayout,
+  WorkspaceTaskBoardLayout,
+  WorkspaceWebNodeLayout,
+} from "../types/workspace";
 import type { TerminalNode, ShellType } from "../types/terminal";
 import { destroyTerminal, createTerminal, saveWorkspace } from "../services/tauriCommands";
 import { generateId } from "../utils/id";
@@ -66,6 +77,45 @@ export function useWorkspace() {
       created_at: n.createdAt,
     }));
 
+    const fileNodeLayouts: WorkspaceFileNodeLayout[] = useFileNodeStore
+      .getState()
+      .getFileNodes()
+      .map((f) => ({
+        id: f.id,
+        path: f.path,
+        name: f.name,
+        kind: f.kind,
+        position: f.position,
+        size: f.size,
+        z_index: f.zIndex,
+        created_at: f.createdAt,
+      }));
+
+    const taskBoardLayouts: WorkspaceTaskBoardLayout[] = Array.from(
+      useTaskBoardStore.getState().boards.values()
+    ).map((b) => ({
+      id: b.id,
+      label: b.label,
+      position: b.position,
+      size: b.size,
+      z_index: b.zIndex,
+      created_at: Date.now(),
+    }));
+
+    const webNodeLayouts: WorkspaceWebNodeLayout[] = useWebNodeStore
+      .getState()
+      .getWebNodes()
+      .map((w) => ({
+        id: w.id,
+        url: w.url,
+        title: w.title,
+        description: w.description,
+        position: w.position,
+        size: w.size,
+        z_index: w.zIndex,
+        created_at: w.createdAt,
+      }));
+
     return {
       id: "",
       name: "",
@@ -80,6 +130,9 @@ export function useWorkspace() {
       terminals: termLayouts,
       wires: wireLayouts,
       notes: noteLayouts,
+      file_nodes: fileNodeLayouts,
+      task_boards: taskBoardLayouts,
+      web_nodes: webNodeLayouts,
       created_at: Date.now(),
       updated_at: Date.now(),
     };
@@ -161,6 +214,42 @@ export function useWorkspace() {
       } else {
         useNoteStore.setState({ notes: new Map(), nextZIndex: 1 });
       }
+
+      // Hydrate file nodes, task boards, and web nodes from workspace
+      useFileNodeStore.getState().syncFromRust(
+        (ws.file_nodes ?? []).map((f) => ({
+          id: f.id,
+          path: f.path,
+          name: f.name,
+          kind: f.kind,
+          position: f.position,
+          size: f.size,
+          z_index: f.z_index,
+          created_at: f.created_at,
+        }))
+      );
+      useTaskBoardStore.getState().syncFromRust(
+        (ws.task_boards ?? []).map((b) => ({
+          id: b.id,
+          label: b.label,
+          position: b.position,
+          size: b.size,
+          z_index: b.z_index,
+          created_at: b.created_at,
+        }))
+      );
+      useWebNodeStore.getState().syncFromRust(
+        (ws.web_nodes ?? []).map((w) => ({
+          id: w.id,
+          url: w.url,
+          title: w.title,
+          description: w.description,
+          position: w.position,
+          size: w.size,
+          z_index: w.z_index,
+          created_at: w.created_at,
+        }))
+      );
     },
     [getTerminals, removeTerminal, addTerminal, setPan]
   );

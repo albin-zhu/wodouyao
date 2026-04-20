@@ -25,6 +25,4 @@ uuid = { version = "1", features = ["v4"] }
 dirs = "6"
 log = "0.4"
 tiny_http = "0.12"
-
-[dev-dependencies]
 ureq = { version = "2", features = ["json"] }

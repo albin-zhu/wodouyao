@@ -3,7 +3,7 @@ import { useWorkspaceStore } from "../../store/workspaceStore";
 import { useWorkspace } from "../../hooks/useWorkspace";
 
 export default function WorkspaceSwitcher() {
-  const { currentWorkspace, workspaces, loadWorkspaceById, deleteWorkspace, createWorkspace } =
+  const { currentWorkspace, workspaces, loadWorkspaceById, deleteWorkspace, createWorkspace, loadWorkspaceList } =
     useWorkspaceStore();
   const { buildWorkspace, applyWorkspace } = useWorkspace();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -13,6 +13,16 @@ export default function WorkspaceSwitcher() {
   const [newName, setNewName] = useState("");
   const [newCwd, setNewCwd] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Refresh the workspace list whenever the dropdown opens. The startup
+  // listing could race with the settings load; this guarantees the user
+  // always sees the current set without needing to create a new workspace
+  // to force a refresh.
+  useEffect(() => {
+    if (dropdownOpen) {
+      loadWorkspaceList();
+    }
+  }, [dropdownOpen, loadWorkspaceList]);
 
   // Close dropdown on outside click
   useEffect(() => {

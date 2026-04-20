@@ -1,9 +1,28 @@
 import { create } from "zustand";
 import type { FileKind, FileNode } from "../types/fileNode";
 import { generateId } from "../utils/id";
+import {
+  fileNodesCreate,
+  fileNodesUpdate as fileNodesUpdateIpc,
+  fileNodesRemove as fileNodesRemoveIpc,
+  type FileNodeIpc,
+} from "../services/tauriCommands";
 
 const DEFAULT_FILE_WIDTH = 280;
 const DEFAULT_FILE_HEIGHT = 220;
+
+function fromIpc(n: FileNodeIpc): FileNode {
+  return {
+    id: n.id,
+    path: n.path,
+    name: n.name,
+    kind: n.kind as FileKind,
+    position: n.position,
+    size: n.size,
+    zIndex: n.z_index,
+    createdAt: n.created_at,
+  };
+}
 
 interface FileNodeStore {
   fileNodes: Map<string, FileNode>;
@@ -21,6 +40,7 @@ interface FileNodeStore {
   updateFileNode: (id: string, updates: Partial<FileNode>) => void;
   bringToFront: (id: string) => void;
   getFileNodes: () => FileNode[];
+  syncFromRust: (ipc: FileNodeIpc[]) => void;
 }
 
 export const useFileNodeStore = create<FileNodeStore>((set, get) => ({
@@ -28,7 +48,7 @@ export const useFileNodeStore = create<FileNodeStore>((set, get) => ({
   nextZIndex: 1,
 
   addFileNode: (input) => {
-    const id = input.id ?? generateId();
+    const id = input.id ?? generateId("f");
     const state = get();
     const node: FileNode = {
       id,
@@ -45,24 +65,43 @@ export const useFileNodeStore = create<FileNodeStore>((set, get) => ({
     const newMap = new Map(state.fileNodes);
     newMap.set(id, node);
     set({ fileNodes: newMap, nextZIndex: state.nextZIndex + 1 });
+
+    fileNodesCreate({
+      id: node.id,
+      path: node.path,
+      name: node.name,
+      kind: node.kind,
+      position: node.position,
+      size: node.size,
+    }).catch(() => {});
+
     return node;
   },
 
-  removeFileNode: (id) =>
+  removeFileNode: (id) => {
     set((state) => {
       const newMap = new Map(state.fileNodes);
       newMap.delete(id);
       return { fileNodes: newMap };
-    }),
+    });
+    fileNodesRemoveIpc(id).catch(() => {});
+  },
 
-  updateFileNode: (id, updates) =>
+  updateFileNode: (id, updates) => {
     set((state) => {
       const node = state.fileNodes.get(id);
       if (!node) return state;
       const newMap = new Map(state.fileNodes);
       newMap.set(id, { ...node, ...updates });
       return { fileNodes: newMap };
-    }),
+    });
+    const patch: Record<string, unknown> = {};
+    if (updates.position !== undefined) patch.position = updates.position;
+    if (updates.size !== undefined) patch.size = updates.size;
+    if (Object.keys(patch).length > 0) {
+      fileNodesUpdateIpc(id, patch).catch(() => {});
+    }
+  },
 
   bringToFront: (id) =>
     set((state) => {
@@ -74,4 +113,15 @@ export const useFileNodeStore = create<FileNodeStore>((set, get) => ({
     }),
 
   getFileNodes: () => Array.from(get().fileNodes.values()),
+
+  syncFromRust: (ipc) => {
+    const newMap = new Map<string, FileNode>();
+    let maxZ = 0;
+    for (const n of ipc) {
+      const node = fromIpc(n);
+      newMap.set(node.id, node);
+      if (node.zIndex > maxZ) maxZ = node.zIndex;
+    }
+    set({ fileNodes: newMap, nextZIndex: maxZ + 1 });
+  },
 }));

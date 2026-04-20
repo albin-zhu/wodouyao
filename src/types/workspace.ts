@@ -13,8 +13,42 @@ export interface Workspace {
   wires: WorkspaceWireLayout[];
   tasks?: import("./task").Task[];
   notes?: WorkspaceNoteLayout[];
+  file_nodes?: WorkspaceFileNodeLayout[];
+  task_boards?: WorkspaceTaskBoardLayout[];
+  web_nodes?: WorkspaceWebNodeLayout[];
   created_at: number;
   updated_at: number;
+}
+
+export interface WorkspaceFileNodeLayout {
+  id: string;
+  path: string;
+  name: string;
+  kind: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  z_index: number;
+  created_at: number;
+}
+
+export interface WorkspaceTaskBoardLayout {
+  id: string;
+  label: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  z_index: number;
+  created_at: number;
+}
+
+export interface WorkspaceWebNodeLayout {
+  id: string;
+  url: string;
+  title: string | null;
+  description: string | null;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  z_index: number;
+  created_at: number;
 }
 
 export interface WorkspaceTerminalLayout {

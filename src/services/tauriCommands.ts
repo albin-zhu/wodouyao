@@ -257,3 +257,160 @@ export async function notesRemove(id: string): Promise<boolean> {
 export async function notesReplaceAll(notes: NoteIpc[]): Promise<void> {
   return invoke<void>("notes_replace_all", { notes });
 }
+
+// File nodes (images, text files, directories dropped on the canvas)
+export interface FileNodeIpc {
+  id: string;
+  path: string;
+  name: string;
+  kind: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  z_index: number;
+  created_at: number;
+}
+
+export interface FileNodeCreateInput {
+  id?: string;
+  path: string;
+  name: string;
+  kind: string;
+  position?: { x: number; y: number };
+  size?: { width: number; height: number };
+}
+
+export interface FileNodePatchInput {
+  position?: { x: number; y: number };
+  size?: { width: number; height: number };
+}
+
+export async function fileNodesList(): Promise<FileNodeIpc[]> {
+  return invoke<FileNodeIpc[]>("file_nodes_list");
+}
+
+export async function fileNodesCreate(input: FileNodeCreateInput): Promise<FileNodeIpc> {
+  return invoke<FileNodeIpc>("file_nodes_create", { input });
+}
+
+export async function fileNodesUpdate(
+  id: string,
+  patch: FileNodePatchInput
+): Promise<FileNodeIpc | null> {
+  return invoke<FileNodeIpc | null>("file_nodes_update", { id, patch });
+}
+
+export async function fileNodesRemove(id: string): Promise<boolean> {
+  return invoke<boolean>("file_nodes_remove", { id });
+}
+
+export async function fileNodesReplaceAll(nodes: FileNodeIpc[]): Promise<void> {
+  return invoke<void>("file_nodes_replace_all", { nodes });
+}
+
+// Task boards
+export interface TaskBoardIpc {
+  id: string;
+  label: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  z_index: number;
+  created_at: number;
+}
+
+export interface TaskBoardCreateInput {
+  id?: string;
+  label?: string;
+  position?: { x: number; y: number };
+  size?: { width: number; height: number };
+}
+
+export interface TaskBoardPatchInput {
+  label?: string;
+  position?: { x: number; y: number };
+  size?: { width: number; height: number };
+}
+
+export async function taskBoardsList(): Promise<TaskBoardIpc[]> {
+  return invoke<TaskBoardIpc[]>("task_boards_list");
+}
+
+export async function taskBoardsCreate(input: TaskBoardCreateInput): Promise<TaskBoardIpc> {
+  return invoke<TaskBoardIpc>("task_boards_create", { input });
+}
+
+export async function taskBoardsUpdate(
+  id: string,
+  patch: TaskBoardPatchInput
+): Promise<TaskBoardIpc | null> {
+  return invoke<TaskBoardIpc | null>("task_boards_update", { id, patch });
+}
+
+export async function taskBoardsRemove(id: string): Promise<boolean> {
+  return invoke<boolean>("task_boards_remove", { id });
+}
+
+export async function taskBoardsReplaceAll(boards: TaskBoardIpc[]): Promise<void> {
+  return invoke<void>("task_boards_replace_all", { boards });
+}
+
+// Web nodes
+export interface WebNodeIpc {
+  id: string;
+  url: string;
+  title: string | null;
+  description: string | null;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  z_index: number;
+  created_at: number;
+}
+
+export interface WebNodeCreateInput {
+  id?: string;
+  url: string;
+  title?: string;
+  description?: string;
+  position?: { x: number; y: number };
+  size?: { width: number; height: number };
+}
+
+export interface WebNodePatchInput {
+  url?: string;
+  title?: string;
+  description?: string;
+  position?: { x: number; y: number };
+  size?: { width: number; height: number };
+}
+
+export async function webNodesList(): Promise<WebNodeIpc[]> {
+  return invoke<WebNodeIpc[]>("web_nodes_list");
+}
+
+export async function webNodesCreate(input: WebNodeCreateInput): Promise<WebNodeIpc> {
+  return invoke<WebNodeIpc>("web_nodes_create", { input });
+}
+
+export async function webNodesUpdate(
+  id: string,
+  patch: WebNodePatchInput
+): Promise<WebNodeIpc | null> {
+  return invoke<WebNodeIpc | null>("web_nodes_update", { id, patch });
+}
+
+export async function webNodesRemove(id: string): Promise<boolean> {
+  return invoke<boolean>("web_nodes_remove", { id });
+}
+
+export async function webNodesReplaceAll(nodes: WebNodeIpc[]): Promise<void> {
+  return invoke<void>("web_nodes_replace_all", { nodes });
+}
+
+export interface WebFetchedMeta {
+  title: string;
+  description: string;
+  content_type: string;
+}
+
+export async function webNodesFetchMeta(url: string): Promise<WebFetchedMeta> {
+  return invoke<WebFetchedMeta>("web_nodes_fetch_meta", { url });
+}
