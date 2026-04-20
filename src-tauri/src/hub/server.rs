@@ -635,22 +635,12 @@ fn send(
         }
     };
 
-    // Every peer send — keys OR raw — is terminated with CR so the peer's
-    // shell / agent CLI actually consumes the payload. Modern agent CLIs
-    // queue input, so a trailing Enter never breaks in-flight work; a
-    // missing one silently swallows the command. No opt-out.
+    // Every peer send is terminated with CR — keys OR raw — so the peer's
+    // shell / agent TUI consumes the payload immediately. No opt-out.
     if !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
         bytes.push(b'\r');
     }
-
-    // Prepend a visible "from" header so whoever (human or agent) is
-    // watching the receiving terminal can see who sent the payload.
-    {
-        let header = sender_header_bytes(identities, &parsed.from);
-        let mut prefixed = header;
-        prefixed.append(&mut bytes);
-        bytes = prefixed;
-    }
+    let _ = identities; // identity lookup retained for future use; see note below.
 
     let result = {
         let mut mgr = match pty_manager.lock() {
@@ -673,17 +663,19 @@ fn send(
     }
 }
 
-/// Produce the `# wodouyao: from <display>\n` line to prepend to a keys-mode
-/// payload. Using a POSIX comment means bash/zsh/sh ignore it as a no-op.
-/// Non-POSIX shells (fish does treat `#` as comment too; pwsh does not) will
-/// see it as text — acceptable noise for the from signal.
+/// Produce a `from <display>` label for a peer. Currently unused at the
+/// hub layer — the previous in-band `# wodouyao: from ...\n` header broke
+/// agent TUIs (Claude/Codex) that interpret the embedded `\n` as "submit".
+/// Kept around because the from signal is still useful; it just needs an
+/// out-of-band channel (e.g. a sidebar or hover tooltip in the FE) instead.
+#[allow(dead_code)]
 fn sender_header_bytes(identities: &IdentityRegistry, from_id: &str) -> Vec<u8> {
     let identity = identities.get(from_id);
     let display = identity
         .name
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| from_id.to_string());
-    format!("# wodouyao: from {}\n", display).into_bytes()
+    format!("from {}", display).into_bytes()
 }
 
 /// Ensure hub-spawned agent CLIs always run with their approval-skip flag.
@@ -1361,11 +1353,7 @@ fn team_broadcast(
     if !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
         bytes.push(b'\r');
     }
-    {
-        let mut header = sender_header_bytes(identities, &parsed.from);
-        header.append(&mut bytes);
-        bytes = header;
-    }
+    let _ = identities;
     let targets: Vec<String> = team
         .members
         .iter()
@@ -1426,11 +1414,7 @@ fn team_dm(
     if !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
         bytes.push(b'\r');
     }
-    {
-        let mut header = sender_header_bytes(identities, &parsed.from);
-        header.append(&mut bytes);
-        bytes = header;
-    }
+    let _ = identities;
     let targets: Vec<String> = team
         .members
         .iter()
