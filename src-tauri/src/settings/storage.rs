@@ -49,6 +49,12 @@ impl Default for BackgroundSettings {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct EnvOverride {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct AppSettings {
     pub default_shell_path: Option<String>,
     pub font_size: u16,
@@ -69,6 +75,11 @@ pub struct AppSettings {
     pub wire_empty_spawn_command: String,
     #[serde(default = "default_language")]
     pub language: String,
+    /// Key/value env vars injected into every spawned terminal. Applied
+    /// BEFORE wodouyao's own vars (WODOUYAO_*, PATH), so users can override
+    /// HOME/TERM/LANG/etc. but can't clobber wodouyao's protocol plumbing.
+    #[serde(default)]
+    pub env_overrides: Vec<EnvOverride>,
 }
 
 impl Default for AppSettings {
@@ -82,6 +93,7 @@ impl Default for AppSettings {
             wire_empty_spawn_enabled: true,
             wire_empty_spawn_command: "claude".into(),
             language: "en".into(),
+            env_overrides: Vec::new(),
             quick_commands: vec![
                 QuickCommand {
                     id: "claude".into(),

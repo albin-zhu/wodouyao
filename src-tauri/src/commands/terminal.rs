@@ -26,13 +26,26 @@ pub fn create_terminal(
         .shell_path
         .unwrap_or_else(|| shell::detect_default_shell().path);
 
-    let mut env = vec![
-        (
-            "WODOUYAO_ENDPOINT".to_string(),
-            state.hub.endpoint_path.to_string_lossy().into_owned(),
-        ),
-        ("WODOUYAO_ID".to_string(), request.id.clone()),
-    ];
+    let mut env: Vec<(String, String)> = Vec::new();
+
+    // User-supplied env overrides first so they sit at the bottom of the
+    // precedence stack — wodouyao's own vars (pushed below) win, meaning
+    // the user can override HOME / TERM / LANG / etc. but can't clobber
+    // WODOUYAO_* which the hub protocol relies on.
+    if let Ok(app_settings) = crate::settings::storage::load() {
+        for eo in &app_settings.env_overrides {
+            let key = eo.key.trim();
+            if !key.is_empty() {
+                env.push((key.to_string(), eo.value.clone()));
+            }
+        }
+    }
+
+    env.push((
+        "WODOUYAO_ENDPOINT".to_string(),
+        state.hub.endpoint_path.to_string_lossy().into_owned(),
+    ));
+    env.push(("WODOUYAO_ID".to_string(), request.id.clone()));
 
     if let Ok(resource_dir) = app.path().resource_dir() {
         // Tauri copies `bundle.resources` entries preserving their relative

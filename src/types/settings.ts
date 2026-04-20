@@ -15,6 +15,11 @@ export interface BackgroundSettings {
   opacity: number;
 }
 
+export interface EnvOverride {
+  key: string;
+  value: string;
+}
+
 export interface AppSettings {
   default_shell_path: string | null;
   font_size: number;
@@ -28,4 +33,7 @@ export interface AppSettings {
   /** Command to run in the auto-spawned terminal (defaults to "claude"). */
   wire_empty_spawn_command: string;
   language: string;
+  /** Key/value env vars injected into every spawned terminal. User keys
+   *  can override HOME/TERM/LANG/etc. but not WODOUYAO_*. */
+  env_overrides: EnvOverride[];
 }

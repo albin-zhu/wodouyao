@@ -6,6 +6,7 @@ import { useWorkspaceStore } from "../../store/workspaceStore";
 import type {
   BackgroundKind,
   BackgroundSettings,
+  EnvOverride,
   ParticlePreset,
   QuickCommand,
 } from "../../types/settings";
@@ -519,6 +520,128 @@ export default function SettingsDrawer() {
           <div style={sectionStyle}>
             <div style={labelStyle}>{t("settings.integrations")}</div>
             <IntegrationsSection />
+          </div>
+
+          {/* Environment variables injected into every new terminal */}
+          <div style={sectionStyle}>
+            <div style={labelStyle}>
+              {t("settings.envOverrides", "Terminal environment variables")}
+            </div>
+            <div
+              style={{
+                color: "#565f89",
+                fontSize: 11,
+                lineHeight: 1.5,
+                marginBottom: 8,
+              }}
+            >
+              {t(
+                "settings.envOverridesHint",
+                "Injected into every new terminal. WODOUYAO_* keys are reserved."
+              )}
+            </div>
+            {(settings.env_overrides ?? []).map((eo, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  marginBottom: 4,
+                  alignItems: "center",
+                }}
+              >
+                <input
+                  value={eo.key}
+                  onChange={(e) => {
+                    const next: EnvOverride[] = (
+                      settings.env_overrides ?? []
+                    ).map((x, i) => (i === idx ? { ...x, key: e.target.value } : x));
+                    updateSettings({ env_overrides: next });
+                  }}
+                  placeholder="KEY"
+                  spellCheck={false}
+                  style={{
+                    flex: "0 0 180px",
+                    background: "#13141b",
+                    border: "1px solid #292e42",
+                    borderRadius: 4,
+                    color: "#c0caf5",
+                    padding: "4px 8px",
+                    fontSize: 12,
+                    fontFamily:
+                      "'SF Mono', 'Menlo', 'Monaco', monospace",
+                    outline: "none",
+                  }}
+                />
+                <input
+                  value={eo.value}
+                  onChange={(e) => {
+                    const next: EnvOverride[] = (
+                      settings.env_overrides ?? []
+                    ).map((x, i) =>
+                      i === idx ? { ...x, value: e.target.value } : x
+                    );
+                    updateSettings({ env_overrides: next });
+                  }}
+                  placeholder="value"
+                  spellCheck={false}
+                  style={{
+                    flex: 1,
+                    background: "#13141b",
+                    border: "1px solid #292e42",
+                    borderRadius: 4,
+                    color: "#c0caf5",
+                    padding: "4px 8px",
+                    fontSize: 12,
+                    fontFamily:
+                      "'SF Mono', 'Menlo', 'Monaco', monospace",
+                    outline: "none",
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    const next = (settings.env_overrides ?? []).filter(
+                      (_, i) => i !== idx
+                    );
+                    updateSettings({ env_overrides: next });
+                  }}
+                  title={t("settings.envOverrideRemove", "Remove")}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#f7768e",
+                    cursor: "pointer",
+                    fontSize: 13,
+                    padding: "0 4px",
+                    lineHeight: 1,
+                  }}
+                >
+                  {"\u2715"}
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={() => {
+                const next = [
+                  ...(settings.env_overrides ?? []),
+                  { key: "", value: "" },
+                ];
+                updateSettings({ env_overrides: next });
+              }}
+              style={{
+                background: "#292e42",
+                color: "#c0caf5",
+                border: "1px solid #3b4261",
+                borderRadius: 4,
+                padding: "4px 12px",
+                fontSize: 11,
+                cursor: "pointer",
+                marginTop: 4,
+              }}
+            >
+              {"+ "}
+              {t("settings.envOverrideAdd", "Add variable")}
+            </button>
           </div>
 
           {/* Quick Commands */}
