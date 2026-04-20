@@ -224,6 +224,43 @@ impl PtySession {
             subscribers,
         };
 
+        // Re-export env overrides AFTER rc files have run, so user-defined
+        // variables win over whatever the shell's init scripts set. Skipped
+        // for fast_start (no rc files anyway) and for unknown shells.
+        //
+        // We emit a leading `\x15` (Ctrl-U, kill-line) to discard any
+        // characters the user might have started typing before the exports
+        // landed, then the export statements, then `\x0c` (form-feed) to
+        // repaint a clean prompt.
+        if !fast_start {
+            let shell_basename = std::path::Path::new(shell_path)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            let shell_basename = shell_basename.trim_end_matches(".exe");
+            let posix_like = matches!(
+                shell_basename,
+                "sh" | "bash" | "zsh" | "dash" | "ksh" | "ash"
+            );
+            if posix_like && !env.is_empty() {
+                let mut script = String::from("\x15");
+                for (k, v) in env {
+                    if k.is_empty() {
+                        continue;
+                    }
+                    script.push_str("export ");
+                    script.push_str(k);
+                    script.push('=');
+                    script.push_str(&shell_escape(v));
+                    script.push('\n');
+                }
+                script.push_str("clear\n");
+                let _ = session.writer.write_all(script.as_bytes());
+                let _ = session.writer.flush();
+            }
+        }
+
         // If an initial command is provided, write it after a short delay
         if let Some(cmd_str) = command {
             let cmd_with_newline = format!("{}\n", cmd_str);
@@ -282,4 +319,20 @@ impl Drop for PtySession {
     fn drop(&mut self) {
         self.kill();
     }
+}
+
+/// POSIX single-quote escape a value for `export KEY=<value>`. Wraps in
+/// single quotes and escapes any embedded single quote via `'\''`.
+fn shell_escape(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('\'');
+    for ch in value.chars() {
+        if ch == '\'' {
+            out.push_str("'\\''");
+        } else {
+            out.push(ch);
+        }
+    }
+    out.push('\'');
+    out
 }

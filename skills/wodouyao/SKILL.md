@@ -111,14 +111,26 @@ lead$ wodouyao team dm alpha worker "see new task"
 worker$ wodouyao team task take alpha task_xyz123
 ```
 
-### `wodouyao send <peer> [--raw|--keys] <text...>`
+### `wodouyao send <peer> [--raw|--keys] [--no-enter] <text...>`
 
 Write to a peer's PTY stdin.
 
 - Default mode `--keys`: tmux `send-keys` style. Supports key literals like `Enter`, `C-c`, `M-x`, arrows, `PageUp`, etc. See [send-keys reference](references/send-keys.md) for the full table — load only when sending non-text keystrokes.
-- `--raw`: bytes are written verbatim. Use when forwarding pre-formatted data (JSON, escape sequences).
+- `--raw`: bytes are written verbatim. Use when forwarding pre-formatted data (JSON, escape sequences). Implies `--no-enter`.
+- **Auto-Enter**: in `--keys` mode the CLI appends a trailing ` Enter` automatically unless the text already ends with `Enter` / `C-m`. Pass `--no-enter` to opt out (e.g. feeding a prompt that still expects more input).
 
-To run a command on the peer: `wodouyao send <peer> "<cmd>" Enter` — the trailing `Enter` submits it. Without `Enter` the peer sees the text in its input line but does not execute.
+Common patterns:
+
+```sh
+# Run a command — Enter is implicit.
+wodouyao send bob "pwd"
+
+# Send a prompt without submitting it yet (still editable on the peer).
+wodouyao send bob --no-enter "What is t"
+
+# Send a control key on its own.
+wodouyao send bob --no-enter C-c
+```
 
 Exit codes: `0` success, `2` env unset, `3` malformed endpoint file, `4` no wire to peer (HTTP 403), `1` other.
 
@@ -129,7 +141,7 @@ Fetch the tail of the peer's output ring buffer. Default `N=16384`, server-side 
 Typical pattern after `send`:
 
 ```sh
-wodouyao send bob "pwd" Enter
+wodouyao send bob "pwd"
 sleep 0.3                 # let the peer execute
 wodouyao read bob --bytes 4096
 ```
@@ -150,7 +162,7 @@ connection errors.
 When the user says "ask the other terminal to do X":
 
 1. `wodouyao peers` → confirm target exists
-2. `wodouyao send <peer> "<command>" Enter`
+2. `wodouyao send <peer> "<command>"` (Enter is auto-appended)
 3. Pause (start with `sleep 0.5`, extend if the command is slow)
 4. `wodouyao read <peer>`
 5. Decide: done, need more time, or error

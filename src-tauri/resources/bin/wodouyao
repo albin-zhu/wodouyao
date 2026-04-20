@@ -18,7 +18,8 @@ Usage: wodouyao <subcommand> [args]
         [--team T] [--team-role R]
                                      create a new terminal (auto-wired from caller
                                      by default); prints the new id on stdout
-  send <peer> [--raw|--keys] <text>  send text (default mode: keys)
+  send <peer> [--raw|--keys] [--no-enter] <text>
+                                     send text (default: keys + auto Enter)
   read <peer> [--bytes N]            read recent output (default N=16384)
   watch <peer>                       stream a peer's output until Ctrl+C
   task list                          list all global tasks
@@ -173,17 +174,28 @@ cmd_send() {
     [ $# -gt 0 ] || usage
     _peer=$1; shift
     _mode=keys
+    _auto_enter=1
     while [ $# -gt 0 ]; do
         case $1 in
-            --raw)  _mode=raw;  shift ;;
-            --keys) _mode=keys; shift ;;
-            --)     shift; break ;;
-            -*)     die "unknown flag: $1" ;;
-            *)      break ;;
+            --raw)       _mode=raw; _auto_enter=0; shift ;;
+            --keys)      _mode=keys; shift ;;
+            --no-enter)  _auto_enter=0; shift ;;
+            --)          shift; break ;;
+            -*)          die "unknown flag: $1" ;;
+            *)           break ;;
         esac
     done
     [ $# -gt 0 ] || die "send: missing text"
     _text=$*
+    # Auto-append " Enter" in keys mode unless the caller already ended with
+    # an Enter/C-m/\n literal or passed --no-enter. This is the #1 forgotten
+    # step and shells won't execute anything without it.
+    if [ "$_auto_enter" = "1" ] && [ "$_mode" = "keys" ]; then
+        case "$_text" in
+            *" Enter"|*" enter"|*" ENTER"|*" C-m"|*" c-m") : ;;
+            *) _text="$_text Enter" ;;
+        esac
+    fi
     load_endpoint
     _encoded=$(json_escape "$_text")
     _body=$(printf '{"from":"%s","to":"%s","text":%s,"mode":"%s"}' \
