@@ -32,6 +32,8 @@ pub struct PtySession {
     pub rows: u16,
     pub ring_buffer: Arc<Mutex<VecDeque<u8>>>,
     pub subscribers: Arc<Mutex<Vec<mpsc::Sender<Vec<u8>>>>>,
+    /// One-shot rcfile / ZDOTDIR temp directory; cleaned up on drop.
+    rc_tempdir: Option<std::path::PathBuf>,
 }
 
 impl PtySession {
@@ -98,6 +100,84 @@ impl PtySession {
 
         for (k, v) in env {
             cmd.env(k, v);
+        }
+
+        // If env overrides need to survive the shell's rc files (zshrc,
+        // bashrc often re-export PATH/NVM/conda/etc.), hand the shell a
+        // one-shot rcfile that sources its real rc first, then re-exports
+        // our overrides LAST so we win. Nothing is written to the user's
+        // HOME; everything lives in a temp dir that we hand-delete.
+        let mut rc_tempdir: Option<std::path::PathBuf> = None;
+        if !fast_start && !env.is_empty() {
+            let shell_basename_raw = std::path::Path::new(shell_path)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            let shell_basename = shell_basename_raw.trim_end_matches(".exe");
+
+            let mut script = String::new();
+            script.push_str("# wodouyao: re-export user env overrides after rc\n");
+            for (k, v) in env {
+                if k.is_empty() {
+                    continue;
+                }
+                script.push_str("export ");
+                script.push_str(k);
+                script.push('=');
+                script.push_str(&shell_escape(v));
+                script.push('\n');
+            }
+
+            match shell_basename {
+                "bash" => {
+                    // bash: --rcfile <file> makes an interactive shell
+                    // source only that file. We source ~/.bashrc first
+                    // (if it exists) so the user's environment still
+                    // loads, then append our exports.
+                    if let Some((dir, rc_path)) = write_temp_rc("wodouyao-bashrc", |w| {
+                        if let Some(home) = std::env::var_os("HOME") {
+                            let home = std::path::Path::new(&home).join(".bashrc");
+                            let _ = writeln!(
+                                w,
+                                "[ -f {p} ] && . {p}",
+                                p = shell_escape(&home.to_string_lossy())
+                            );
+                        }
+                        write!(w, "{}", script)
+                    }) {
+                        cmd.arg("--rcfile");
+                        cmd.arg(&rc_path);
+                        cmd.arg("-i");
+                        rc_tempdir = Some(dir);
+                    }
+                }
+                "zsh" => {
+                    // zsh honors $ZDOTDIR: when set, .zshrc is read from
+                    // there instead of $HOME. Drop a .zshrc that sources
+                    // the real one, then runs our exports.
+                    if let Some((dir, _)) = write_temp_rc_named("wodouyao-zdotdir", ".zshrc", |w| {
+                        if let Some(home) = std::env::var_os("HOME") {
+                            let home = std::path::Path::new(&home).join(".zshrc");
+                            let _ = writeln!(
+                                w,
+                                "[ -f {p} ] && . {p}",
+                                p = shell_escape(&home.to_string_lossy())
+                            );
+                        }
+                        write!(w, "{}", script)
+                    }) {
+                        cmd.env("ZDOTDIR", &dir);
+                        rc_tempdir = Some(dir);
+                    }
+                }
+                _ => {
+                    // fish / pwsh / cmd / sh: no reliable post-rc
+                    // injection path. The pre-rc CommandBuilder env still
+                    // applies; user-rc may clobber some values but we
+                    // don't have a general workaround here.
+                }
+            }
         }
         if fast_start {
             // Skip rc/profile files so the shell drops into an interactive
@@ -222,44 +302,19 @@ impl PtySession {
             rows,
             ring_buffer,
             subscribers,
+            rc_tempdir,
         };
 
         // Re-export env overrides AFTER rc files have run, so user-defined
         // variables win over whatever the shell's init scripts set. Skipped
         // for fast_start (no rc files anyway) and for unknown shells.
         //
-        // We emit a leading `\x15` (Ctrl-U, kill-line) to discard any
-        // characters the user might have started typing before the exports
-        // landed, then the export statements, then `\x0c` (form-feed) to
-        // repaint a clean prompt.
-        if !fast_start {
-            let shell_basename = std::path::Path::new(shell_path)
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("")
-                .to_lowercase();
-            let shell_basename = shell_basename.trim_end_matches(".exe");
-            let posix_like = matches!(
-                shell_basename,
-                "sh" | "bash" | "zsh" | "dash" | "ksh" | "ash"
-            );
-            if posix_like && !env.is_empty() {
-                let mut script = String::from("\x15");
-                for (k, v) in env {
-                    if k.is_empty() {
-                        continue;
-                    }
-                    script.push_str("export ");
-                    script.push_str(k);
-                    script.push('=');
-                    script.push_str(&shell_escape(v));
-                    script.push('\n');
-                }
-                script.push_str("clear\n");
-                let _ = session.writer.write_all(script.as_bytes());
-                let _ = session.writer.flush();
-            }
-        }
+        // NOTE: the heavy lifting is already done via --rcfile / $ZDOTDIR
+        // above. This block is a best-effort fallback for the rare case
+        // where the rcfile path didn't take (e.g. rc_tempdir creation
+        // failed) — do nothing in that case; we don't want to corrupt the
+        // prompt via Ctrl-U / stdin injection which had timing bugs.
+        let _ = fast_start; // suppress unused-binding warning
 
         // If an initial command is provided, write it after a short delay
         if let Some(cmd_str) = command {
@@ -318,6 +373,9 @@ impl PtySession {
 impl Drop for PtySession {
     fn drop(&mut self) {
         self.kill();
+        if let Some(dir) = self.rc_tempdir.take() {
+            let _ = std::fs::remove_dir_all(dir);
+        }
     }
 }
 
@@ -335,4 +393,32 @@ fn shell_escape(value: &str) -> String {
     }
     out.push('\'');
     out
+}
+
+/// Create a unique temp directory with a file called `<filename>` inside it;
+/// hand off the writer closure to populate the file. Returns (dir_path,
+/// file_path) on success, None on any I/O failure.
+fn write_temp_rc_named<F>(prefix: &str, filename: &str, fill: F) -> Option<(std::path::PathBuf, std::path::PathBuf)>
+where
+    F: FnOnce(&mut std::fs::File) -> std::io::Result<()>,
+{
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let dir = std::env::temp_dir().join(format!("{}-{}-{}", prefix, std::process::id(), nanos));
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join(filename);
+    let mut f = std::fs::File::create(&path).ok()?;
+    fill(&mut f).ok()?;
+    Some((dir, path))
+}
+
+/// Convenience: the returned rcfile gets the same stem as `prefix`.
+fn write_temp_rc<F>(prefix: &str, fill: F) -> Option<(std::path::PathBuf, std::path::PathBuf)>
+where
+    F: FnOnce(&mut std::fs::File) -> std::io::Result<()>,
+{
+    write_temp_rc_named(prefix, "rc", fill)
 }
