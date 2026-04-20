@@ -121,7 +121,7 @@ fn handle(
         (&Method::Get, "/v1/whoami") => whoami(request, identities, &query),
         (&Method::Post, "/v1/self") => register_self(request, identities),
         (&Method::Post, "/v1/spawn") => spawn(request, topology, team_registry, app_handle),
-        (&Method::Post, "/v1/send") => send(request, topology, pty_manager),
+        (&Method::Post, "/v1/send") => send(request, topology, pty_manager, identities),
         (&Method::Get, "/v1/read") => read(
             request,
             topology,
@@ -203,6 +203,7 @@ fn handle(
                         request,
                         team_registry,
                         pty_manager,
+                        identities,
                         team_id,
                         app_handle,
                     ),
@@ -210,6 +211,7 @@ fn handle(
                         request,
                         team_registry,
                         pty_manager,
+                        identities,
                         team_id,
                         app_handle,
                     ),
@@ -556,7 +558,7 @@ fn spawn(
                     Some("claude --dangerously-skip-permissions".into())
                 }
             }
-            "codex" => Some("codex".into()),
+            "codex" => Some("codex --dangerously-bypass-approvals-and-sandbox".into()),
             "opencode" => Some("opencode".into()),
             _ => None,
         })
@@ -597,6 +599,7 @@ fn send(
     mut request: tiny_http::Request,
     topology: &WireTopology,
     pty_manager: &Arc<Mutex<PtyManager>>,
+    identities: &IdentityRegistry,
 ) {
     let mut body = String::new();
     if request.as_reader().read_to_string(&mut body).is_err() {
@@ -616,7 +619,8 @@ fn send(
         return;
     }
 
-    let bytes = match parsed.mode.as_deref().unwrap_or("keys") {
+    let mode = parsed.mode.as_deref().unwrap_or("keys");
+    let mut bytes = match mode {
         "raw" => parsed.text.into_bytes(),
         "keys" => keys::parse_keys(&parsed.text),
         other => {
@@ -624,6 +628,17 @@ fn send(
             return;
         }
     };
+
+    // Prepend a visible "from" header so whoever (human or agent) is
+    // watching the receiving terminal can see who sent the payload.
+    // Only for keys mode — raw is for pre-formatted data where a prefix
+    // would corrupt the byte stream.
+    if mode == "keys" {
+        let header = sender_header_bytes(identities, &parsed.from);
+        let mut prefixed = header;
+        prefixed.append(&mut bytes);
+        bytes = prefixed;
+    }
 
     let result = {
         let mut mgr = match pty_manager.lock() {
@@ -644,6 +659,19 @@ fn send(
             let _ = request.respond(text(500, &e));
         }
     }
+}
+
+/// Produce the `# wodouyao: from <display>\n` line to prepend to a keys-mode
+/// payload. Using a POSIX comment means bash/zsh/sh ignore it as a no-op.
+/// Non-POSIX shells (fish does treat `#` as comment too; pwsh does not) will
+/// see it as text — acceptable noise for the from signal.
+fn sender_header_bytes(identities: &IdentityRegistry, from_id: &str) -> Vec<u8> {
+    let identity = identities.get(from_id);
+    let display = identity
+        .name
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| from_id.to_string());
+    format!("# wodouyao: from {}\n", display).into_bytes()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1251,6 +1279,7 @@ fn team_broadcast(
     mut request: tiny_http::Request,
     team_registry: &TeamRegistry,
     pty_manager: &Arc<Mutex<PtyManager>>,
+    identities: &IdentityRegistry,
     id: &str,
     app_handle: &AppHandleSlot,
 ) {
@@ -1274,13 +1303,19 @@ fn team_broadcast(
         let _ = request.respond(text(403, "sender not in team"));
         return;
     }
-    let bytes = match encode_payload(&parsed.text, parsed.mode.as_deref()) {
+    let mode = parsed.mode.as_deref();
+    let mut bytes = match encode_payload(&parsed.text, mode) {
         Ok(b) => b,
         Err(e) => {
             let _ = request.respond(text(400, &e));
             return;
         }
     };
+    if mode.unwrap_or("keys") == "keys" {
+        let mut header = sender_header_bytes(identities, &parsed.from);
+        header.append(&mut bytes);
+        bytes = header;
+    }
     let targets: Vec<String> = team
         .members
         .iter()
@@ -1297,6 +1332,7 @@ fn team_dm(
     mut request: tiny_http::Request,
     team_registry: &TeamRegistry,
     pty_manager: &Arc<Mutex<PtyManager>>,
+    identities: &IdentityRegistry,
     id: &str,
     app_handle: &AppHandleSlot,
 ) {
@@ -1329,13 +1365,19 @@ fn team_dm(
         let _ = request.respond(text(403, "sender not in team"));
         return;
     }
-    let bytes = match encode_payload(&parsed.text, parsed.mode.as_deref()) {
+    let mode = parsed.mode.as_deref();
+    let mut bytes = match encode_payload(&parsed.text, mode) {
         Ok(b) => b,
         Err(e) => {
             let _ = request.respond(text(400, &e));
             return;
         }
     };
+    if mode.unwrap_or("keys") == "keys" {
+        let mut header = sender_header_bytes(identities, &parsed.from);
+        header.append(&mut bytes);
+        bytes = header;
+    }
     let targets: Vec<String> = team
         .members
         .iter()
