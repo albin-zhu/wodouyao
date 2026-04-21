@@ -45,6 +45,11 @@ Usage: wodouyao <subcommand> [args]
   note remove <note-id>              remove a note
   terminal list                      list all live terminals
   terminal close <terminal-id>       close a terminal
+  bg get                             print current background settings JSON
+  bg set <kind> [--source S] [--shader N] [--opacity F]
+                                     set canvas background
+                                     kind: none|image|video|url|shader
+  bg shaders                         list available shader names
   team create <name> [--palette K] [--as-lead]
                                      create a team; prints new team id
   team list                          list teams, one per line
@@ -1438,6 +1443,64 @@ cmd_terminal() {
     esac
 }
 
+cmd_bg_get() {
+    load_endpoint
+    curl_auth -f "$URL/v1/background" || die "bg get failed"
+    printf '\n'
+}
+
+cmd_bg_shaders() {
+    load_endpoint
+    _body=$(curl_auth -f "$URL/v1/shaders") || die "bg shaders failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_body" | python3 -c '
+import json, sys
+for n in json.load(sys.stdin):
+    print(n)
+'
+    else
+        printf '%s' "$_body" \
+            | grep -o '"[^"]*"' \
+            | sed 's/"//g'
+    fi
+}
+
+cmd_bg_set() {
+    # cmd_bg_set <kind> [--source S] [--shader N] [--opacity F]
+    [ $# -gt 0 ] || die "bg set: missing kind (none|image|video|url|shader)"
+    _kind=$1; shift
+    case $_kind in
+        none|image|video|url|shader) ;;
+        *) die "bg set: invalid kind: $_kind" ;;
+    esac
+    _fields="\"kind\":$(json_escape "$_kind")"
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --source)  shift; _fields="$_fields,\"source\":$(json_escape "${1:-}")" ;;
+            --shader)  shift; _fields="$_fields,\"shader\":$(json_escape "${1:-}")" ;;
+            --opacity) shift; _fields="$_fields,\"opacity\":${1:-1.0}" ;;
+            *) die "bg set: unknown flag: $1" ;;
+        esac
+        shift || true
+    done
+    load_endpoint
+    _body="{$_fields}"
+    curl_auth -f -X POST -H "Content-Type: application/json" \
+        --data-binary "$_body" "$URL/v1/background" >/dev/null \
+        || die "bg set failed"
+}
+
+cmd_bg() {
+    [ $# -gt 0 ] || die "bg: missing subcommand (get|set|shaders)"
+    _sub=$1; shift
+    case $_sub in
+        get)     cmd_bg_get "$@" ;;
+        set)     cmd_bg_set "$@" ;;
+        shaders) cmd_bg_shaders "$@" ;;
+        *)       die "bg: unknown subcommand: $_sub" ;;
+    esac
+}
+
 [ $# -gt 0 ] || usage
 sub=$1; shift
 case $sub in
@@ -1454,6 +1517,7 @@ case $sub in
     wire)           cmd_wire  "$@" ;;
     note)           cmd_note  "$@" ;;
     terminal)       cmd_terminal "$@" ;;
+    bg)             cmd_bg "$@" ;;
     -h|--help|help) usage 0 ;;
     *)              die "unknown subcommand: $sub" ;;
 esac

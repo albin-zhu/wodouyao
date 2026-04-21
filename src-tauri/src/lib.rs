@@ -75,6 +75,9 @@ pub fn run() {
                     Err(e) => log::warn!("claude install failed: {}", e),
                 }
             }
+            if let Err(e) = commands::shaders::seed_from_resources(app.handle()) {
+                log::warn!("shader seed failed: {}", e);
+            }
 
             // On macOS, Tauri's default menu binds Cmd+W to "Close Window".
             // Replace it with a custom menu that omits that item, so Cmd+W
@@ -165,6 +168,9 @@ pub fn run() {
             commands::task_boards::task_boards_update,
             commands::task_boards::task_boards_remove,
             commands::task_boards::task_boards_replace_all,
+            commands::shaders::shaders_list,
+            commands::shaders::shaders_get,
+            commands::shaders::shaders_dir_path,
             open_url,
         ])
         .run(tauri::generate_context!())

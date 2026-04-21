@@ -17,6 +17,8 @@ pub struct BackgroundSettings {
     pub source: Option<String>,
     #[serde(default)]
     pub particle: Option<String>,
+    #[serde(default)]
+    pub shader: Option<String>,
     #[serde(default = "default_opacity")]
     pub opacity: f64,
 }
@@ -43,6 +45,7 @@ impl Default for BackgroundSettings {
             kind: "none".into(),
             source: None,
             particle: Some("matrix".into()),
+            shader: None,
             opacity: 1.0,
         }
     }

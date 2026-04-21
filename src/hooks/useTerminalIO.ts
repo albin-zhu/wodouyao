@@ -7,7 +7,6 @@ import { writeTerminal, resizeTerminal, destroyTerminal } from "../services/taur
 import { listenTerminalOutput, listenTerminalExit } from "../services/tauriEvents";
 import { registerXterm, unregisterXterm } from "../services/terminalRegistry";
 import { useTerminalStore } from "../store/terminalStore";
-import { useWireStore } from "../store/wireStore";
 import { TERMINAL_THEMES } from "../utils/terminalThemes";
 import type { TerminalTheme } from "../types/terminal";
 
@@ -105,28 +104,13 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
     // Register in global registry for cross-terminal operations
     registerXterm(terminalId, term);
 
-    // Send user input to backend PTY, and mirror it to any io-wired peer
-    // terminals so Enter / Ctrl keys / arrow keys travel together.
+    // Send user input to backend PTY only. Wires are ACL for hub peer
+    // communication, not live keystroke mirroring — agents talk to peers
+    // explicitly via the `wodouyao send` CLI.
     const encoder = new TextEncoder();
     term.onData((data) => {
       const bytes = Array.from(encoder.encode(data));
       writeTerminal(terminalId, bytes).catch(console.error);
-
-      const wires = useWireStore.getState().wires;
-      if (wires.size === 0) return;
-      const terminals = useTerminalStore.getState().terminals;
-      for (const w of wires.values()) {
-        if (w.kind !== "io") continue;
-        let peerId: string | null = null;
-        if (w.sourceId === terminalId && terminals.has(w.targetId)) {
-          peerId = w.targetId;
-        } else if (w.targetId === terminalId && terminals.has(w.sourceId)) {
-          peerId = w.sourceId;
-        }
-        if (peerId) {
-          writeTerminal(peerId, bytes).catch(console.error);
-        }
-      }
     });
 
     // Listen for PTY output and exit

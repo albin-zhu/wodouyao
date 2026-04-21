@@ -32,6 +32,14 @@ export default function App() {
 
   useEffect(() => {
     loadSettings();
+    // Hub or other processes may mutate settings on disk (e.g. wodouyao bg).
+    // Listen for the settings-changed event and reload.
+    const unlisten = import("@tauri-apps/api/event").then(({ listen }) =>
+      listen("settings-changed", () => loadSettings())
+    );
+    return () => {
+      unlisten.then((fn) => fn()).catch(() => {});
+    };
   }, [loadSettings]);
 
   // Handle fork-workspace events dispatched by useForkWorkspace

@@ -5,13 +5,13 @@ export interface QuickCommand {
   icon_label: string;
 }
 
-export type BackgroundKind = "none" | "image" | "video" | "url" | "particles";
-export type ParticlePreset = "matrix" | "starfield" | "wave" | "dust";
+export type BackgroundKind = "none" | "image" | "video" | "url" | "shader";
 
 export interface BackgroundSettings {
   kind: BackgroundKind;
   source?: string | null;
-  particle?: ParticlePreset | null;
+  /** Shader name (filename stem) under ~/.wodouyao/shaders/<name>.frag. */
+  shader?: string | null;
   opacity: number;
 }
 

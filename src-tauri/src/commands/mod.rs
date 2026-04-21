@@ -4,6 +4,7 @@ pub mod file_preview;
 pub mod integrations;
 pub mod notes;
 pub mod settings;
+pub mod shaders;
 pub mod task_boards;
 pub mod tasks;
 pub mod team;

@@ -1,6 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../../store/settingsStore";
-import ParticleCanvas from "./ParticleCanvas";
+import ShaderCanvas from "./ShaderCanvas";
 
 export default function BackgroundLayer() {
   const bg = useSettingsStore((s) => s.settings?.background);
@@ -50,8 +50,8 @@ export default function BackgroundLayer() {
         />
       ) : null;
       break;
-    case "particles":
-      content = <ParticleCanvas preset={bg.particle ?? "matrix"} style={fill} />;
+    case "shader":
+      content = bg.shader ? <ShaderCanvas name={bg.shader} style={fill} /> : null;
       break;
   }
 

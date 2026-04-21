@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import type {
   BackgroundKind,
   BackgroundSettings,
   EnvOverride,
-  ParticlePreset,
   QuickCommand,
 } from "../../types/settings";
 import IntegrationsSection from "./IntegrationsSection";
@@ -22,12 +22,20 @@ export default function SettingsDrawer() {
   const [editLabel, setEditLabel] = useState("");
   const [editCommand, setEditCommand] = useState("");
   const [cwdInput, setCwdInput] = useState("");
+  const [shaderList, setShaderList] = useState<string[]>([]);
+
+  const refreshShaders = useCallback(() => {
+    invoke<string[]>("shaders_list")
+      .then((list) => setShaderList(list))
+      .catch((e) => console.warn("[settings] shaders_list failed:", e));
+  }, []);
 
   useEffect(() => {
     if (drawerOpen) {
       setCwdInput(workspaceCwd ?? "");
+      refreshShaders();
     }
-  }, [drawerOpen, workspaceCwd]);
+  }, [drawerOpen, workspaceCwd, refreshShaders]);
 
   if (!drawerOpen || !settings) return null;
 
@@ -419,7 +427,7 @@ export default function SettingsDrawer() {
               <option value="image">{t("settings.bgImage")}</option>
               <option value="video">{t("settings.bgVideo")}</option>
               <option value="url">{t("settings.bgUrl")}</option>
-              <option value="particles">{t("settings.bgParticles")}</option>
+              <option value="shader">{t("settings.bgShader")}</option>
             </select>
 
             {(bg.kind === "image" || bg.kind === "video" || bg.kind === "url") && (
@@ -471,29 +479,64 @@ export default function SettingsDrawer() {
               </div>
             )}
 
-            {bg.kind === "particles" && (
-              <select
-                value={bg.particle ?? "matrix"}
-                onChange={(e) =>
-                  patchBg({ particle: e.target.value as ParticlePreset })
-                }
-                style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  background: "#13141b",
-                  border: "1px solid #292e42",
-                  borderRadius: 6,
-                  color: "#c0caf5",
-                  fontSize: 13,
-                  outline: "none",
-                  marginBottom: 8,
-                }}
-              >
-                <option value="matrix">{t("settings.particleMatrix")}</option>
-                <option value="starfield">{t("settings.particleStarfield")}</option>
-                <option value="wave">{t("settings.particleWave")}</option>
-                <option value="dust">{t("settings.particleDust")}</option>
-              </select>
+            {bg.kind === "shader" && (
+              <>
+                <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                  <select
+                    value={bg.shader ?? ""}
+                    onChange={(e) => patchBg({ shader: e.target.value || null })}
+                    style={{
+                      flex: 1,
+                      padding: "8px 10px",
+                      background: "#13141b",
+                      border: "1px solid #292e42",
+                      borderRadius: 6,
+                      color: "#c0caf5",
+                      fontSize: 13,
+                      outline: "none",
+                    }}
+                  >
+                    {shaderList.length === 0 ? (
+                      <option value="">{t("settings.bgShaderNone")}</option>
+                    ) : (
+                      <>
+                        {!bg.shader && <option value="">—</option>}
+                        {shaderList.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                  <button
+                    onClick={refreshShaders}
+                    title={t("settings.bgShaderRefresh")}
+                    style={{
+                      background: "#292e42",
+                      border: "none",
+                      color: "#c0caf5",
+                      borderRadius: 6,
+                      padding: "0 10px",
+                      cursor: "pointer",
+                      fontSize: 14,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {"\u21bb"}
+                  </button>
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#565f89",
+                    marginBottom: 8,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {t("settings.bgShaderHint")}
+                </div>
+              </>
             )}
 
             {bg.kind !== "none" && (

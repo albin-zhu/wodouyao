@@ -1,21 +1,11 @@
 ---
 name: wodouyao
-description: "Collaborate with peer terminals inside a Wodouyao canvas via the `wodouyao` CLI. Use when running inside a Wodouyao terminal (env var WODOUYAO_ID is set) and the user wants to discover connected peers, spawn a new terminal on the canvas (e.g. 'open a new codex'), send commands or keystrokes to a peer terminal, read a peer's recent output, register this agent's identity so other peers can see its name and capabilities, or check who this agent is on the canvas. Trigger on phrases such as: connected peers, the other terminal, send to X, tell terminal Y to run, read what X is doing, register identity, delegate to a terminal, who am I on this canvas, open a new terminal, spawn a codex, create a worker terminal, 开一个新的, 建一个新的."
+description: "Collaborate with peer terminals inside a Wodouyao canvas via the `wodouyao` CLI. Use when the user wants to discover connected peers, spawn a new terminal on the canvas (e.g. 'open a new codex'), send commands to a peer, read a peer's output, register identity, fork the current agent session, or change the canvas background. Trigger phrases: connected peers, the other terminal, send to X, tell terminal Y to run, read what X is doing, delegate to a terminal, who am I on this canvas, open a new terminal, spawn a codex, create a worker terminal, fork this session, change background, 开一个新的, 建一个新的, 换背景."
 ---
 
 # Wodouyao peer communication
 
-Agents running inside a Wodouyao terminal talk to other wired terminals through the `wodouyao` CLI, which wraps a local HTTP hub. Wires are the ACL — only wired peers are addressable.
-
-## Preflight
-
-Confirm the environment before suggesting any CLI call. If these checks fail, say so and stop — do not improvise.
-
-```sh
-test -n "$WODOUYAO_ID" && test -n "$WODOUYAO_ENDPOINT" && command -v wodouyao
-```
-
-`$WODOUYAO_ID` is the caller's terminal id. Surface it if the user asks "who am I".
+`wodouyao` is the CLI for collaborating with other terminals on a Wodouyao canvas. It's pre-injected into every canvas terminal — just run it. Wires on the canvas act as the ACL: only wired peers are addressable.
 
 ## Core workflow
 
@@ -40,7 +30,7 @@ Idempotent — re-running overwrites.
 
 ### `wodouyao whoami`
 
-Print the caller's current identity as JSON. Use to confirm registration stuck, or to surface `$WODOUYAO_ID` reliably without shelling through env.
+Print the caller's current identity as JSON. Use to confirm registration stuck, or to get the caller's own terminal id.
 
 ### `wodouyao peers`
 
@@ -71,7 +61,7 @@ Fork the current (or a named peer's) agent session into a fresh canvas terminal 
 
 - `--kind` **(required)** — `claude` or `codex`. Determines the resume command and slash command used.
 - `--name` — label for the new terminal and the argument passed to the agent's fork command. Defaults to empty (agent picks its own name).
-- `--peer` — fork from a specific peer instead of `$WODOUYAO_ID`. Must be wired.
+- `--peer` — fork from a specific peer's terminal instead of the caller's. Must be wired.
 
 What happens under the hood:
 1. Hub spawns a new terminal running `claude --dangerously-skip-permissions -c` (claude) or `codex --dangerously-bypass-approvals-and-sandbox --resume` (codex).
@@ -89,6 +79,53 @@ new_id=$(wodouyao fork --kind codex --peer "$other_id" --name "experiment")
 ```
 
 Exit codes: `0` success, `1` unknown kind or hub error, `2` env unset, `4` no wire to peer.
+
+## Canvas background
+
+Agents can change the canvas background at runtime — useful for signalling session state ("thinking", "error"), matching a project's vibe, or letting the model flex with a custom GLSL shader.
+
+### `wodouyao bg get`
+
+Print the current background JSON.
+
+### `wodouyao bg set <kind> [--source S] [--shader N] [--opacity F]`
+
+Set the canvas background. Allowed `<kind>` values:
+
+- `none` — blank canvas
+- `image` — static image; `--source <path-or-url>`
+- `video` — looping video; `--source <path-or-url>`
+- `url` — iframe; `--source <https-url>` (useful for embedding an arbitrary animation)
+- `shader` — WebGL2 fragment shader; `--shader <name>` where `<name>` is a file under `~/.wodouyao/shaders/<name>.frag`
+
+`--opacity` takes a float 0–1 (applied as a dimming overlay on top of the background).
+
+### `wodouyao bg shaders`
+
+List shader names available under `~/.wodouyao/shaders/`, one per line.
+
+### Writing your own shader
+
+Drop a GLSL ES 3.00 fragment shader at `~/.wodouyao/shaders/<name>.frag`, then `wodouyao bg set shader --shader <name>`. Contract:
+
+```glsl
+#version 300 es
+precision highp float;
+
+uniform float u_time;        // seconds since load
+uniform vec2  u_resolution;  // canvas size in pixels
+uniform vec2  u_mouse;       // mouse position in pixels (origin bottom-left)
+
+out vec4 outColor;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+    // ... your art here ...
+    outColor = vec4(uv, 0.5 + 0.5 * sin(u_time), 1.0);
+}
+```
+
+Seeded examples: `matrix`, `starfield`, `wave`, `dust`, `plasma`, `aurora`. Tip: keep colors muted — the background sits behind terminals, and loud colors hurt readability. Multiply final RGB by ~0.3–0.5.
 
 ## Team mode
 
@@ -121,7 +158,7 @@ Once a team exists, members can share tasks and talk to each other without needi
 
 - `wodouyao team task add <team> "<subject>" [--desc "..."] [--blocked-by id,id]` — create a work item. Prints the new `task_<id>` on stdout.
 - `wodouyao team task list <team>` — one line per task: `<id>  <status>  <subject>  [owner=<term>]`. Empty output means no tasks yet.
-- `wodouyao team task take <team> <task-id>` — claim an unowned task (sets `owner=$WODOUYAO_ID`, `status=in_progress`).
+- `wodouyao team task take <team> <task-id>` — claim an unowned task (sets owner to the caller, status to `in_progress`).
 - `wodouyao team task done <team> <task-id>` — mark completed.
 - `wodouyao team task assign <team> <task-id> <peer-id>` — assign to a specific member; used by leads to delegate.
 - `wodouyao team bcast <team> "<msg>"` — send `<msg>` to every team member's PTY (keys mode, like `wodouyao send`). Partial failures go to stderr.
@@ -193,7 +230,6 @@ Capture both the command echo and its output in `read` — do not assume the pee
 
 | Symptom | Cause | Resolution |
 |---|---|---|
-| `wodouyao: not running inside a wodouyao terminal` (exit 2) | Env vars unset | Not in a wodouyao-spawned shell. Stop and tell user. |
 | `wodouyao: no wire to <peer>` (exit 4) | ACL reject | User must draw a wire between the two terminals in the canvas UI. |
 | `peers` prints nothing | Terminal is isolated | Same — needs a wire. |
 | `whoami` returns id but no name/kind | Never called `hello` | Run `hello` to register. |
@@ -201,6 +237,5 @@ Capture both the command echo and its output in `read` — do not assume the pee
 ## Hard rules
 
 - Never fabricate peer ids. Always list via `peers` first.
-- Never paste raw `$WODOUYAO_ENDPOINT` file contents to the user — it holds the hub bearer token.
 - Do not pipe `send` arguments through `eval` or unsanitized shell expansion — the user's text may contain backticks or `$(...)`.
 - When the user asks for a capability the peer has not advertised (check its `capabilities` array), warn before calling — the peer may ignore it.

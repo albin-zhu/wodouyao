@@ -143,6 +143,9 @@ fn handle(
         (&Method::Get, "/v1/terminals") => terminals_list_route(request, pty_manager, identities),
         (&Method::Get, "/v1/notes") => notes_list_route(request, note_store),
         (&Method::Post, "/v1/notes") => notes_create_route(request, note_store, app_handle),
+        (&Method::Post, "/v1/background") => background_set(request, app_handle),
+        (&Method::Get, "/v1/background") => background_get(request),
+        (&Method::Get, "/v1/shaders") => shaders_list_route(request),
         _ => {
             if let Some(task_id) = path.strip_prefix("/v1/tasks/") {
                 match &method {
@@ -1892,5 +1895,96 @@ fn notes_delete_route(
         let _ = request.respond(empty(204));
     } else {
         let _ = request.respond(text(404, "note not found"));
+    }
+}
+
+#[derive(Deserialize)]
+struct BackgroundPatch {
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    source: Option<Option<String>>,
+    #[serde(default)]
+    particle: Option<Option<String>>,
+    #[serde(default)]
+    shader: Option<Option<String>>,
+    #[serde(default)]
+    opacity: Option<f64>,
+}
+
+fn background_set(mut request: tiny_http::Request, app_handle: &AppHandleSlot) {
+    let mut body = String::new();
+    if request.as_reader().read_to_string(&mut body).is_err() {
+        let _ = request.respond(text(400, "unable to read body"));
+        return;
+    }
+    let patch: BackgroundPatch = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = request.respond(text(400, &format!("invalid json: {}", e)));
+            return;
+        }
+    };
+    let mut settings = match crate::settings::storage::load() {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = request.respond(text(500, &format!("load settings: {}", e)));
+            return;
+        }
+    };
+    if let Some(k) = patch.kind {
+        if !matches!(
+            k.as_str(),
+            "none" | "image" | "video" | "url" | "shader"
+        ) {
+            let _ = request.respond(text(400, "invalid kind"));
+            return;
+        }
+        settings.background.kind = k;
+    }
+    if let Some(v) = patch.source {
+        settings.background.source = v;
+    }
+    if let Some(v) = patch.particle {
+        settings.background.particle = v;
+    }
+    if let Some(v) = patch.shader {
+        settings.background.shader = v;
+    }
+    if let Some(v) = patch.opacity {
+        settings.background.opacity = v.clamp(0.0, 1.0);
+    }
+    if let Err(e) = crate::settings::storage::save(&settings) {
+        let _ = request.respond(text(500, &format!("save: {}", e)));
+        return;
+    }
+    if let Some(handle) = app_handle.get() {
+        let _ = handle.emit("settings-changed", ());
+    }
+    let body = serde_json::to_string(&settings.background).unwrap_or_else(|_| "{}".into());
+    let _ = request.respond(json(200, body));
+}
+
+fn background_get(request: tiny_http::Request) {
+    let settings = match crate::settings::storage::load() {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = request.respond(text(500, &format!("load: {}", e)));
+            return;
+        }
+    };
+    let body = serde_json::to_string(&settings.background).unwrap_or_else(|_| "{}".into());
+    let _ = request.respond(json(200, body));
+}
+
+fn shaders_list_route(request: tiny_http::Request) {
+    match crate::commands::shaders::shaders_list() {
+        Ok(list) => {
+            let body = serde_json::to_string(&list).unwrap_or_else(|_| "[]".into());
+            let _ = request.respond(json(200, body));
+        }
+        Err(e) => {
+            let _ = request.respond(text(500, &e));
+        }
     }
 }
