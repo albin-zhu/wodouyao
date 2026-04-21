@@ -28,12 +28,14 @@ function TeamCard({
   team,
   focusedTerminalId,
   onDissolve,
+  pendingDissolve,
   onJoin,
   onArrange,
 }: {
   team: Team;
   focusedTerminalId: string | null;
   onDissolve: () => void;
+  pendingDissolve: boolean;
   onJoin: () => void;
   onArrange: () => void;
 }) {
@@ -124,16 +126,17 @@ function TeamCard({
           <button
             onClick={onDissolve}
             style={{
-              background: "#292e42",
-              color: "#f7768e",
+              background: pendingDissolve ? "#f7768e" : "#292e42",
+              color: pendingDissolve ? "#1a1b26" : "#f7768e",
               border: "none",
               borderRadius: 4,
               padding: "3px 8px",
               fontSize: 11,
               cursor: "pointer",
+              fontWeight: pendingDissolve ? 600 : 400,
             }}
           >
-            {t("teams.dissolve")}
+            {pendingDissolve ? t("teams.confirmDissolve", "Confirm?") : t("teams.dissolve")}
           </button>
         </div>
       </div>
@@ -406,6 +409,7 @@ export default function TeamsDrawer() {
   const teamsMap = useTeamStore((s) => s.teams);
   const dissolve = useTeamStore((s) => s.dissolve);
   const terminalsMap = useTerminalStore((s) => s.terminals);
+  const [pendingDissolve, setPendingDissolve] = useState<string | null>(null);
 
   const focusedTerminalId = useMemo(() => {
     let bestId: string | null = null;
@@ -424,10 +428,15 @@ export default function TeamsDrawer() {
   const teams = Array.from(teamsMap.values());
 
   const handleDissolve = (team: Team) => {
-    const ok = window.confirm(
-      `Dissolve ${team.name}? This will kill all member terminals.`
-    );
-    if (ok) dissolve(team.id);
+    if (pendingDissolve === team.id) {
+      dissolve(team.id);
+      setPendingDissolve(null);
+    } else {
+      setPendingDissolve(team.id);
+      setTimeout(() => {
+        setPendingDissolve((cur) => (cur === team.id ? null : cur));
+      }, 3000);
+    }
   };
 
   const handleArrange = (team: Team) => {
@@ -537,6 +546,7 @@ export default function TeamsDrawer() {
                 team={team}
                 focusedTerminalId={focusedTerminalId}
                 onDissolve={() => handleDissolve(team)}
+                pendingDissolve={pendingDissolve === team.id}
                 onJoin={() => handleJoin(team)}
                 onArrange={() => handleArrange(team)}
               />

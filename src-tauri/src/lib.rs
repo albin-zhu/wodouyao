@@ -20,6 +20,11 @@ use state::AppState;
 use task_boards::TaskBoardStore;
 use tasks::TaskStore;
 
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    open::that(&url).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let topology = WireTopology::new();
@@ -59,7 +64,6 @@ pub fn run() {
     let setup_slot = app_handle_slot.clone();
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(app_state)
         .setup(move |app| {
@@ -161,6 +165,7 @@ pub fn run() {
             commands::task_boards::task_boards_update,
             commands::task_boards::task_boards_remove,
             commands::task_boards::task_boards_replace_all,
+            open_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

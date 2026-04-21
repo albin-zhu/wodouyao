@@ -1,8 +1,8 @@
 import { useEffect, useRef, useCallback } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { WebLinksAddon } from "@xterm/addon-web-links";
 import { CanvasAddon } from "@xterm/addon-canvas";
+import { invoke } from "@tauri-apps/api/core";
 import { writeTerminal, resizeTerminal, destroyTerminal } from "../services/tauriCommands";
 import { listenTerminalOutput, listenTerminalExit } from "../services/tauriEvents";
 import { registerXterm, unregisterXterm } from "../services/terminalRegistry";
@@ -37,13 +37,43 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
       fontFamily:
         "'JetBrainsMono Nerd Font Mono', 'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Fira Code', 'Consolas', monospace",
       theme: xtermTheme,
+      // Custom OSC 8 hyperlink handler — bypasses xterm's built-in
+      // window.confirm() prompt which tauri-plugin-dialog would intercept.
+      linkHandler: {
+        activate: (_e, text) => {
+          invoke("open_url", { url: text }).catch(console.error);
+        },
+        allowNonHttpProtocols: true,
+      },
     });
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
-    term.loadAddon(new WebLinksAddon());
-
     term.open(container);
+
+    // Detect any scheme://... URL and open with system default handler.
+    const URL_REGEX = /[a-zA-Z][a-zA-Z0-9+\-.]*:\/\/[^\s"'<>()[\]{}]+/g;
+    term.registerLinkProvider({
+      provideLinks(y, cb) {
+        const line = term.buffer.active.getLine(y);
+        if (!line) { cb([]); return; }
+        const text = line.translateToString(true);
+        const links: import("@xterm/xterm").ILink[] = [];
+        let m: RegExpExecArray | null;
+        URL_REGEX.lastIndex = 0;
+        while ((m = URL_REGEX.exec(text)) !== null) {
+          const url = m[0].replace(/[.,;:!?)]+$/, "");
+          const startX = m.index;
+          const endX = startX + url.length;
+          links.push({
+            range: { start: { x: startX + 1, y }, end: { x: endX, y } },
+            text: url,
+            activate() { invoke("open_url", { url }).catch(console.error); },
+          });
+        }
+        cb(links);
+      },
+    });
 
     // Canvas renderer — required for xterm.js v5.5+ to render text. We
     // intentionally do NOT use the WebGL addon: the whole TerminalLayer
