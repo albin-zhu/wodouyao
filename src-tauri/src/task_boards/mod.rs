@@ -25,6 +25,8 @@ pub struct TaskBoard {
     #[serde(default)]
     pub z_index: u32,
     pub created_at: u64,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -37,6 +39,8 @@ pub struct TaskBoardCreate {
     pub position: Option<Position>,
     #[serde(default)]
     pub size: Option<Size>,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -90,6 +94,7 @@ impl TaskBoardStore {
             }),
             z_index: *next_z,
             created_at: now_ms(),
+            workspace_id: input.workspace_id,
         };
         *next_z += 1;
         map.insert(board.id.clone(), board.clone());
@@ -132,6 +137,39 @@ impl TaskBoardStore {
             map.insert(b.id.clone(), b);
         }
         *next_z = max_z + 1;
+    }
+
+    pub fn filter_for_workspace(&self, ws_id: &str) -> Vec<TaskBoard> {
+        let (map, _) = &*self.inner.lock().unwrap();
+        let mut v: Vec<TaskBoard> = map
+            .values()
+            .filter(|b| b.workspace_id.as_deref() == Some(ws_id))
+            .cloned()
+            .collect();
+        v.sort_by_key(|b| b.created_at);
+        v
+    }
+
+    pub fn upsert_for_workspace(&self, ws_id: &str, boards: Vec<TaskBoard>) {
+        let mut guard = self.inner.lock().unwrap();
+        let (map, next_z) = &mut *guard;
+        let to_remove: Vec<String> = map
+            .iter()
+            .filter(|(_, b)| b.workspace_id.as_deref() == Some(ws_id))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in to_remove {
+            map.remove(&id);
+        }
+        let mut max_z = *next_z;
+        for mut b in boards {
+            b.workspace_id = Some(ws_id.to_string());
+            if b.z_index >= max_z {
+                max_z = b.z_index + 1;
+            }
+            map.insert(b.id.clone(), b);
+        }
+        *next_z = max_z;
     }
 }
 

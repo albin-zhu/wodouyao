@@ -15,6 +15,7 @@ pub fn wire_create(
     source_id: String,
     target_id: String,
     kind: Option<String>,
+    workspace_id: Option<String>,
 ) -> Wire {
     let wire = Wire {
         id: Uuid::new_v4().to_string(),
@@ -22,6 +23,7 @@ pub fn wire_create(
         target_id,
         forward_output: true,
         kind,
+        workspace_id,
     };
     state.topology.insert(wire)
 }

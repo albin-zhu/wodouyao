@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useTaskStore } from "../../store/taskStore";
 import { useTerminalStore } from "../../store/terminalStore";
+import { useWorkspaceStore } from "../../store/workspaceStore";
 import type { Task, TaskStatus } from "../../types/task";
 
 const STATUS_GLYPH: Record<TaskStatus, string> = {
@@ -195,7 +196,12 @@ export default function TasksDrawer() {
   const closeDrawer = useTaskStore((s) => s.closeDrawer);
   const tasksMap = useTaskStore((s) => s.tasks);
   const createTask = useTaskStore((s) => s.createTask);
-  const tasks = useMemo(() => Array.from(tasksMap.values()), [tasksMap]);
+  const wsId = useWorkspaceStore((s) => s.currentWorkspace?.id ?? null);
+  const tasks = useMemo(() => {
+    const all = Array.from(tasksMap.values());
+    if (wsId === null) return all;
+    return all.filter((t) => (t.workspace_id ?? wsId) === wsId);
+  }, [tasksMap, wsId]);
   const [filter, setFilter] = useState<Filter>("all");
   const [quickAdd, setQuickAdd] = useState("");
 

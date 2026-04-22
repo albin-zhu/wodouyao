@@ -46,6 +46,8 @@ pub struct TerminalNodeLayout {
     pub cwd: Option<String>,
     #[serde(default)]
     pub role: Option<String>,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

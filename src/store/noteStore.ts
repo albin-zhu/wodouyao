@@ -7,6 +7,7 @@ import {
   notesRemove as notesRemoveIpc,
   type NoteIpc,
 } from "../services/tauriCommands";
+import { useWorkspaceStore } from "./workspaceStore";
 
 const DEFAULT_NOTE_WIDTH = 240;
 const DEFAULT_NOTE_HEIGHT = 160;
@@ -21,6 +22,7 @@ function fromIpc(n: NoteIpc): NoteNode {
     size: n.size,
     zIndex: n.z_index,
     createdAt: n.created_at,
+    workspaceId: n.workspace_id ?? null,
   };
 }
 
@@ -33,6 +35,7 @@ interface NoteStore {
   updateNote: (id: string, updates: Partial<NoteNode>) => void;
   bringToFront: (id: string) => void;
   getNotes: () => NoteNode[];
+  getVisibleNotes: () => NoteNode[];
   syncFromRust: (ipcNotes: NoteIpc[]) => void;
 }
 
@@ -43,6 +46,10 @@ export const useNoteStore = create<NoteStore>((set, get) => ({
   addNote: (overrides) => {
     const id = overrides?.id ?? generateId();
     const state = get();
+    const wsId =
+      overrides?.workspaceId ??
+      useWorkspaceStore.getState().currentWorkspace?.id ??
+      null;
     const note: NoteNode = {
       id,
       text: overrides?.text ?? "",
@@ -53,6 +60,7 @@ export const useNoteStore = create<NoteStore>((set, get) => ({
       size: overrides?.size ?? { width: DEFAULT_NOTE_WIDTH, height: DEFAULT_NOTE_HEIGHT },
       zIndex: state.nextZIndex,
       createdAt: Date.now(),
+      workspaceId: wsId,
     };
     const newMap = new Map(state.notes);
     newMap.set(id, note);
@@ -63,6 +71,7 @@ export const useNoteStore = create<NoteStore>((set, get) => ({
       color: note.color,
       position: note.position,
       size: note.size,
+      workspace_id: wsId,
     }).catch(() => {});
 
     return note;
@@ -105,6 +114,13 @@ export const useNoteStore = create<NoteStore>((set, get) => ({
     }),
 
   getNotes: () => Array.from(get().notes.values()),
+
+  getVisibleNotes: () => {
+    const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+    const all = Array.from(get().notes.values());
+    if (wsId === null) return all;
+    return all.filter((n) => (n.workspaceId ?? wsId) === wsId);
+  },
 
   syncFromRust: (ipcNotes) => {
     const newMap = new Map<string, NoteNode>();

@@ -17,14 +17,13 @@ import type {
   WorkspaceTaskBoardLayout,
 } from "../types/workspace";
 import type { TerminalNode, ShellType } from "../types/terminal";
-import { destroyTerminal, createTerminal, saveWorkspace } from "../services/tauriCommands";
+import { createTerminal, saveWorkspace } from "../services/tauriCommands";
 import { generateId } from "../utils/id";
 import { DEFAULT_COLS, DEFAULT_ROWS } from "../utils/constants";
 
 export function useWorkspace() {
   const terminals = useTerminalStore((s) => s.terminals);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
-  const removeTerminal = useTerminalStore((s) => s.removeTerminal);
   const getTerminals = useTerminalStore((s) => s.getTerminals);
   const { panX, panY, zoom, gridVisible, gridSize, setPan } =
     useCanvasStore();
@@ -41,9 +40,17 @@ export function useWorkspace() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initRef = useRef(false);
 
-  // Build workspace from current state
+  // Build workspace from current state. Filters by the active workspace
+  // so terminals/notes/etc belonging to other workspaces are NOT persisted
+  // into this workspace's file (they're persisted into theirs at the
+  // moment of switching out / explicit save).
   const buildWorkspace = useCallback((): Workspace => {
-    const terms = getTerminals();
+    const activeWsId =
+      useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+    const inActiveWs = <T extends { workspaceId?: string | null }>(item: T) =>
+      activeWsId === null || (item.workspaceId ?? activeWsId) === activeWsId;
+
+    const terms = getTerminals().filter(inActiveWs);
     const termLayouts: WorkspaceTerminalLayout[] = terms.map((t) => ({
       id: t.id,
       name: t.name,
@@ -58,26 +65,33 @@ export function useWorkspace() {
       role: t.role,
     }));
 
-    const wireLayouts: WorkspaceWireLayout[] = Array.from(wiresMap.values()).map((w) => ({
-      id: w.id,
-      source_id: w.sourceId,
-      target_id: w.targetId,
-      forward_output: true,
-    }));
+    const wireLayouts: WorkspaceWireLayout[] = Array.from(wiresMap.values())
+      .filter((w) => activeWsId === null || (w.workspaceId ?? activeWsId) === activeWsId)
+      .map((w) => ({
+        id: w.id,
+        source_id: w.sourceId,
+        target_id: w.targetId,
+        forward_output: true,
+      }));
 
-    const noteLayouts: WorkspaceNoteLayout[] = useNoteStore.getState().getNotes().map((n) => ({
-      id: n.id,
-      text: n.text,
-      color: n.color,
-      position: n.position,
-      size: n.size,
-      z_index: n.zIndex,
-      created_at: n.createdAt,
-    }));
+    const noteLayouts: WorkspaceNoteLayout[] = useNoteStore
+      .getState()
+      .getNotes()
+      .filter(inActiveWs)
+      .map((n) => ({
+        id: n.id,
+        text: n.text,
+        color: n.color,
+        position: n.position,
+        size: n.size,
+        z_index: n.zIndex,
+        created_at: n.createdAt,
+      }));
 
     const fileNodeLayouts: WorkspaceFileNodeLayout[] = useFileNodeStore
       .getState()
       .getFileNodes()
+      .filter(inActiveWs)
       .map((f) => ({
         id: f.id,
         path: f.path,
@@ -91,14 +105,16 @@ export function useWorkspace() {
 
     const taskBoardLayouts: WorkspaceTaskBoardLayout[] = Array.from(
       useTaskBoardStore.getState().boards.values()
-    ).map((b) => ({
-      id: b.id,
-      label: b.label,
-      position: b.position,
-      size: b.size,
-      z_index: b.zIndex,
-      created_at: Date.now(),
-    }));
+    )
+      .filter(inActiveWs)
+      .map((b) => ({
+        id: b.id,
+        label: b.label,
+        position: b.position,
+        size: b.size,
+        z_index: b.zIndex,
+        created_at: Date.now(),
+      }));
 
     return {
       id: "",
@@ -121,28 +137,74 @@ export function useWorkspace() {
     };
   }, [getTerminals, wiresMap, panX, panY, zoom, gridVisible, gridSize]);
 
-  // Apply workspace: clear existing terminals and recreate from layout
+  // Apply workspace: hot-switch render only, do NOT destroy live PTYs.
+  //  - Autosave the outgoing workspace (its layout/positions) before flipping.
+  //  - Snapshot/restore canvas pan/zoom per workspace.
+  //  - Reconcile terminals: spawn only those whose PTY is not alive, update
+  //    metadata (position/size/role/etc) on the rest, mark them as belonging
+  //    to the new workspace.
+  //  - Stamp wires/notes/file_nodes/task_boards/tasks with the new workspace
+  //    id (legacy migration). Backend has already upserted them.
   const applyWorkspace = useCallback(
     async (ws: Workspace) => {
-      // Destroy all existing PTY sessions
-      const existing = getTerminals();
-      for (const t of existing) {
-        await destroyTerminal(t.id).catch(console.error);
-        removeTerminal(t.id);
+      const outgoingId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+      const incomingId = ws.id;
+
+      // 1) Autosave the outgoing workspace's current layout snapshot before
+      //    we start mutating things — so positions/pan/zoom aren't lost.
+      if (outgoingId && outgoingId !== incomingId) {
+        try {
+          const snapshot = buildWorkspace();
+          snapshot.id = outgoingId;
+          // Preserve name/created_at by hydrating from the existing meta.
+          const outgoingMeta = useWorkspaceStore
+            .getState()
+            .workspaces.find((w) => w.id === outgoingId);
+          snapshot.name = outgoingMeta?.name ?? "Workspace";
+          snapshot.updated_at = Date.now();
+          await saveWorkspace(snapshot);
+        } catch (e) {
+          console.warn("[workspace] autosave outgoing failed:", e);
+        }
       }
 
-      // Backend's load_workspace command has already seeded the wire topology
-      // from ws.wires; the frontend just mirrors that state below via hydrate().
+      // 2) Per-workspace canvas swap (snapshot outgoing, restore incoming).
+      useCanvasStore.getState().switchTo(incomingId, outgoingId);
+      // If the workspace file has explicit pan/zoom AND we have no prior
+      // snapshot for this id, honor the file. Otherwise prefer snapshot.
+      const hasSnapshot = useCanvasStore
+        .getState()
+        .workspaceViews.has(incomingId);
+      if (!hasSnapshot) {
+        setPan(ws.canvas.pan_x, ws.canvas.pan_y);
+        useCanvasStore.setState({ zoom: ws.canvas.zoom });
+      }
 
-      // Restore workspace cwd
+      // 3) Restore workspace cwd.
       useWorkspaceStore.getState().setWorkspaceCwd(ws.cwd ?? null);
 
-      // Restore canvas state
-      setPan(ws.canvas.pan_x, ws.canvas.pan_y);
-      useCanvasStore.setState({ zoom: ws.canvas.zoom });
-
-      // Recreate terminals from layout
+      // 4) Terminal reconcile — spawn only what's missing, stamp the rest.
+      const liveTerminals = useTerminalStore.getState().terminals;
       for (const layout of ws.terminals) {
+        const existing = liveTerminals.get(layout.id);
+        if (existing) {
+          // Terminal is alive (probably from a prior workspace); just
+          // update its layout metadata and re-tag it for this workspace.
+          useTerminalStore.getState().updateTerminal(layout.id, {
+            name: layout.name,
+            position: { x: layout.position.x, y: layout.position.y },
+            size: { width: layout.size.width, height: layout.size.height },
+            isFolded: layout.is_folded,
+            color: layout.color ?? existing.color,
+            theme: (layout.theme as TerminalNode["theme"]) ?? existing.theme,
+            role: layout.role as TerminalNode["role"],
+            cwd: layout.cwd ?? existing.cwd,
+            workspaceId: incomingId,
+          });
+          continue;
+        }
+        // Fresh spawn — terminal does not exist yet (cold start, or fork
+        // from a different ws where this terminal was never spawned).
         const overrides: Partial<TerminalNode> = {
           id: layout.id,
           name: layout.name,
@@ -155,10 +217,9 @@ export function useWorkspace() {
           theme: (layout.theme as TerminalNode["theme"]) ?? "tokyonight",
           cwd: layout.cwd,
           role: layout.role as TerminalNode["role"],
+          workspaceId: incomingId,
         };
-
         addTerminal(overrides);
-
         try {
           await createTerminal({
             id: layout.id,
@@ -172,57 +233,78 @@ export function useWorkspace() {
         }
       }
 
-      // Pull the freshly seeded wire topology from the backend.
+      // 5) Wires + tasks: backend already upserted; pull the fresh state.
       await useWireStore.getState().hydrate();
-      // Backend's task store was replaced by load_workspace; mirror to FE.
       await useTaskStore.getState().hydrate();
-      // Hydrate notes from workspace
-      if (ws.notes && ws.notes.length > 0) {
-        const newMap = new Map<string, import("../types/note").NoteNode>();
-        let maxZ = 0;
-        for (const n of ws.notes) {
-          const node = {
-            id: n.id,
-            text: n.text,
-            color: n.color,
-            position: n.position,
-            size: n.size,
-            zIndex: n.z_index,
-            createdAt: n.created_at,
-          };
-          newMap.set(node.id, node);
-          if (node.zIndex > maxZ) maxZ = node.zIndex;
-        }
-        useNoteStore.setState({ notes: newMap, nextZIndex: maxZ + 1 });
-      } else {
-        useNoteStore.setState({ notes: new Map(), nextZIndex: 1 });
-      }
 
-      // Hydrate file nodes, task boards, and web nodes from workspace
-      useFileNodeStore.getState().syncFromRust(
-        (ws.file_nodes ?? []).map((f) => ({
+      // 6) Notes / file nodes / task boards: stamp with incomingId on the way in.
+      const noteMap = new Map<string, import("../types/note").NoteNode>();
+      let maxNoteZ = 0;
+      // Preserve notes from OTHER workspaces (don't blast them away).
+      for (const n of useNoteStore.getState().notes.values()) {
+        if (n.workspaceId && n.workspaceId !== incomingId) {
+          noteMap.set(n.id, n);
+        }
+      }
+      for (const n of ws.notes ?? []) {
+        const node = {
+          id: n.id,
+          text: n.text,
+          color: n.color,
+          position: n.position,
+          size: n.size,
+          zIndex: n.z_index,
+          createdAt: n.created_at,
+          workspaceId: incomingId,
+        };
+        noteMap.set(node.id, node);
+        if (node.zIndex > maxNoteZ) maxNoteZ = node.zIndex;
+      }
+      useNoteStore.setState({ notes: noteMap, nextZIndex: maxNoteZ + 1 });
+
+      const fileMap = new Map<string, import("../types/fileNode").FileNode>();
+      let maxFileZ = 0;
+      for (const f of useFileNodeStore.getState().fileNodes.values()) {
+        if (f.workspaceId && f.workspaceId !== incomingId) {
+          fileMap.set(f.id, f);
+        }
+      }
+      for (const f of ws.file_nodes ?? []) {
+        const node: import("../types/fileNode").FileNode = {
           id: f.id,
           path: f.path,
           name: f.name,
-          kind: f.kind,
+          kind: f.kind as import("../types/fileNode").FileKind,
           position: f.position,
           size: f.size,
-          z_index: f.z_index,
-          created_at: f.created_at,
-        }))
-      );
-      useTaskBoardStore.getState().syncFromRust(
-        (ws.task_boards ?? []).map((b) => ({
+          zIndex: f.z_index,
+          createdAt: f.created_at,
+          workspaceId: incomingId,
+        };
+        fileMap.set(node.id, node);
+        if (node.zIndex > maxFileZ) maxFileZ = node.zIndex;
+      }
+      useFileNodeStore.setState({ fileNodes: fileMap, nextZIndex: maxFileZ + 1 });
+
+      const boardMap = new Map<string, import("../store/taskBoardStore").TaskBoard>();
+      for (const b of useTaskBoardStore.getState().boards.values()) {
+        if (b.workspaceId && b.workspaceId !== incomingId) {
+          boardMap.set(b.id, b);
+        }
+      }
+      for (const b of ws.task_boards ?? []) {
+        boardMap.set(b.id, {
           id: b.id,
           label: b.label,
           position: b.position,
           size: b.size,
-          z_index: b.z_index,
-          created_at: b.created_at,
-        }))
-      );
+          zIndex: b.z_index,
+          workspaceId: incomingId,
+        });
+      }
+      useTaskBoardStore.setState({ boards: boardMap });
     },
-    [getTerminals, removeTerminal, addTerminal, setPan]
+    [addTerminal, setPan, buildWorkspace]
   );
 
   const forkCurrentWorkspace = useCallback(

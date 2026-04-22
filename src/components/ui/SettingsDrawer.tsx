@@ -539,24 +539,58 @@ export default function SettingsDrawer() {
               </>
             )}
 
-            {bg.kind !== "none" && (
-              <div>
-                <div style={{ color: "#565f89", fontSize: 11, marginBottom: 4 }}>
-                  {t("settings.opacity")}: {(bg.opacity ?? 1).toFixed(2)}
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={bg.opacity ?? 1}
-                  onChange={(e) =>
-                    patchBg({ opacity: parseFloat(e.target.value) })
-                  }
-                  style={{ width: "100%" }}
-                />
+            <div>
+              <div style={{ color: "#565f89", fontSize: 11, marginBottom: 4 }}>
+                {t("settings.opacity")}: {(bg.opacity ?? 1).toFixed(2)}
               </div>
-            )}
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={bg.opacity ?? 1}
+                onChange={(e) =>
+                  patchBg({ opacity: parseFloat(e.target.value) })
+                }
+                style={{ width: "100%" }}
+              />
+              <div style={{ color: "#565f89", fontSize: 10, marginTop: 4, lineHeight: 1.4 }}>
+                {t("settings.opacityHint")}
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <div style={{ color: "#565f89", fontSize: 11, marginBottom: 4 }}>
+                {t("settings.terminalOpacity")}: {(settings.terminal_opacity ?? 1).toFixed(2)}
+              </div>
+              <input
+                type="range"
+                min={0.3}
+                max={1}
+                step={0.05}
+                value={settings.terminal_opacity ?? 1}
+                onChange={(e) =>
+                  updateSettings({ terminal_opacity: parseFloat(e.target.value) })
+                }
+                style={{ width: "100%" }}
+              />
+            </div>
+
+            <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                id="wd-hdpi"
+                checked={settings.is_hdpi ?? true}
+                onChange={(e) => updateSettings({ is_hdpi: e.target.checked })}
+                style={{ cursor: "pointer" }}
+              />
+              <label htmlFor="wd-hdpi" style={{ color: "#c0caf5", fontSize: 12, cursor: "pointer" }}>
+                {t("settings.isHdpi")}
+              </label>
+            </div>
+            <div style={{ color: "#565f89", fontSize: 10, marginTop: 4, lineHeight: 1.4 }}>
+              {t("settings.isHdpiHint")}
+            </div>
           </div>
 
           {/* Integrations */}

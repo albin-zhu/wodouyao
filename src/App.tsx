@@ -10,6 +10,7 @@ import TerminalCreateDialog from "./components/ui/TerminalCreateDialog";
 import TerminalContextMenu from "./components/terminal/TerminalContextMenu";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { useSettingsStore } from "./store/settingsStore";
+import { useCanvasStore } from "./store/canvasStore";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { useHubSpawn } from "./hooks/useHubSpawn";
 import { useTeamsSync } from "./hooks/useTeamsSync";
@@ -29,6 +30,33 @@ export default function App() {
   useNotesSync();
   useWiresSync();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const zenMode = useCanvasStore((s) => s.zenMode);
+  const clickThroughOverride = useCanvasStore((s) => s.clickThroughOverride);
+  const bgOpacity = useSettingsStore((s) => s.settings?.background?.opacity ?? 1);
+  const isHdpi = useSettingsStore((s) => s.settings?.is_hdpi ?? true);
+
+  // Toggle body class so global.css applies the non-HDPI font smoothing
+  // and border-snap rules. Cheaper than re-rendering every component.
+  useEffect(() => {
+    document.body.classList.toggle("wd-no-hdpi", !isHdpi);
+  }, [isHdpi]);
+
+  // Click-through: when window is fully transparent, mouse events fall
+  // through to the desktop. Manual override (Cmd+Shift+F11) wins over auto.
+  useEffect(() => {
+    const wantPassthrough =
+      clickThroughOverride !== null
+        ? clickThroughOverride
+        : bgOpacity === 0;
+    let cancelled = false;
+    import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+      if (cancelled) return;
+      getCurrentWindow().setIgnoreCursorEvents(wantPassthrough).catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bgOpacity, clickThroughOverride]);
 
   useEffect(() => {
     loadSettings();
@@ -65,11 +93,14 @@ export default function App() {
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
-        background: "#13141b",
+        // Background painted by <BackgroundLayer> with the user-controlled
+        // alpha; keep this transparent so a transparent Tauri window can
+        // show the desktop through.
+        background: "transparent",
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       }}
     >
-      <Toolbar />
+      {!zenMode && <Toolbar />}
       <div style={{ flex: 1, position: "relative" }}>
         <InfiniteCanvas />
       </div>

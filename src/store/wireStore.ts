@@ -7,6 +7,7 @@ import {
   wireReplaceAll,
   type WireIpc,
 } from "../services/tauriCommands";
+import { useWorkspaceStore } from "./workspaceStore";
 
 interface WireStore {
   wires: Map<string, Wire>;
@@ -16,6 +17,8 @@ interface WireStore {
   removeWire: (wireId: string) => Promise<void>;
   getWiresForTerminal: (terminalId: string) => Wire[];
   getWires: () => Wire[];
+  /** Wires belonging to the active workspace (or all if none active). */
+  getVisibleWires: () => Wire[];
   clearAll: () => Promise<void>;
 }
 
@@ -25,6 +28,7 @@ function fromIpc(w: WireIpc): Wire {
     sourceId: w.source_id,
     targetId: w.target_id,
     kind: w.kind ?? undefined,
+    workspaceId: w.workspace_id ?? null,
   };
 }
 
@@ -47,7 +51,8 @@ export const useWireStore = create<WireStore>((set, get) => ({
 
   addWire: async (sourceId, targetId, kind) => {
     try {
-      const ipc = await wireCreate(sourceId, targetId, kind);
+      const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+      const ipc = await wireCreate(sourceId, targetId, kind, wsId);
       const wire = fromIpc(ipc);
       const next = new Map(get().wires);
       next.set(wire.id, wire);
@@ -77,6 +82,16 @@ export const useWireStore = create<WireStore>((set, get) => ({
   },
 
   getWires: () => Array.from(get().wires.values()),
+
+  getVisibleWires: () => {
+    const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+    const all = Array.from(get().wires.values());
+    if (wsId === null) return all;
+    // Wires with no workspaceId (legacy or hub-created cross-workspace) are
+    // visible everywhere; only filter out wires explicitly tagged for a
+    // different workspace.
+    return all.filter((w) => !w.workspaceId || w.workspaceId === wsId);
+  },
 
   clearAll: async () => {
     try {

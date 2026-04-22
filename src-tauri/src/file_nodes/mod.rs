@@ -28,6 +28,8 @@ pub struct FileNode {
     #[serde(default)]
     pub z_index: u32,
     pub created_at: u64,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -41,6 +43,8 @@ pub struct FileNodeCreate {
     pub position: Option<Position>,
     #[serde(default)]
     pub size: Option<Size>,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -97,6 +101,7 @@ impl FileNodeStore {
             }),
             z_index: *next_z,
             created_at: now_ms(),
+            workspace_id: input.workspace_id,
         };
         *next_z += 1;
         map.insert(node.id.clone(), node.clone());
@@ -136,6 +141,39 @@ impl FileNodeStore {
             map.insert(n.id.clone(), n);
         }
         *next_z = max_z + 1;
+    }
+
+    pub fn filter_for_workspace(&self, ws_id: &str) -> Vec<FileNode> {
+        let (map, _) = &*self.inner.lock().unwrap();
+        let mut v: Vec<FileNode> = map
+            .values()
+            .filter(|n| n.workspace_id.as_deref() == Some(ws_id))
+            .cloned()
+            .collect();
+        v.sort_by_key(|n| n.created_at);
+        v
+    }
+
+    pub fn upsert_for_workspace(&self, ws_id: &str, nodes: Vec<FileNode>) {
+        let mut guard = self.inner.lock().unwrap();
+        let (map, next_z) = &mut *guard;
+        let to_remove: Vec<String> = map
+            .iter()
+            .filter(|(_, n)| n.workspace_id.as_deref() == Some(ws_id))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in to_remove {
+            map.remove(&id);
+        }
+        let mut max_z = *next_z;
+        for mut n in nodes {
+            n.workspace_id = Some(ws_id.to_string());
+            if n.z_index >= max_z {
+                max_z = n.z_index + 1;
+            }
+            map.insert(n.id.clone(), n);
+        }
+        *next_z = max_z;
     }
 }
 

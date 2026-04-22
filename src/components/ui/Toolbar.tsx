@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useCanvasStore } from "../../store/canvasStore";
 import { useTeamStore } from "../../store/teamStore";
 import { useNoteStore } from "../../store/noteStore";
 import { useTaskStore } from "../../store/taskStore";
@@ -44,21 +43,8 @@ export default function Toolbar() {
   const forkWorkspace = useForkWorkspace();
   const currentMode = useCanvasInteractionStore((s) => s.mode);
   const setMode = useCanvasInteractionStore((s) => s.setMode);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  useEffect(() => {
-    const win = getCurrentWindow();
-    win.isFullscreen().then(setIsFullscreen).catch(() => {});
-    const unlisten = win.onResized(() => {
-      win.isFullscreen().then(setIsFullscreen).catch(() => {});
-    });
-    return () => { unlisten.then((fn) => fn()).catch(() => {}); };
-  }, []);
-
-  const toggleFullscreen = () => {
-    const win = getCurrentWindow();
-    win.setFullscreen(!isFullscreen).then(() => setIsFullscreen(!isFullscreen)).catch(() => {});
-  };
+  const zenMode = useCanvasStore((s) => s.zenMode);
+  const toggleZenMode = useCanvasStore((s) => s.toggleZenMode);
 
   const quickCommands = settings?.quick_commands ?? [];
 
@@ -66,20 +52,23 @@ export default function Toolbar() {
 
   return (
     <div
+      data-tauri-drag-region
       style={{
         height: 40,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0 16px",
+        // Reserve space on the left for the macOS traffic-light buttons
+        // (Overlay title bar style; they sit at ~12px from the left edge).
+        padding: "0 16px 0 80px",
         background: "#1f2335",
         borderBottom: "1px solid #292e42",
         zIndex: 20,
         flexShrink: 0,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ color: "#7aa2f7", fontWeight: 600, fontSize: 14 }}>Wodouyao</span>
+      <div data-tauri-drag-region style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <span data-tauri-drag-region style={{ color: "#7aa2f7", fontWeight: 600, fontSize: 14 }}>Wodouyao</span>
         <WorkspaceSwitcher />
         <button
           onClick={() => {
@@ -137,7 +126,7 @@ export default function Toolbar() {
           ))}
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div data-tauri-drag-region style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {/* Quick Command Buttons */}
         {quickCommands.map((cmd) => {
           const agentKey = cmd.command?.toLowerCase().trim();
@@ -313,15 +302,15 @@ export default function Toolbar() {
           />
         </button>
 
-        {/* Fullscreen toggle */}
+        {/* Zen mode toggle: hides toolbar + canvas controls. Cmd+F11 / F11 to toggle back. */}
         <button
-          onClick={toggleFullscreen}
-          title={isFullscreen ? t("toolbar.exitFullscreen") : t("toolbar.fullscreen")}
+          onClick={toggleZenMode}
+          title={t("toolbar.zenMode")}
           style={{
             background: "none",
             border: "1px solid #292e42",
             borderRadius: 4,
-            color: "#565f89",
+            color: zenMode ? "#7aa2f7" : "#565f89",
             cursor: "pointer",
             width: 26,
             height: 26,
@@ -331,7 +320,8 @@ export default function Toolbar() {
             justifyContent: "center",
           }}
         >
-          {isFullscreen ? "\u29C4" : "\u26F6"}
+          
+          {"⛶"}
         </button>
       </div>
     </div>

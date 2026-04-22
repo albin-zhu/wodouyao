@@ -11,6 +11,7 @@ export interface Task {
   blocked_by: string[];
   acceptance: string[];
   note_id?: string | null;
+  workspace_id?: string | null;
 }
 
 export interface TaskCreateInput {
@@ -21,6 +22,7 @@ export interface TaskCreateInput {
   blocked_by?: string[];
   acceptance?: string[];
   note_id?: string | null;
+  workspace_id?: string | null;
 }
 
 export interface TaskPatchInput {

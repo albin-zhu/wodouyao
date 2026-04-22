@@ -5,6 +5,7 @@ import {
   loadWorkspace,
   listWorkspaces,
   deleteWorkspace,
+  destroyTerminal,
 } from "../services/tauriCommands";
 import { generateId } from "../utils/id";
 
@@ -131,6 +132,50 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   deleteWorkspace: async (id) => {
     try {
+      // Kill any live terminals belonging to this workspace + scrub their
+      // entities from the FE stores so we don't keep zombie PTYs around.
+      // Loaded lazily to avoid a cycle (these stores import workspaceStore).
+      const { useTerminalStore } = await import("./terminalStore");
+      const { useWireStore } = await import("./wireStore");
+      const { useNoteStore } = await import("./noteStore");
+      const { useFileNodeStore } = await import("./fileNodeStore");
+      const { useTaskBoardStore } = await import("./taskBoardStore");
+      const { useTaskStore } = await import("./taskStore");
+
+      const termStore = useTerminalStore.getState();
+      const doomedTerms = Array.from(termStore.terminals.values()).filter(
+        (t) => t.workspaceId === id
+      );
+      for (const t of doomedTerms) {
+        await destroyTerminal(t.id).catch(() => {});
+        termStore.removeTerminal(t.id);
+      }
+
+      const trim = <V extends { workspaceId?: string | null }>(
+        m: Map<string, V>
+      ): Map<string, V> => {
+        const next = new Map<string, V>();
+        for (const [k, v] of m) {
+          if (v.workspaceId !== id) next.set(k, v);
+        }
+        return next;
+      };
+      useWireStore.setState({ wires: trim(useWireStore.getState().wires) });
+      useNoteStore.setState({ notes: trim(useNoteStore.getState().notes) });
+      useFileNodeStore.setState({
+        fileNodes: trim(useFileNodeStore.getState().fileNodes),
+      });
+      useTaskBoardStore.setState({
+        boards: trim(useTaskBoardStore.getState().boards),
+      });
+      // Tasks use snake_case workspace_id (matches Rust struct).
+      const tasks = useTaskStore.getState().tasks;
+      const trimmedTasks = new Map<string, import("../types/task").Task>();
+      for (const [k, v] of tasks) {
+        if (v.workspace_id !== id) trimmedTasks.set(k, v);
+      }
+      useTaskStore.setState({ tasks: trimmedTasks });
+
       await deleteWorkspace(id);
       const { currentWorkspace } = get();
       if (currentWorkspace?.id === id) {

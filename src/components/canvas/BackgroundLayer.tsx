@@ -2,9 +2,17 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../../store/settingsStore";
 import ShaderCanvas from "./ShaderCanvas";
 
+// Solid app background color. Behind it is the (possibly transparent)
+// Tauri webview, so when the user dials opacity below 1 the desktop
+// shows through. Above it sits any user-chosen background content
+// (image/video/url/shader).
+const BG_RGB = "19, 20, 27"; // #13141b
+
 export default function BackgroundLayer() {
   const bg = useSettingsStore((s) => s.settings?.background);
-  if (!bg || bg.kind === "none") return null;
+  if (!bg) return null;
+
+  const opacity = Math.max(0, Math.min(1, bg.opacity ?? 1));
 
   const fill: React.CSSProperties = {
     position: "absolute",
@@ -13,11 +21,12 @@ export default function BackgroundLayer() {
     width: "100%",
     height: "100%",
     pointerEvents: "none",
-    zIndex: 0,
   };
 
   let content: React.ReactNode = null;
   switch (bg.kind) {
+    case "none":
+      break;
     case "image":
       content = bg.source ? (
         <img
@@ -46,29 +55,33 @@ export default function BackgroundLayer() {
           src={bg.source}
           sandbox="allow-scripts allow-same-origin"
           title="background"
-          style={{ ...fill, border: "none", background: "#13141b" }}
+          style={{ ...fill, border: "none", background: "transparent" }}
         />
       ) : null;
       break;
     case "shader":
-      content = bg.shader ? <ShaderCanvas name={bg.shader} style={fill} /> : null;
+      content = bg.shader ? (
+        <ShaderCanvas name={bg.shader} style={fill} />
+      ) : null;
       break;
   }
 
-  const dim = 1 - Math.max(0, Math.min(1, bg.opacity ?? 1));
-
   return (
     <>
-      {content}
-      {dim > 0 && (
-        <div
-          style={{
-            ...fill,
-            background: `rgba(10, 12, 18, ${dim})`,
-            zIndex: 1,
-          }}
-        />
-      )}
+      {/* Base tinted layer — always rendered. Its alpha is the user's
+          opacity slider, so dragging to 0 makes the whole window see-through
+          (the Tauri window is transparent: true). */}
+      <div
+        style={{
+          ...fill,
+          background: `rgba(${BG_RGB}, ${opacity})`,
+        }}
+      />
+      {/* Shader/image/video content. The slider is applied as a CSS alpha
+          on the whole content layer — colors stay at full strength but the
+          canvas as a whole becomes see-through to the (transparent) Tauri
+          window when the user dials opacity down. */}
+      {content && <div style={{ ...fill, opacity }}>{content}</div>}
     </>
   );
 }

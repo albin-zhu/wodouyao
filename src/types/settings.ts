@@ -36,4 +36,11 @@ export interface AppSettings {
   /** Key/value env vars injected into every spawned terminal. User keys
    *  can override HOME/TERM/LANG/etc. but not WODOUYAO_*. */
   env_overrides: EnvOverride[];
+  /** Terminal window opacity 0–1. Applies to xterm canvas + title bar
+   *  so the canvas background can show through. Default 1.0. */
+  terminal_opacity: number;
+  /** When true (default), assume an HDPI/Retina display and use thin
+   *  hairline borders, antialiased fonts, etc. When false, switch to
+   *  thicker borders and subpixel-rendered text optimised for 1x screens. */
+  is_hdpi: boolean;
 }

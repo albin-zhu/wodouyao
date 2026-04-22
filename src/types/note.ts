@@ -6,4 +6,5 @@ export interface NoteNode {
   text: string;
   color: string;
   createdAt: number;
+  workspaceId?: string | null;
 }

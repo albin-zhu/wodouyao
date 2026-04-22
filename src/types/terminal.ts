@@ -26,6 +26,8 @@ export interface TerminalNode {
   lastExitCode?: number;
   /** Saved position/size to restore from a maximize. Present = currently maximized. */
   prevBounds?: { position: { x: number; y: number }; size: { width: number; height: number } };
+  /** Workspace this terminal belongs to. null = legacy / not yet stamped. */
+  workspaceId?: string | null;
 }
 
 export interface ShellInfo {

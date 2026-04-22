@@ -7,6 +7,8 @@ import { useTaskBoardStore } from "../../store/taskBoardStore";
 import { useCanvasStore } from "../../store/canvasStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
 import { useTeamStore } from "../../store/teamStore";
+import { useWorkspaceStore } from "../../store/workspaceStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import type { Team, Role } from "../../types/team";
 
 const DEFAULT_WIRE_STROKE = "#7aa2f7";
@@ -50,7 +52,16 @@ function wireStyle(
 
 export default function WireLayer() {
   const wiresMap = useWireStore((s) => s.wires);
-  const wires = useMemo(() => Array.from(wiresMap.values()), [wiresMap]);
+  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspace?.id ?? null);
+  const wires = useMemo(() => {
+    const all = Array.from(wiresMap.values());
+    if (currentWorkspaceId === null) return all;
+    return all.filter((w) => !w.workspaceId || w.workspaceId === currentWorkspaceId);
+  }, [wiresMap, currentWorkspaceId]);
+  const isHdpi = useSettingsStore((s) => s.settings?.is_hdpi ?? true);
+  // Non-HDPI screens lose hairlines after the canvas zoom transform.
+  // Multiply every stroke by 1.5 so wires stay visible.
+  const widthScale = isHdpi ? 1 : 1.5;
   const removeWire = useWireStore((s) => s.removeWire);
   const terminals = useTerminalStore((s) => s.terminals);
   const notes = useNoteStore((s) => s.notes);
@@ -176,7 +187,7 @@ export default function WireLayer() {
             const style = wireStyle(wire.sourceId, wire.targetId, termToTeam);
             const wireColor = style.stroke;
             const wireOpacity = style.opacity;
-            const wireWidth = style.width;
+            const wireWidth = style.width * widthScale;
 
             return (
               <g key={wire.id}>

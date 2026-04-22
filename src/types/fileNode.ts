@@ -9,4 +9,5 @@ export interface FileNode {
   name: string;
   kind: FileKind;
   createdAt: number;
+  workspaceId?: string | null;
 }

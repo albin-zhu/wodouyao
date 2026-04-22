@@ -3,6 +3,7 @@ import { useNoteStore } from "../../store/noteStore";
 import { useFileNodeStore } from "../../store/fileNodeStore";
 import { useTaskBoardStore } from "../../store/taskBoardStore";
 import { useCanvasStore } from "../../store/canvasStore";
+import { useWorkspaceStore } from "../../store/workspaceStore";
 import NoteNode from "./NoteNode";
 import FileNode from "./FileNode";
 import TaskBoardNode from "./TaskBoardNode";
@@ -11,9 +12,21 @@ export default function ResourceLayer() {
   const notesMap = useNoteStore((s) => s.notes);
   const filesMap = useFileNodeStore((s) => s.fileNodes);
   const boardsMap = useTaskBoardStore((s) => s.boards);
-  const notes = useMemo(() => Array.from(notesMap.values()), [notesMap]);
-  const files = useMemo(() => Array.from(filesMap.values()), [filesMap]);
-  const boards = useMemo(() => Array.from(boardsMap.values()), [boardsMap]);
+  const wsId = useWorkspaceStore((s) => s.currentWorkspace?.id ?? null);
+  const inWs = <T extends { workspaceId?: string | null }>(item: T) =>
+    wsId === null || (item.workspaceId ?? wsId) === wsId;
+  const notes = useMemo(
+    () => Array.from(notesMap.values()).filter(inWs),
+    [notesMap, wsId]
+  );
+  const files = useMemo(
+    () => Array.from(filesMap.values()).filter(inWs),
+    [filesMap, wsId]
+  );
+  const boards = useMemo(
+    () => Array.from(boardsMap.values()).filter(inWs),
+    [boardsMap, wsId]
+  );
   const { panX, panY, zoom } = useCanvasStore();
 
   return (

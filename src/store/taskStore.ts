@@ -6,6 +6,7 @@ import {
   tasksUpdate,
   tasksRemove,
 } from "../services/tauriCommands";
+import { useWorkspaceStore } from "./workspaceStore";
 
 interface TaskStore {
   tasks: Map<string, Task>;
@@ -21,6 +22,7 @@ interface TaskStore {
   updateTask: (id: string, patch: TaskPatchInput) => Promise<Task | null>;
   removeTask: (id: string) => Promise<void>;
   getTasks: () => Task[];
+  getVisibleTasks: () => Task[];
 }
 
 export const useTaskStore = create<TaskStore>((set, get) => ({
@@ -45,7 +47,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
   createTask: async (input) => {
     try {
-      const t = await tasksCreate(input);
+      const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+      const t = await tasksCreate({ ...input, workspace_id: input.workspace_id ?? wsId });
       const next = new Map(get().tasks);
       next.set(t.id, t);
       set({ tasks: next });
@@ -81,4 +84,11 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   },
 
   getTasks: () => Array.from(get().tasks.values()),
+
+  getVisibleTasks: () => {
+    const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+    const all = Array.from(get().tasks.values());
+    if (wsId === null) return all;
+    return all.filter((t) => (t.workspace_id ?? wsId) === wsId);
+  },
 }));

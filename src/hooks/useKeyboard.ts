@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCommandStore } from "../store/commandStore";
+import { useCanvasStore } from "../store/canvasStore";
 
 export function useKeyboard() {
   const togglePalette = useCommandStore((s) => s.togglePalette);
@@ -11,10 +11,22 @@ export function useKeyboard() {
         e.preventDefault();
         togglePalette();
       }
+      // Zen mode: hide all UI chrome (toolbar + canvas controls).
+      // F11 on Windows/Linux, Cmd+F11 on macOS (plain F11 is taken by macOS
+      // for Show Desktop). Cmd/Ctrl+Shift+F11 → toggle click-through (the
+      // escape hatch when the desktop swallows your clicks).
       if (e.key === "F11") {
-        e.preventDefault();
-        const win = getCurrentWindow();
-        win.isFullscreen().then((full) => win.setFullscreen(!full)).catch(() => {});
+        const isMac = navigator.platform.toLowerCase().includes("mac");
+        const modKey = isMac ? e.metaKey : e.ctrlKey;
+        if (e.shiftKey && modKey) {
+          e.preventDefault();
+          useCanvasStore.getState().toggleClickThrough();
+          return;
+        }
+        if ((isMac && e.metaKey) || (!isMac && !e.metaKey && !e.ctrlKey)) {
+          e.preventDefault();
+          useCanvasStore.getState().toggleZenMode();
+        }
       }
     };
     window.addEventListener("keydown", handler);

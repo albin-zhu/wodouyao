@@ -69,6 +69,7 @@ export interface WireIpc {
   target_id: string;
   forward_output: boolean;
   kind?: string | null;
+  workspace_id?: string | null;
 }
 
 export async function wireList(): Promise<WireIpc[]> {
@@ -78,12 +79,14 @@ export async function wireList(): Promise<WireIpc[]> {
 export async function wireCreate(
   sourceId: string,
   targetId: string,
-  kind?: string
+  kind?: string,
+  workspaceId?: string | null
 ): Promise<WireIpc> {
   return invoke<WireIpc>("wire_create", {
     sourceId,
     targetId,
     kind: kind ?? null,
+    workspaceId: workspaceId ?? null,
   });
 }
 
@@ -222,6 +225,7 @@ export interface NoteIpc {
   size: { width: number; height: number };
   z_index: number;
   created_at: number;
+  workspace_id?: string | null;
 }
 
 export interface NoteCreateInput {
@@ -229,6 +233,7 @@ export interface NoteCreateInput {
   color?: string;
   position?: { x: number; y: number };
   size?: { width: number; height: number };
+  workspace_id?: string | null;
 }
 
 export interface NotePatchInput {
@@ -268,6 +273,7 @@ export interface FileNodeIpc {
   size: { width: number; height: number };
   z_index: number;
   created_at: number;
+  workspace_id?: string | null;
 }
 
 export interface FileNodeCreateInput {
@@ -277,6 +283,7 @@ export interface FileNodeCreateInput {
   kind: string;
   position?: { x: number; y: number };
   size?: { width: number; height: number };
+  workspace_id?: string | null;
 }
 
 export interface FileNodePatchInput {
@@ -315,6 +322,7 @@ export interface TaskBoardIpc {
   size: { width: number; height: number };
   z_index: number;
   created_at: number;
+  workspace_id?: string | null;
 }
 
 export interface TaskBoardCreateInput {
@@ -322,6 +330,7 @@ export interface TaskBoardCreateInput {
   label?: string;
   position?: { x: number; y: number };
   size?: { width: number; height: number };
+  workspace_id?: string | null;
 }
 
 export interface TaskBoardPatchInput {

@@ -1,12 +1,18 @@
 import { useMemo } from "react";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasStore } from "../../store/canvasStore";
+import { useWorkspaceStore } from "../../store/workspaceStore";
 import TerminalNode from "./TerminalNode";
 import DrawPreview from "../canvas/DrawPreview";
 
 export default function TerminalLayer() {
   const terminalsMap = useTerminalStore((s) => s.terminals);
-  const terminals = useMemo(() => Array.from(terminalsMap.values()), [terminalsMap]);
+  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspace?.id ?? null);
+  const terminals = useMemo(() => {
+    const all = Array.from(terminalsMap.values());
+    if (currentWorkspaceId === null) return all;
+    return all.filter((t) => (t.workspaceId ?? currentWorkspaceId) === currentWorkspaceId);
+  }, [terminalsMap, currentWorkspaceId]);
   const maximizedId = useMemo(
     () => terminals.find((t) => !!t.prevBounds)?.id ?? null,
     [terminals]

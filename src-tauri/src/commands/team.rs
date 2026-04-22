@@ -103,6 +103,7 @@ pub fn teams_join(
             target_id,
             forward_output: true,
             kind: Some("team".to_string()),
+            workspace_id: None,
         });
     }
     let _ = app.emit("teams-updated", ());

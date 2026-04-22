@@ -6,6 +6,7 @@ import {
   taskBoardsRemove as taskBoardsRemoveIpc,
   type TaskBoardIpc,
 } from "../services/tauriCommands";
+import { useWorkspaceStore } from "./workspaceStore";
 
 export interface TaskBoard {
   id: string;
@@ -13,6 +14,7 @@ export interface TaskBoard {
   position: { x: number; y: number };
   size: { width: number; height: number };
   zIndex: number;
+  workspaceId?: string | null;
 }
 
 function fromIpc(b: TaskBoardIpc): TaskBoard {
@@ -22,6 +24,7 @@ function fromIpc(b: TaskBoardIpc): TaskBoard {
     position: b.position,
     size: b.size,
     zIndex: b.z_index,
+    workspaceId: b.workspace_id ?? null,
   };
 }
 
@@ -31,20 +34,23 @@ interface TaskBoardStore {
   updateBoard: (id: string, patch: Partial<Omit<TaskBoard, "id">>) => void;
   removeBoard: (id: string) => void;
   bringToFront: (id: string) => void;
+  getVisibleBoards: () => TaskBoard[];
   syncFromRust: (ipc: TaskBoardIpc[]) => void;
 }
 
-export const useTaskBoardStore = create<TaskBoardStore>((set) => ({
+export const useTaskBoardStore = create<TaskBoardStore>((set, get) => ({
   boards: new Map(),
 
   addBoard: (opts = {}) => {
     const id = generateId("tb");
+    const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
     const board: TaskBoard = {
       id,
       label: "Tasks",
       position: opts.position ?? { x: 300, y: 200 },
       size: { width: 320, height: 400 },
       zIndex: Date.now(),
+      workspaceId: wsId,
     };
     set((state) => {
       const next = new Map(state.boards);
@@ -56,6 +62,7 @@ export const useTaskBoardStore = create<TaskBoardStore>((set) => ({
       label: board.label,
       position: board.position,
       size: board.size,
+      workspace_id: wsId,
     }).catch(() => {});
     return id;
   },
@@ -103,5 +110,12 @@ export const useTaskBoardStore = create<TaskBoardStore>((set) => ({
       next.set(node.id, node);
     }
     set({ boards: next });
+  },
+
+  getVisibleBoards: () => {
+    const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+    const all = Array.from(get().boards.values());
+    if (wsId === null) return all;
+    return all.filter((b) => (b.workspaceId ?? wsId) === wsId);
   },
 }));

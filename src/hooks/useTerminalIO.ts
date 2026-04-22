@@ -7,6 +7,7 @@ import { writeTerminal, resizeTerminal, destroyTerminal } from "../services/taur
 import { listenTerminalOutput, listenTerminalExit } from "../services/tauriEvents";
 import { registerXterm, unregisterXterm } from "../services/terminalRegistry";
 import { useTerminalStore } from "../store/terminalStore";
+import { useSettingsStore } from "../store/settingsStore";
 import { TERMINAL_THEMES } from "../utils/terminalThemes";
 import type { TerminalTheme } from "../types/terminal";
 
@@ -26,16 +27,37 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
     if (!container) return;
 
     themeRef.current = initialTheme;
-    const xtermTheme = TERMINAL_THEMES[initialTheme] ?? TERMINAL_THEMES.tokyonight;
+    const baseTheme = TERMINAL_THEMES[initialTheme] ?? TERMINAL_THEMES.tokyonight;
+    const settings = useSettingsStore.getState().settings;
+    const opacity = settings?.terminal_opacity ?? 1;
+    const isHdpi = settings?.is_hdpi ?? true;
+    // When the user wants transparency, give xterm a fully-transparent
+    // background and let the TerminalBody container render the tinted color.
+    // The Canvas addon paints cell backgrounds opaquely even with
+    // allowTransparency, so fighting it per-cell is brittle; CSS compositing
+    // behind the canvas is reliable.
+    const xtermTheme =
+      opacity < 1
+        ? { ...baseTheme, background: "rgba(0, 0, 0, 0)" }
+        : baseTheme;
 
     const term = new Terminal({
       cursorBlink: true,
-      fontSize: 13,
-      lineHeight: 1.2,
-      letterSpacing: 0,
+      // Treat the macOS Option key as Meta (Alt) in xterm. Without this,
+      // Option-key shortcuts in agents (claude, codex, vim, emacs) get
+      // swallowed by macOS's "insert special char" behavior.
+      macOptionIsMeta: true,
+      // Non-HDPI displays need beefier glyphs — bump the size and weight
+      // so strokes don't disappear into the pixel grid.
+      fontSize: isHdpi ? 13 : 14,
+      lineHeight: isHdpi ? 1.2 : 1.25,
+      letterSpacing: isHdpi ? 0 : 0.2,
+      fontWeight: isHdpi ? "normal" : 500,
+      fontWeightBold: isHdpi ? "bold" : 700,
       fontFamily:
         "'JetBrainsMono Nerd Font Mono', 'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Fira Code', 'Consolas', monospace",
       theme: xtermTheme,
+      allowTransparency: opacity < 1,
       // Custom OSC 8 hyperlink handler — bypasses xterm's built-in
       // window.confirm() prompt which tauri-plugin-dialog would intercept.
       linkHandler: {
@@ -144,6 +166,32 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
       fitAddonRef.current = null;
     };
   }, [terminalId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // React to global opacity + HDPI changes — apply in place (no remount).
+  // xterm's setters swap theme/font live; allowTransparency was chosen at
+  // construction, so we pre-enable it below at opacity<1.
+  const opacity = useSettingsStore((s) => s.settings?.terminal_opacity ?? 1);
+  const isHdpi = useSettingsStore((s) => s.settings?.is_hdpi ?? true);
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    const current = useTerminalStore.getState().terminals.get(terminalId);
+    const themeName = current?.theme ?? themeRef.current;
+    const base = TERMINAL_THEMES[themeName] ?? TERMINAL_THEMES.tokyonight;
+    term.options.theme = {
+      ...base,
+      background: opacity < 1 ? "rgba(0, 0, 0, 0)" : base.background,
+    };
+    term.options.fontSize = isHdpi ? 13 : 14;
+    term.options.lineHeight = isHdpi ? 1.2 : 1.25;
+    term.options.letterSpacing = isHdpi ? 0 : 0.2;
+    term.options.fontWeight = isHdpi ? "normal" : 500;
+    term.options.fontWeightBold = isHdpi ? "bold" : 700;
+    // Trigger a re-fit so the new font metrics take effect.
+    if (fitAddonRef.current) {
+      try { fitAddonRef.current.fit(); } catch { /* ignore */ }
+    }
+  }, [opacity, isHdpi, terminalId]);
 
   const fit = useCallback(() => {
     if (fitAddonRef.current && termRef.current) {

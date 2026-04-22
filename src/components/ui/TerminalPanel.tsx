@@ -10,6 +10,7 @@ export default function TerminalPanel() {
   const [filter, setFilter] = useState("");
   const terminalsMap = useTerminalStore((s) => s.terminals);
   const bringToFront = useTerminalStore((s) => s.bringToFront);
+  const zenMode = useCanvasStore((s) => s.zenMode);
   const terminals = useMemo(
     () => Array.from(terminalsMap.values()),
     [terminalsMap]
@@ -103,6 +104,9 @@ export default function TerminalPanel() {
     pos.y < 0
       ? { left: pos.x, bottom: 60 }
       : { left: pos.x, top: pos.y + 40 }; // 40 = toolbar height
+
+  // Hide entirely in zen mode — the panel is part of the chrome.
+  if (zenMode) return null;
 
   if (!open) {
     return (

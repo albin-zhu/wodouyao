@@ -7,6 +7,7 @@ import {
   fileNodesRemove as fileNodesRemoveIpc,
   type FileNodeIpc,
 } from "../services/tauriCommands";
+import { useWorkspaceStore } from "./workspaceStore";
 
 const DEFAULT_FILE_WIDTH = 280;
 const DEFAULT_FILE_HEIGHT = 220;
@@ -21,6 +22,7 @@ function fromIpc(n: FileNodeIpc): FileNode {
     size: n.size,
     zIndex: n.z_index,
     createdAt: n.created_at,
+    workspaceId: n.workspace_id ?? null,
   };
 }
 
@@ -40,6 +42,7 @@ interface FileNodeStore {
   updateFileNode: (id: string, updates: Partial<FileNode>) => void;
   bringToFront: (id: string) => void;
   getFileNodes: () => FileNode[];
+  getVisibleFileNodes: () => FileNode[];
   syncFromRust: (ipc: FileNodeIpc[]) => void;
 }
 
@@ -50,6 +53,7 @@ export const useFileNodeStore = create<FileNodeStore>((set, get) => ({
   addFileNode: (input) => {
     const id = input.id ?? generateId("f");
     const state = get();
+    const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
     const node: FileNode = {
       id,
       path: input.path,
@@ -61,6 +65,7 @@ export const useFileNodeStore = create<FileNodeStore>((set, get) => ({
       size: input.size ?? { width: DEFAULT_FILE_WIDTH, height: DEFAULT_FILE_HEIGHT },
       zIndex: state.nextZIndex,
       createdAt: Date.now(),
+      workspaceId: wsId,
     };
     const newMap = new Map(state.fileNodes);
     newMap.set(id, node);
@@ -73,6 +78,7 @@ export const useFileNodeStore = create<FileNodeStore>((set, get) => ({
       kind: node.kind,
       position: node.position,
       size: node.size,
+      workspace_id: wsId,
     }).catch(() => {});
 
     return node;
@@ -113,6 +119,13 @@ export const useFileNodeStore = create<FileNodeStore>((set, get) => ({
     }),
 
   getFileNodes: () => Array.from(get().fileNodes.values()),
+
+  getVisibleFileNodes: () => {
+    const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+    const all = Array.from(get().fileNodes.values());
+    if (wsId === null) return all;
+    return all.filter((n) => (n.workspaceId ?? wsId) === wsId);
+  },
 
   syncFromRust: (ipc) => {
     const newMap = new Map<string, FileNode>();

@@ -52,6 +52,7 @@ function classifyByExt(path: string): FileKind {
 export default function InfiniteCanvas() {
   const { handleWheel, handleCanvasMouseDown } = useCanvas();
   const { panX, panY, zoom } = useCanvasStore();
+  const zenMode = useCanvasStore((s) => s.zenMode);
   const mode = useCanvasInteractionStore((s) => s.mode);
   const setDrawRect = useCanvasInteractionStore((s) => s.setDrawRect);
   const clearDrawRect = useCanvasInteractionStore((s) => s.clearDrawRect);
@@ -280,7 +281,9 @@ export default function InfiniteCanvas() {
         width: "100%",
         height: "100%",
         overflow: "hidden",
-        background: "#13141b",
+        // BackgroundLayer paints the tinted base; keep this transparent so
+        // the user-controlled opacity actually shows the desktop through.
+        background: "transparent",
         cursor: mode === "draw" ? "crosshair" : mode === "wire" ? "crosshair" : "default",
       }}
     >
@@ -288,7 +291,7 @@ export default function InfiniteCanvas() {
       {!anyMaximized && <WireLayer />}
       <TerminalLayer />
       {!anyMaximized && <ResourceLayer />}
-      {!anyMaximized && <CanvasControls />}
+      {!anyMaximized && !zenMode && <CanvasControls />}
     </div>
   );
 }

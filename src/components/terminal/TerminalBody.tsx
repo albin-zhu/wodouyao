@@ -1,7 +1,15 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { useTerminalIO } from "../../hooks/useTerminalIO";
 import { useTerminalStore } from "../../store/terminalStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import { TERMINAL_THEMES } from "../../utils/terminalThemes";
+
+function hexToRgba(hex: string, alpha: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 0xff}, ${(n >> 8) & 0xff}, ${n & 0xff}, ${alpha})`;
+}
 import { writeTerminal } from "../../services/tauriCommands";
 import PasteConfirmDialog from "./PasteConfirmDialog";
 import "@xterm/xterm/css/xterm.css";
@@ -14,7 +22,9 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { fit, termRef } = useTerminalIO(terminalId, containerRef);
   const themeName = useTerminalStore((s) => s.terminals.get(terminalId)?.theme ?? "tokyonight");
-  const bg = TERMINAL_THEMES[themeName]?.background ?? "#1a1b26";
+  const opacity = useSettingsStore((s) => s.settings?.terminal_opacity ?? 1);
+  const rawBg = TERMINAL_THEMES[themeName]?.background ?? "#1a1b26";
+  const bg = opacity < 1 ? hexToRgba(rawBg, opacity) : rawBg;
   const [pendingPaste, setPendingPaste] = useState<string | null>(null);
 
   const handleClick = useCallback(() => {

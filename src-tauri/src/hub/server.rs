@@ -678,6 +678,7 @@ fn fork(
         target_id: new_id.clone(),
         forward_output: true,
         kind: Some("io".to_string()),
+        workspace_id: None,
     };
     topology.insert(wire);
     let _ = app.emit("wires-updated", ());
@@ -1201,6 +1202,7 @@ fn wire_new_member(
             target_id,
             forward_output: true,
             kind: Some("team".to_string()),
+            workspace_id: None,
         });
     }
 }
@@ -1727,6 +1729,7 @@ fn wires_create_route(
         target_id: parsed.target_id,
         forward_output: true,
         kind: parsed.kind,
+        workspace_id: None,
     };
     let created = topology.insert(wire);
     emit_wires_updated(app_handle);

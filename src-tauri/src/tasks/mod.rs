@@ -29,6 +29,8 @@ pub struct Task {
     pub acceptance: Vec<String>,
     #[serde(default)]
     pub note_id: Option<String>,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -46,6 +48,8 @@ pub struct TaskCreate {
     pub acceptance: Vec<String>,
     #[serde(default)]
     pub note_id: Option<String>,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -116,6 +120,7 @@ impl TaskStore {
             blocked_by: input.blocked_by,
             acceptance: input.acceptance,
             note_id: input.note_id,
+            workspace_id: input.workspace_id,
         };
         self.inner.lock().unwrap().insert(task.id.clone(), task.clone());
         task
@@ -156,6 +161,33 @@ impl TaskStore {
         let mut map = self.inner.lock().unwrap();
         map.clear();
         for t in tasks {
+            map.insert(t.id.clone(), t);
+        }
+    }
+
+    pub fn filter_for_workspace(&self, ws_id: &str) -> Vec<Task> {
+        let map = self.inner.lock().unwrap();
+        let mut v: Vec<Task> = map
+            .values()
+            .filter(|t| t.workspace_id.as_deref() == Some(ws_id))
+            .cloned()
+            .collect();
+        v.sort_by_key(|t| t.created_at);
+        v
+    }
+
+    pub fn upsert_for_workspace(&self, ws_id: &str, tasks: Vec<Task>) {
+        let mut map = self.inner.lock().unwrap();
+        let to_remove: Vec<String> = map
+            .iter()
+            .filter(|(_, t)| t.workspace_id.as_deref() == Some(ws_id))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in to_remove {
+            map.remove(&id);
+        }
+        for mut t in tasks {
+            t.workspace_id = Some(ws_id.to_string());
             map.insert(t.id.clone(), t);
         }
     }

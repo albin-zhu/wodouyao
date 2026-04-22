@@ -83,6 +83,18 @@ pub struct AppSettings {
     /// HOME/TERM/LANG/etc. but can't clobber wodouyao's protocol plumbing.
     #[serde(default)]
     pub env_overrides: Vec<EnvOverride>,
+    #[serde(default = "default_terminal_opacity")]
+    pub terminal_opacity: f64,
+    #[serde(default = "default_is_hdpi")]
+    pub is_hdpi: bool,
+}
+
+fn default_terminal_opacity() -> f64 {
+    1.0
+}
+
+fn default_is_hdpi() -> bool {
+    true
 }
 
 impl Default for AppSettings {
@@ -97,6 +109,8 @@ impl Default for AppSettings {
             wire_empty_spawn_command: "claude".into(),
             language: "en".into(),
             env_overrides: Vec::new(),
+            terminal_opacity: 1.0,
+            is_hdpi: true,
             quick_commands: vec![
                 QuickCommand {
                     id: "claude".into(),

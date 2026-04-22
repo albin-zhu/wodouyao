@@ -9,6 +9,7 @@ import {
 } from "../utils/constants";
 import { DEFAULT_COLOR, DEFAULT_THEME } from "../utils/terminalThemes";
 import { generateId } from "../utils/id";
+import { useWorkspaceStore } from "./workspaceStore";
 
 interface TerminalStore {
   terminals: Map<string, TerminalNode>;
@@ -27,6 +28,9 @@ interface TerminalStore {
   markActivity: (id: string, ts: number) => void;
   setExitCode: (id: string, code: number) => void;
   getTerminals: () => TerminalNode[];
+  /** Terminals belonging to the currently active workspace, plus any
+   *  un-stamped legacy terminals (treated as belonging to the active ws). */
+  getVisibleTerminals: () => TerminalNode[];
   clearAll: () => void;
 }
 
@@ -37,6 +41,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   addTerminal: (overrides) => {
     const id = overrides?.id ?? generateId();
     const state = get();
+    const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
     const terminal: TerminalNode = {
       id,
       name: overrides?.name ?? `Terminal ${state.terminals.size + 1}`,
@@ -54,11 +59,15 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       theme: overrides?.theme ?? DEFAULT_THEME,
       cwd: overrides?.cwd,
       role: overrides?.role,
+      workspaceId: overrides?.workspaceId ?? wsId,
       ...overrides,
-      // Ensure id is not overwritten by spread
+      // Ensure id/workspaceId are not overwritten by spread when not provided
     };
     terminal.id = id;
     terminal.zIndex = state.nextZIndex;
+    if (overrides?.workspaceId === undefined) {
+      terminal.workspaceId = wsId;
+    }
 
     const newMap = new Map(state.terminals);
     newMap.set(id, terminal);
@@ -174,6 +183,13 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     }),
 
   getTerminals: () => Array.from(get().terminals.values()),
+
+  getVisibleTerminals: () => {
+    const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+    const all = Array.from(get().terminals.values());
+    if (wsId === null) return all;
+    return all.filter((t) => (t.workspaceId ?? wsId) === wsId);
+  },
 
   clearAll: () => set({ terminals: new Map(), nextZIndex: 1 }),
 }));

@@ -83,9 +83,27 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
   const startResize = useCallback(
     (dir: { n?: boolean; s?: boolean; e?: boolean; w?: boolean }) =>
       (e: React.MouseEvent) => {
+        // In wire mode the crosshair is doing something else — let the
+        // click fall through to the canvas / wire anchor logic.
+        if (mode === "wire") return;
         e.preventDefault();
         e.stopPropagation();
         bringToFront(terminal.id);
+
+        // Lock cursor globally for the duration of the drag so it doesn't
+        // flicker back to default when the mouse moves off the hit strip.
+        const cursorName =
+          (dir.n && dir.w) || (dir.s && dir.e)
+            ? "nwse-resize"
+            : (dir.n && dir.e) || (dir.s && dir.w)
+            ? "nesw-resize"
+            : dir.n || dir.s
+            ? "ns-resize"
+            : "ew-resize";
+        const prevBodyCursor = document.body.style.cursor;
+        const prevUserSelect = document.body.style.userSelect;
+        document.body.style.cursor = cursorName;
+        document.body.style.userSelect = "none";
 
         const start = {
           mouseX: e.clientX,
@@ -150,11 +168,13 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
           if (pendingFrame) cancelAnimationFrame(pendingFrame);
           window.removeEventListener("mousemove", onMouseMove);
           window.removeEventListener("mouseup", onMouseUp);
+          document.body.style.cursor = prevBodyCursor;
+          document.body.style.userSelect = prevUserSelect;
         };
         window.addEventListener("mousemove", onMouseMove);
         window.addEventListener("mouseup", onMouseUp);
       },
-    [terminal.id, terminal.position, terminal.size, updateTerminal, bringToFront]
+    [terminal.id, terminal.position, terminal.size, updateTerminal, bringToFront, mode]
   );
 
   const handleWireAnchorDown = useCallback(
@@ -211,9 +231,7 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
           ? `1px solid ${terminal.color}`
           : `1px solid ${terminal.color}40`,
         overflow: "hidden",
-        boxShadow: team
-          ? `0 4px 24px rgba(0,0,0,0.4), 0 0 0 3px ${team.palette.base}55`
-          : "0 4px 24px rgba(0,0,0,0.4)",
+        boxShadow: team ? `0 0 0 3px ${team.palette.base}55` : "none",
         transition: "height 0.2s ease",
         pointerEvents: "auto",
       }}
@@ -222,39 +240,11 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
         <TerminalTitleBar terminal={terminal} />
       </div>
       {!terminal.isFolded && <TerminalBody terminalId={terminal.id} />}
-      {!terminal.isFolded && (
+      {!terminal.isFolded && mode !== "wire" && (
         <>
-          {/* Edge handles — invisible, 6px hit-strips. Corners stacked on top. */}
-          <div
-            onMouseDown={startResize({ n: true })}
-            style={{ position: "absolute", top: -3, left: 10, right: 10, height: 6, cursor: "ns-resize", zIndex: 15 }}
-          />
-          <div
-            onMouseDown={startResize({ s: true })}
-            style={{ position: "absolute", bottom: -3, left: 10, right: 10, height: 6, cursor: "ns-resize", zIndex: 15 }}
-          />
-          <div
-            onMouseDown={startResize({ w: true })}
-            style={{ position: "absolute", left: -3, top: 10, bottom: 10, width: 6, cursor: "ew-resize", zIndex: 15 }}
-          />
-          <div
-            onMouseDown={startResize({ e: true })}
-            style={{ position: "absolute", right: -3, top: 10, bottom: 10, width: 6, cursor: "ew-resize", zIndex: 15 }}
-          />
-          {/* Corners */}
-          <div
-            onMouseDown={startResize({ n: true, w: true })}
-            style={{ position: "absolute", top: -3, left: -3, width: 12, height: 12, cursor: "nwse-resize", zIndex: 21 }}
-          />
-          <div
-            onMouseDown={startResize({ n: true, e: true })}
-            style={{ position: "absolute", top: -3, right: -3, width: 12, height: 12, cursor: "nesw-resize", zIndex: 21 }}
-          />
-          <div
-            onMouseDown={startResize({ s: true, w: true })}
-            style={{ position: "absolute", bottom: -3, left: -3, width: 12, height: 12, cursor: "nesw-resize", zIndex: 21 }}
-          />
-          {/* Bottom-right corner with visible grow-box */}
+          {/* Bottom-right corner is the only resize handle — edges/other
+              corners removed so accidental drags from those areas are
+              impossible (they were also fighting wire-mode hits). */}
           <div
             onMouseDown={startResize({ s: true, e: true })}
             title="Drag to resize"

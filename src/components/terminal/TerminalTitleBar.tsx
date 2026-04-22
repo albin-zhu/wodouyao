@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasStore } from "../../store/canvasStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import { useTerminal } from "../../hooks/useTerminal";
 import { useTeamStore } from "../../store/teamStore";
 import TerminalStatusBadge from "./TerminalStatusBadge";
@@ -20,6 +21,8 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
   const bringToFront = useTerminalStore((s) => s.bringToFront);
   const { kill } = useTerminal();
   const team = useTeamStore((s) => s.getTeamForTerminal(terminal.id));
+  const opacity = useSettingsStore((s) => s.settings?.terminal_opacity ?? 1);
+  const titleBg = opacity < 1 ? `rgba(31, 35, 53, ${opacity})` : "#1f2335";
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
   const roleMeta = terminal.role ? TERMINAL_ROLES[terminal.role] : undefined;
 
@@ -75,7 +78,7 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
         display: "flex",
         alignItems: "center",
         padding: "0 10px",
-        background: "#1f2335",
+        background: titleBg,
         borderBottom: terminal.isFolded ? "none" : "1px solid #292e42",
         borderLeft: `3px solid ${terminal.color}`,
         position: "relative",

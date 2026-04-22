@@ -175,6 +175,7 @@ fn peers_returns_identity_metadata() {
         target_id: "term-b".into(),
         forward_output: true,
         kind: None,
+        workspace_id: None,
     });
     identities.upsert(wodouyao_lib::hub::Identity {
         id: "term-b".into(),
@@ -223,6 +224,7 @@ fn peers_drops_dead_terminals() {
         target_id: "term-dead".into(),
         forward_output: true,
         kind: None,
+        workspace_id: None,
     });
     // Deliberately do NOT mark term-dead as live.
     let url = format!("{}/v1/peers?from=term-a", handle.url);
@@ -419,6 +421,7 @@ fn spawn_with_team_fans_out_wires() {
             target_id: pid.clone(),
             forward_output: true,
             kind: None,
+            workspace_id: None,
         });
     }
     let peers = topology.peers_for(&new_id);
@@ -678,6 +681,7 @@ fn watch_target_without_session_returns_404() {
         target_id: "term-b".into(),
         forward_output: true,
         kind: None,
+        workspace_id: None,
     });
     let url = format!("{}/v1/watch?from=term-a&to=term-b", handle.url);
     let result = ureq::get(&url)

@@ -31,13 +31,22 @@ pub fn create_terminal(
     // User-supplied env overrides first so they sit at the bottom of the
     // precedence stack — wodouyao's own vars (pushed below) win, meaning
     // the user can override HOME / TERM / LANG / etc. but can't clobber
-    // WODOUYAO_* which the hub protocol relies on.
+    // WODOUYAO_* which the hub protocol relies on. PATH is special-cased:
+    // we still PREPEND the wodouyao bin dir to whatever the user supplied
+    // (if anything), instead of letting their value silently win and break
+    // `wodouyao` discovery.
+    let mut user_path: Option<String> = None;
     if let Ok(app_settings) = crate::settings::storage::load() {
         for eo in &app_settings.env_overrides {
             let key = eo.key.trim();
-            if !key.is_empty() {
-                env.push((key.to_string(), eo.value.clone()));
+            if key.is_empty() {
+                continue;
             }
+            if key == "PATH" {
+                user_path = Some(eo.value.clone());
+                continue;
+            }
+            env.push((key.to_string(), eo.value.clone()));
         }
     }
 
@@ -55,13 +64,20 @@ pub fn create_terminal(
         let bin_dir = resource_dir.join("resources").join("bin");
         let bin_dir_str = bin_dir.to_string_lossy().into_owned();
         let separator = if cfg!(windows) { ';' } else { ':' };
-        let new_path = match std::env::var("PATH") {
-            Ok(current) if !current.is_empty() => {
-                format!("{}{}{}", bin_dir_str, separator, current)
-            }
-            _ => bin_dir_str,
+        // Precedence for the base PATH: explicit user override → parent
+        // process env → empty. We always PREPEND the wodouyao bin dir so
+        // the CLI is discoverable regardless of user config.
+        let base_path = user_path
+            .filter(|s| !s.is_empty())
+            .or_else(|| std::env::var("PATH").ok().filter(|s| !s.is_empty()));
+        let new_path = match base_path {
+            Some(current) => format!("{}{}{}", bin_dir_str, separator, current),
+            None => bin_dir_str,
         };
         env.push(("PATH".to_string(), new_path));
+    } else if let Some(p) = user_path {
+        // No resource dir (unlikely) — just honor the user's PATH verbatim.
+        env.push(("PATH".to_string(), p));
     }
 
     let mut manager = state.pty_manager.lock().map_err(|e| e.to_string())?;
