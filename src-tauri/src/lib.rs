@@ -20,6 +20,69 @@ use state::AppState;
 use task_boards::TaskBoardStore;
 use tasks::TaskStore;
 
+/// On macOS (and to a lesser extent Linux), GUI apps launched from
+/// Finder/Dock/Spotlight inherit only launchd's bare environment —
+/// PATH is `/usr/bin:/bin:/usr/sbin:/sbin`, no NODE_PATH, no PYENV,
+/// no `~/.local/bin`, etc. That breaks every PTY we spawn because it
+/// can't find `claude`, `codex`, `node`, the user's shims…
+///
+/// At startup, run the user's login shell once in interactive mode,
+/// dump its env, and merge anything missing into the current process
+/// env. From then on, every PTY (and our hub) sees the same PATH the
+/// user gets in Terminal.app.
+fn hydrate_login_shell_env() {
+    if std::env::var("WODOUYAO_LOGIN_SHELL_HYDRATED").is_ok() {
+        return; // already done in this process
+    }
+    // On Windows the inherited GUI env is fine; nothing to do.
+    if cfg!(windows) {
+        return;
+    }
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+    // -i -l so .zshrc / .bashrc are sourced (PATH lives there for most
+    // users who use pyenv / nvm / asdf / homebrew shims).
+    let output = std::process::Command::new(&shell)
+        .args(["-ilc", "/usr/bin/env"])
+        .output();
+    let Ok(out) = output else {
+        log::warn!("env hydrate: failed to run {} -ilc env", shell);
+        return;
+    };
+    if !out.status.success() {
+        log::warn!("env hydrate: {} exited non-zero", shell);
+        return;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let mut imported = 0usize;
+    for line in stdout.lines() {
+        let Some(eq) = line.find('=') else { continue };
+        let key = &line[..eq];
+        let val = &line[eq + 1..];
+        // Don't trample existing GUI-set vars (the user's launch agents
+        // may have set TMPDIR etc. for a reason). Login shell only fills
+        // in gaps.
+        if std::env::var_os(key).is_none() {
+            // SAFETY: single-threaded at this point in startup.
+            unsafe {
+                std::env::set_var(key, val);
+            }
+            imported += 1;
+        }
+    }
+    // Always replace PATH with the login shell's — it's the variable that
+    // matters most and the launchd-supplied one is almost certainly worse.
+    if let Some(path_line) = stdout.lines().find(|l| l.starts_with("PATH=")) {
+        let val = &path_line[5..];
+        unsafe {
+            std::env::set_var("PATH", val);
+        }
+    }
+    unsafe {
+        std::env::set_var("WODOUYAO_LOGIN_SHELL_HYDRATED", "1");
+    }
+    log::info!("env hydrate: imported {} vars from {} -ilc", imported, shell);
+}
+
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
     open::that(&url).map_err(|e| e.to_string())
@@ -27,6 +90,7 @@ fn open_url(url: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    hydrate_login_shell_env();
     let topology = WireTopology::new();
     let identities = IdentityRegistry::new();
     let team_registry = TeamRegistry::new();
