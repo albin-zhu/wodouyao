@@ -8,6 +8,7 @@ import TasksDrawer from "./components/ui/TasksDrawer";
 import TerminalPanel from "./components/ui/TerminalPanel";
 import TerminalCreateDialog from "./components/ui/TerminalCreateDialog";
 import TerminalContextMenu from "./components/terminal/TerminalContextMenu";
+import ToastContainer from "./components/ui/ToastContainer";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { useSettingsStore } from "./store/settingsStore";
 import { useCanvasStore } from "./store/canvasStore";
@@ -119,6 +120,7 @@ export default function App() {
       <TerminalPanel />
       <TerminalCreateDialog />
       <TerminalContextMenu />
+      <ToastContainer />
     </div>
   );
 }

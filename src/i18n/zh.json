@@ -103,6 +103,19 @@
       "rightClickSelectsWord": "右键单击选词"
     }
   },
+  "toast": {
+    "terminalCreated": "终端已创建",
+    "terminalError": "创建终端失败",
+    "wireConnected": "连线成功",
+    "wireRemoved": "连线已断开",
+    "workspaceSwitched": "已切换到「{{name}}」",
+    "workspaceForked": "已复制到「{{name}}」",
+    "workspaceCreated": "工作区已创建",
+    "workspaceDeleted": "工作区已删除",
+    "workspaceError": "切换工作区失败",
+    "noteSaved": "便利贴已保存",
+    "settingsSaved": "设置已保存"
+  },
   "toolbar": {
     "selectMode": "选择(移动/调整大小)",
     "drawMode": "绘制(拖拽创建)",

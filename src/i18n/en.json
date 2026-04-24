@@ -103,6 +103,19 @@
       "rightClickSelectsWord": "Right click selects word"
     }
   },
+  "toast": {
+    "terminalCreated": "Terminal created",
+    "terminalError": "Failed to create terminal",
+    "wireConnected": "Wire connected",
+    "wireRemoved": "Wire removed",
+    "workspaceSwitched": "Switched to \"{{name}}\"",
+    "workspaceForked": "Forked to \"{{name}}\"",
+    "workspaceCreated": "Workspace created",
+    "workspaceDeleted": "Workspace deleted",
+    "workspaceError": "Failed to switch workspace",
+    "noteSaved": "Note saved",
+    "settingsSaved": "Settings saved"
+  },
   "toolbar": {
     "selectMode": "Select (move/resize terminals)",
     "drawMode": "Draw (drag to create terminal)",

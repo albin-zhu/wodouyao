@@ -7,6 +7,8 @@ import { useNoteStore } from "../store/noteStore";
 import type { Workspace, WorkspaceTerminalLayout, WorkspaceWireLayout, WorkspaceNoteLayout } from "../types/workspace";
 import { saveWorkspace } from "../services/tauriCommands";
 import { generateId } from "../utils/id";
+import { toast } from "../store/toastStore";
+import i18n from "../i18n";
 
 export function useForkWorkspace() {
   const { currentWorkspace, loadWorkspaceList, loadWorkspaceById } = useWorkspaceStore();
@@ -60,9 +62,8 @@ export function useForkWorkspace() {
       };
       await saveWorkspace(forked);
       await loadWorkspaceList();
-      // loadWorkspaceById requires applyWorkspace — dispatch a custom event
-      // so App.tsx (which owns applyWorkspace) handles the actual switch.
       window.dispatchEvent(new CustomEvent("wodouyao:fork-workspace", { detail: forkedId }));
+      toast(i18n.t("toast.workspaceForked", { name: forked.name }), "success", 2500);
     },
     [currentWorkspace, getTerminals, wiresMap, getNotes, panX, panY, zoom, gridVisible, gridSize, loadWorkspaceList, loadWorkspaceById]
   );

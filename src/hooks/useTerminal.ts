@@ -5,6 +5,8 @@ import { useWorkspaceStore } from "../store/workspaceStore";
 import { createTerminal, destroyTerminal } from "../services/tauriCommands";
 import { generateId } from "../utils/id";
 import { DEFAULT_COLS, DEFAULT_ROWS } from "../utils/constants";
+import { toast } from "../store/toastStore";
+import i18n from "../i18n";
 import type { TerminalNode, TerminalTheme, TerminalRole } from "../types/terminal";
 
 export interface SpawnOptions {
@@ -64,8 +66,10 @@ export function useTerminal() {
           cwd,
           fast_start: options?.fastStart ?? false,
         });
+        toast(i18n.t("toast.terminalCreated"), "success", 2000);
       } catch (err) {
         console.error("[spawn] createTerminal failed:", err);
+        toast(i18n.t("toast.terminalError"), "error");
       }
 
       return terminal;

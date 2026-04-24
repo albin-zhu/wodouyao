@@ -8,6 +8,8 @@ import {
   destroyTerminal,
 } from "../services/tauriCommands";
 import { generateId } from "../utils/id";
+import { toast } from "./toastStore";
+import i18n from "../i18n";
 
 interface WorkspaceStore {
   currentWorkspace: WorkspaceMeta | null;
@@ -106,9 +108,11 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         currentWorkspaceCwd: ws.cwd ?? null,
         loading: false,
       });
+      toast(i18n.t("toast.workspaceSwitched", { name: ws.name }), "info", 2500);
     } catch (e) {
       console.error("Failed to load workspace:", e);
       set({ loading: false });
+      toast(i18n.t("toast.workspaceError"), "error");
     }
   },
 
@@ -136,6 +140,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     try {
       await saveWorkspace(ws);
       await get().loadWorkspaceList();
+      toast(i18n.t("toast.workspaceCreated"), "success", 2000);
       return id;
     } catch (e) {
       console.error("Failed to create workspace:", e);
@@ -198,6 +203,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         set({ currentWorkspace: null });
       }
       await get().loadWorkspaceList();
+      toast(i18n.t("toast.workspaceDeleted"), "warning", 3000);
     } catch (e) {
       console.error("Failed to delete workspace:", e);
     }

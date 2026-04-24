@@ -8,6 +8,8 @@ import {
   type WireIpc,
 } from "../services/tauriCommands";
 import { useWorkspaceStore } from "./workspaceStore";
+import { toast } from "./toastStore";
+import i18n from "../i18n";
 
 interface WireStore {
   wires: Map<string, Wire>;
@@ -57,6 +59,7 @@ export const useWireStore = create<WireStore>((set, get) => ({
       const next = new Map(get().wires);
       next.set(wire.id, wire);
       set({ wires: next });
+      toast(i18n.t("toast.wireConnected"), "info", 2000);
       return wire;
     } catch (e) {
       console.error("wireStore.addWire failed:", e);
