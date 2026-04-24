@@ -244,7 +244,7 @@ export default function WireLayer() {
                     y={midY - 12 / zoom + 4 / zoom}
                     textAnchor="middle"
                     fontSize={10 / zoom}
-                    fill="white"
+                    fill="var(--color-surface)"
                   >
                     ×
                   </text>

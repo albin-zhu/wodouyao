@@ -46,7 +46,7 @@ export default function PasteConfirmDialog({ text, onConfirm, onCancel }: PasteC
           background: "var(--color-surface)",
           border: "1px solid var(--color-border)",
           borderRadius: 8,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+          boxShadow: "var(--shadow-dropdown)",
           padding: 14,
           minWidth: 260,
           maxWidth: "100%",

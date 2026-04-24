@@ -108,7 +108,7 @@ function FileNodeImpl({ file }: FileNodeProps) {
         borderRadius: 8,
         background: "var(--color-surface)",
         border: `1px solid ${accent}66`,
-        boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+        boxShadow: "var(--shadow-panel)",
         pointerEvents: "auto",
         overflow: "hidden",
       }}

@@ -82,10 +82,20 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   },
 
   loadWorkspaceById: async (id, applyWorkspace) => {
+    // Monotonic switch token: if another switch starts before this one
+    // finishes, the stale one detects the mismatch and bails out before
+    // writing currentWorkspace/loading — preventing store corruption on
+    // rapid consecutive switches.
+    const token = Date.now() + Math.random();
+    (get() as any)._pendingSwitchToken = token;
+
     set({ loading: true });
     try {
       const ws = await loadWorkspace(id);
-      applyWorkspace(ws);
+      // Bail if a newer switch has started since we called loadWorkspace.
+      if ((get() as any)._pendingSwitchToken !== token) return;
+      await (applyWorkspace as (w: Workspace) => Promise<void> | void)(ws);
+      if ((get() as any)._pendingSwitchToken !== token) return;
       set({
         currentWorkspace: {
           id: ws.id,

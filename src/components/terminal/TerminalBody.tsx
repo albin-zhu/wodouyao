@@ -43,6 +43,11 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         timer = null;
+        // Skip when hidden (display:none on any ancestor makes offsetParent
+        // null and contentRect collapse to 0). Calling fit() in that state
+        // would send a ~0-column resize to the backend PTY, breaking TUI
+        // program layouts in the hidden workspace.
+        if (el.offsetParent === null) return;
         const term = termRef.current;
         if (!term) {
           fit();

@@ -19,7 +19,7 @@ export default function DrawPreview() {
         width: w,
         height: h,
         border: "2px dashed var(--color-accent)",
-        background: "rgba(122, 162, 247, 0.08)",
+        background: "color-mix(in srgb, var(--color-accent) 8%, transparent)",
         borderRadius: 8,
         pointerEvents: "none",
         zIndex: 999999,

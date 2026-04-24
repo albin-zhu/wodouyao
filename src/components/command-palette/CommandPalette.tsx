@@ -176,7 +176,7 @@ export default function CommandPalette() {
           position: "fixed",
           inset: 0,
           zIndex: 9998,
-          background: "rgba(0,0,0,0.4)",
+          background: "var(--overlay-backdrop)",
         }}
       />
       <div
@@ -190,7 +190,7 @@ export default function CommandPalette() {
           background: "var(--color-surface)",
           borderRadius: 12,
           border: "1px solid var(--color-border)",
-          boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
+          boxShadow: "var(--shadow-dropdown)",
           overflow: "hidden",
         }}
       >

@@ -72,7 +72,7 @@ function NoteNodeImpl({ note }: NoteNodeProps) {
         borderRadius: 8,
         background: `${note.color}1a`,
         border: `1px solid ${note.color}66`,
-        boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+        boxShadow: "var(--shadow-panel)",
         pointerEvents: "auto",
         overflow: "hidden",
       }}

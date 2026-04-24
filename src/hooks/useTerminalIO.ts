@@ -201,6 +201,10 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
   }, [opacity, isHdpi, terminalId, appTheme]);
 
   const fit = useCallback(() => {
+    const container = containerRef.current;
+    // Skip if the container is hidden (display:none on ancestor → offsetParent
+    // is null and FitAddon measures 0 cols/rows → PTY gets a damaging resize).
+    if (container && container.offsetParent === null) return;
     if (fitAddonRef.current && termRef.current) {
       try {
         fitAddonRef.current.fit();

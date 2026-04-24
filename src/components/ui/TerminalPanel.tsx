@@ -128,7 +128,7 @@ export default function TerminalPanel() {
           fontSize: 12,
           fontWeight: 600,
           cursor: "pointer",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+          boxShadow: "var(--shadow-panel)",
         }}
       >
         {"\u2630"} {terminals.length}
@@ -148,7 +148,7 @@ export default function TerminalPanel() {
         background: "var(--color-surface)",
         border: "1px solid var(--color-border)",
         borderRadius: 8,
-        boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+        boxShadow: "var(--shadow-dropdown)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",

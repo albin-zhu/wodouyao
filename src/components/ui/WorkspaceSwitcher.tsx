@@ -126,7 +126,7 @@ export default function WorkspaceSwitcher() {
             background: "var(--color-surface)",
             border: "1px solid var(--color-border)",
             borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            boxShadow: "var(--shadow-dropdown)",
             zIndex: 100,
             overflow: "hidden",
           }}
