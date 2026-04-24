@@ -9,7 +9,40 @@ import { registerXterm, unregisterXterm } from "../services/terminalRegistry";
 import { useTerminalStore } from "../store/terminalStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { getXtermThemeMap } from "../utils/terminalThemes";
+import { DEFAULT_TERMINAL_OPTIONS } from "../types/settings";
 import type { TerminalTheme } from "../types/terminal";
+import type { TerminalOptions } from "../types/settings";
+
+function toXtermOptions(opts: TerminalOptions, opacity: number, baseTheme: import("@xterm/xterm").ITheme) {
+  return {
+    fontSize: opts.font_size,
+    fontFamily: opts.font_family,
+    fontWeight: opts.font_weight as import("@xterm/xterm").FontWeight,
+    fontWeightBold: opts.font_weight_bold as import("@xterm/xterm").FontWeight,
+    lineHeight: opts.line_height,
+    letterSpacing: opts.letter_spacing,
+    cursorBlink: opts.cursor_blink,
+    cursorStyle: opts.cursor_style as "block" | "underline" | "bar",
+    cursorWidth: opts.cursor_width,
+    cursorInactiveStyle: opts.cursor_inactive_style as "outline" | "block" | "bar" | "underline" | "none",
+    scrollback: opts.scrollback,
+    scrollSensitivity: opts.scroll_sensitivity,
+    fastScrollSensitivity: opts.fast_scroll_sensitivity,
+    fastScrollModifier: opts.fast_scroll_modifier as "none" | "alt" | "ctrl" | "shift",
+    smoothScrollDuration: opts.smooth_scroll_duration,
+    customGlyphs: opts.custom_glyphs,
+    drawBoldTextInBrightColors: opts.draw_bold_text_in_bright_colors,
+    minimumContrastRatio: opts.minimum_contrast_ratio,
+    macOptionIsMeta: opts.mac_option_is_meta,
+    rightClickSelectsWord: opts.right_click_selects_word,
+    wordSeparator: opts.word_separator,
+    theme: {
+      ...baseTheme,
+      background: opacity < 1 ? "rgba(0, 0, 0, 0)" : baseTheme.background,
+    },
+    allowTransparency: opacity < 1,
+  };
+}
 
 export function useTerminalIO(terminalId: string, containerRef: React.RefObject<HTMLDivElement | null>) {
   const termRef = useRef<Terminal | null>(null);
@@ -18,7 +51,6 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
   const updateTerminal = useTerminalStore((s) => s.updateTerminal);
   const themeRef = useRef<TerminalTheme>("tokyonight");
 
-  // Read initial theme from store
   const initialTheme = useTerminalStore((s) => s.terminals.get(terminalId)?.theme ?? "tokyonight");
 
   // Single effect that handles attach + cleanup — works with React StrictMode
@@ -31,36 +63,10 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
     const baseTheme = xtermMap[initialTheme] ?? xtermMap.tokyonight;
     const settings = useSettingsStore.getState().settings;
     const opacity = settings?.terminal_opacity ?? 1;
-    const isHdpi = settings?.is_hdpi ?? true;
-    // When the user wants transparency, give xterm a fully-transparent
-    // background and let the TerminalBody container render the tinted color.
-    // The Canvas addon paints cell backgrounds opaquely even with
-    // allowTransparency, so fighting it per-cell is brittle; CSS compositing
-    // behind the canvas is reliable.
-    const xtermTheme =
-      opacity < 1
-        ? { ...baseTheme, background: "rgba(0, 0, 0, 0)" }
-        : baseTheme;
+    const opts = settings?.terminal_options ?? DEFAULT_TERMINAL_OPTIONS;
 
     const term = new Terminal({
-      cursorBlink: true,
-      // Treat the macOS Option key as Meta (Alt) in xterm. Without this,
-      // Option-key shortcuts in agents (claude, codex, vim, emacs) get
-      // swallowed by macOS's "insert special char" behavior.
-      macOptionIsMeta: true,
-      // Non-HDPI displays need beefier glyphs — bump the size and weight
-      // so strokes don't disappear into the pixel grid.
-      fontSize: isHdpi ? 13 : 14,
-      lineHeight: isHdpi ? 1.2 : 1.25,
-      letterSpacing: isHdpi ? 0 : 0.2,
-      fontWeight: isHdpi ? "normal" : 500,
-      fontWeightBold: isHdpi ? "bold" : 700,
-      fontFamily:
-        "'JetBrainsMono Nerd Font Mono', 'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Fira Code', 'Consolas', monospace",
-      theme: xtermTheme,
-      allowTransparency: opacity < 1,
-      // Custom OSC 8 hyperlink handler — bypasses xterm's built-in
-      // window.confirm() prompt which tauri-plugin-dialog would intercept.
+      ...toXtermOptions(opts, opacity, baseTheme),
       linkHandler: {
         activate: (_e, text) => {
           invoke("open_url", { url: text }).catch(console.error);
@@ -168,10 +174,9 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
     };
   }, [terminalId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // React to global opacity + HDPI + top-level theme changes — apply in
-  // place (no remount). xterm's setters swap theme/font live.
+  // React to opacity / terminal_options / top-level theme changes in-place.
   const opacity = useSettingsStore((s) => s.settings?.terminal_opacity ?? 1);
-  const isHdpi = useSettingsStore((s) => s.settings?.is_hdpi ?? true);
+  const terminalOptions = useSettingsStore((s) => s.settings?.terminal_options ?? DEFAULT_TERMINAL_OPTIONS);
   const appTheme = useSettingsStore((s) => s.settings?.theme ?? "system");
   useEffect(() => {
     const term = termRef.current;
@@ -181,24 +186,18 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
       const themeName = current?.theme ?? themeRef.current;
       const map = getXtermThemeMap();
       const base = map[themeName] ?? map.tokyonight;
-      term.options.theme = {
-        ...base,
-        background: opacity < 1 ? "rgba(0, 0, 0, 0)" : base.background,
-      };
-      term.options.fontSize = isHdpi ? 13 : 14;
-      term.options.lineHeight = isHdpi ? 1.2 : 1.25;
-      term.options.letterSpacing = isHdpi ? 0 : 0.2;
-      term.options.fontWeight = isHdpi ? "normal" : 500;
-      term.options.fontWeightBold = isHdpi ? "bold" : 700;
+      const opts = useSettingsStore.getState().settings?.terminal_options ?? DEFAULT_TERMINAL_OPTIONS;
+      const currentOpacity = useSettingsStore.getState().settings?.terminal_opacity ?? 1;
+      const applied = toXtermOptions(opts, currentOpacity, base);
+      Object.assign(term.options, applied);
       if (fitAddonRef.current) {
         try { fitAddonRef.current.fit(); } catch { /* ignore */ }
       }
     };
     reApply();
-    // Listen for system-theme flips dispatched by App.tsx.
     window.addEventListener("wd-theme-changed", reApply);
     return () => window.removeEventListener("wd-theme-changed", reApply);
-  }, [opacity, isHdpi, terminalId, appTheme]);
+  }, [opacity, terminalOptions, terminalId, appTheme]);
 
   const fit = useCallback(() => {
     const container = containerRef.current;
