@@ -12,17 +12,99 @@ import { useForkWorkspace } from "../../hooks/useForkWorkspace";
 import { useCanvasInteractionStore, type CanvasMode } from "../../store/canvasInteractionStore";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 
-const MODE_BUTTONS: { mode: CanvasMode; label: string; titleKey: string }[] = [
-  { mode: "select", label: "\u2190", titleKey: "toolbar.selectMode" },
-  { mode: "draw", label: "\u25AD", titleKey: "toolbar.drawMode" },
-  { mode: "wire", label: "\u2014", titleKey: "toolbar.wireMode" },
+const MODE_BUTTONS: { mode: CanvasMode; img: string; titleKey: string }[] = [
+  { mode: "select", img: "/icons/mode-select.png", titleKey: "toolbar.selectMode" },
+  { mode: "draw",   img: "/icons/mode-draw.png",   titleKey: "toolbar.drawMode"   },
+  { mode: "wire",   img: "/icons/mode-wire.png",    titleKey: "toolbar.wireMode"   },
 ];
 
-const AGENT_STYLES: Record<string, { bg: string; color: string; icon: string }> = {
-  claude: { bg: "color-mix(in srgb, var(--color-warning-alt) 13%, transparent)", color: "var(--color-warning-alt)", icon: "\u2726" },  // ✦
-  codex: { bg: "color-mix(in srgb, var(--color-success) 13%, transparent)", color: "var(--color-success)", icon: "\u25C8" },   // ◈
-  opencode: { bg: "color-mix(in srgb, var(--color-info) 13%, transparent)", color: "var(--color-info)", icon: "\u25C7" }, // ◇
+const AGENT_STYLES: Record<string, { bg: string; color: string; img?: string }> = {
+  claude:    { bg: "color-mix(in srgb, var(--color-warning-alt) 13%, transparent)", color: "var(--color-warning-alt)", img: "/icons/agent-claude.png" },
+  codex:     { bg: "color-mix(in srgb, var(--color-success) 13%, transparent)",     color: "var(--color-success)",     img: "/icons/agent-codex.png"  },
+  opencode:  { bg: "color-mix(in srgb, var(--color-info) 13%, transparent)",        color: "var(--color-info)",        img: "/icons/agent-opencode.png" },
 };
+
+// A simple vertical divider between button groups
+function Divider() {
+  return (
+    <div style={{
+      width: 1,
+      height: 20,
+      background: "var(--color-border)",
+      flexShrink: 0,
+      margin: "0 2px",
+    }} />
+  );
+}
+
+// A square icon-only toolbar button
+function IconBtn({
+  src, alt, size = 18, active = false, activeAccent = false,
+  badge, onClick, title, children,
+}: {
+  src?: string; alt?: string; size?: number;
+  active?: boolean; activeAccent?: boolean;
+  badge?: React.ReactNode;
+  onClick?: () => void; title?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        position: "relative",
+        background: activeAccent
+          ? "color-mix(in srgb, var(--color-accent) 18%, transparent)"
+          : active
+          ? "var(--color-surface-alt)"
+          : "none",
+        border: "none",
+        borderRadius: 6,
+        cursor: "pointer",
+        width: 30,
+        height: 30,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 0,
+        flexShrink: 0,
+        color: active || activeAccent ? "var(--color-accent)" : "var(--color-text-muted)",
+      }}
+    >
+      {src ? (
+        <img
+          src={src}
+          alt={alt ?? ""}
+          width={size}
+          height={size}
+          style={{
+            display: "block",
+            opacity: active || activeAccent ? 1 : 0.7,
+          }}
+        />
+      ) : children}
+      {badge && (
+        <span style={{
+          position: "absolute",
+          top: 2, right: 2,
+          background: "var(--color-accent)",
+          color: "var(--color-bg-alt)",
+          fontSize: 9,
+          fontWeight: 700,
+          borderRadius: 6,
+          padding: "0 3px",
+          lineHeight: "13px",
+          minWidth: 12,
+          textAlign: "center",
+          pointerEvents: "none",
+        }}>
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
 
 export default function Toolbar() {
   const { t } = useTranslation();
@@ -58,19 +140,30 @@ export default function Toolbar() {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        // Reserve space on the left for the macOS traffic-light buttons
-        // (Overlay title bar style; they sit at ~12px from the left edge).
-        padding: "0 16px 0 80px",
+        padding: "0 12px 0 80px",
         background: "var(--color-surface)",
         borderBottom: "1px solid var(--color-border)",
         zIndex: 20,
         flexShrink: 0,
+        gap: 0,
       }}
     >
-      <div data-tauri-drag-region style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span data-tauri-drag-region style={{ color: "var(--color-accent)", fontWeight: 600, fontSize: 14 }}>Wodouyao</span>
+      {/* ── Left: brand + workspace + fork + modes ─────────────────────────── */}
+      <div data-tauri-drag-region style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span
+          data-tauri-drag-region
+          style={{ color: "var(--color-accent)", fontWeight: 700, fontSize: 13, letterSpacing: 0.3, marginRight: 2 }}
+        >
+          Wodouyao
+        </span>
+
         <WorkspaceSwitcher />
-        <button
+
+        <IconBtn
+          src="/icons/fork.png"
+          alt={t("toolbar.fork")}
+          size={15}
+          title={t("toolbar.forkTitle")}
           onClick={() => {
             const name = prompt(
               t("toolbar.forkPrompt", { name: currentWorkspace?.name ?? "Workspace" }),
@@ -78,62 +171,59 @@ export default function Toolbar() {
             );
             if (name !== null) forkWorkspace(name || undefined);
           }}
-          title={t("toolbar.forkTitle")}
-          style={{
-            background: "none",
-            border: "1px solid var(--color-border)",
-            color: "var(--color-text-muted)",
-            borderRadius: 4,
-            padding: "2px 8px",
-            fontSize: 11,
-            cursor: "pointer",
-          }}
-        >
-          {"\u29BE"} {t("toolbar.fork")}
-        </button>
+        />
 
-        {/* Mode toggle buttons */}
-        <div
-          style={{
-            display: "flex",
-            border: "1px solid var(--color-border)",
-            borderRadius: 6,
-            overflow: "hidden",
-            marginLeft: 4,
-          }}
-        >
-          {MODE_BUTTONS.map((btn) => (
+        <Divider />
+
+        {/* Mode toggle group */}
+        <div style={{
+          display: "flex",
+          border: "1px solid var(--color-border)",
+          borderRadius: 6,
+          overflow: "hidden",
+        }}>
+          {MODE_BUTTONS.map((btn, i) => (
             <button
               key={btn.mode}
               onClick={() => setMode(btn.mode)}
               title={t(btn.titleKey)}
               style={{
                 background: currentMode === btn.mode ? "var(--color-accent)" : "var(--color-surface)",
-                color: currentMode === btn.mode ? "var(--color-bg-alt)" : "var(--color-text-muted)",
                 border: "none",
-                padding: "4px 10px",
-                fontSize: 13,
-                fontWeight: 600,
+                borderRight: i < 2 ? "1px solid var(--color-border)" : "none",
+                padding: "0 9px",
+                height: 28,
                 cursor: "pointer",
-                borderRight: "1px solid var(--color-border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              {btn.label}
+              <img
+                src={btn.img}
+                alt={btn.mode}
+                width={15}
+                height={15}
+                style={{
+                  display: "block",
+                  opacity: currentMode === btn.mode ? 1 : 0.5,
+                  filter: currentMode === btn.mode
+                    ? "brightness(0) invert(1)"   // white icon on accent bg
+                    : "none",
+                }}
+              />
             </button>
           ))}
         </div>
       </div>
 
-      {/* Invisible drag strip in the centre — fills leftover space between
-          the two button groups. This is the main grab target since it has
-          no interactive children to eat mousedown. */}
-      <div
-        data-tauri-drag-region
-        style={{ flex: 1, height: "100%", cursor: "default" }}
-      />
+      {/* ── Centre: drag strip ──────────────────────────────────────────────── */}
+      <div data-tauri-drag-region style={{ flex: 1, height: "100%", cursor: "default" }} />
 
-      <div data-tauri-drag-region style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        {/* Quick Command Buttons */}
+      {/* ── Right: agents + actions + utilities ────────────────────────────── */}
+      <div data-tauri-drag-region style={{ display: "flex", alignItems: "center", gap: 4 }}>
+
+        {/* Quick command agent buttons */}
         {quickCommands.map((cmd) => {
           const agentKey = cmd.command?.toLowerCase().trim();
           const agentStyle = agentKey ? AGENT_STYLES[agentKey] : undefined;
@@ -152,24 +242,28 @@ export default function Toolbar() {
                 color: agentStyle?.color ?? "var(--color-text)",
                 border: `1px solid ${agentStyle?.color ?? "var(--color-border-strong)"}40`,
                 borderRadius: 6,
-                padding: "4px 10px",
+                padding: "0 8px",
+                height: 28,
                 fontSize: 11,
                 fontWeight: 600,
                 cursor: "pointer",
-                letterSpacing: 0.5,
+                letterSpacing: 0.3,
                 display: "flex",
                 alignItems: "center",
-                gap: 4,
+                gap: 5,
               }}
             >
-              {agentStyle && (
-                <span style={{ fontSize: 13 }}>{agentStyle.icon}</span>
+              {agentStyle?.img && (
+                <img src={agentStyle.img} width={14} height={14} style={{ display: "block" }} />
               )}
               {cmd.icon_label}
             </button>
           );
         })}
 
+        <Divider />
+
+        {/* + Terminal */}
         <button
           onClick={(e) => launchTerminal({ shiftKey: e.shiftKey })}
           title={
@@ -182,23 +276,31 @@ export default function Toolbar() {
             color: "var(--color-bg-alt)",
             border: "none",
             borderRadius: 6,
-            padding: "6px 14px",
+            padding: "0 12px",
+            height: 28,
             fontSize: 12,
             fontWeight: 600,
             cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
           }}
         >
+          <img src="/icons/add-terminal.png" width={13} height={13} style={{ display: "block", filter: "brightness(0) invert(1)" }} />
           {t("toolbar.addTerminal")}
         </button>
+
+        {/* + Note */}
         <button
           onClick={() => addNote()}
           title={t("toolbar.addNote", "New sticky note")}
           style={{
             background: "color-mix(in srgb, var(--color-warning) 13%, transparent)",
             color: "var(--color-warning)",
-            border: "1px solid color-mix(in srgb, var(--color-warning) 40%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--color-warning) 35%, transparent)",
             borderRadius: 6,
-            padding: "6px 12px",
+            padding: "0 10px",
+            height: 28,
             fontSize: 12,
             fontWeight: 600,
             cursor: "pointer",
@@ -206,153 +308,79 @@ export default function Toolbar() {
         >
           {t("toolbar.addNote")}
         </button>
+
+        {/* Board */}
         <button
           onClick={() => addBoard()}
           title="New task board"
           style={{
             background: "color-mix(in srgb, var(--color-accent) 13%, transparent)",
             color: "var(--color-accent)",
-            border: "1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--color-accent) 35%, transparent)",
             borderRadius: 6,
-            padding: "6px 12px",
+            padding: "0 10px",
+            height: 28,
             fontSize: 12,
             fontWeight: 600,
             cursor: "pointer",
           }}
         >
-          {"\u2713"} Board
+          Board
         </button>
-        <span style={{ color: "var(--color-text-muted)", fontSize: 11 }}>
-          {t("toolbar.ctrlK")}
-        </span>
 
-        {/* Teams button */}
-        <button
-          onClick={openTeamsDrawer}
+        <Divider />
+
+        {/* Teams */}
+        <IconBtn
+          src="/icons/teams.png"
+          alt={t("toolbar.teams")}
+          size={20}
           title={t("toolbar.teams")}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: "2px 4px",
-            lineHeight: 0,
-          }}
-        >
-          <img
-            src="/icons/teams.png"
-            alt={t("toolbar.teams")}
-            width={22}
-            height={22}
-            style={{ display: "block", opacity: 0.85 }}
-          />
-        </button>
+          onClick={openTeamsDrawer}
+        />
 
-        {/* Tasks button */}
-        <button
+        {/* Tasks */}
+        <IconBtn
+          src="/icons/tasks.png"
+          alt={t("toolbar.tasks")}
+          size={18}
+          title={t("toolbar.tasks")}
+          active={tasksActiveCount > 0}
           onClick={openTasksDrawer}
-          title={t("toolbar.tasksActive", { count: tasksActiveCount })}
-          style={{
-            position: "relative",
-            background: "none",
-            border: "1px solid var(--color-border)",
-            borderRadius: 4,
-            color: "var(--color-text)",
-            cursor: "pointer",
-            padding: "2px 8px",
-            fontSize: 12,
-            fontWeight: 600,
-            lineHeight: "20px",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-          }}
-        >
-          {"\u2713"} {t("toolbar.tasks")}
-          {tasksActiveCount > 0 && (
-            <span
-              style={{
-                background: "var(--color-accent)",
-                color: "var(--color-bg-alt)",
-                fontSize: 10,
-                fontWeight: 700,
-                borderRadius: 8,
-                padding: "0 5px",
-                lineHeight: "14px",
-                minWidth: 14,
-                textAlign: "center",
-              }}
-            >
-              {tasksActiveCount}
-            </span>
-          )}
-        </button>
+          badge={tasksActiveCount > 0 ? tasksActiveCount : undefined}
+        />
 
-        {/* Settings gear button */}
-        <button
-          onClick={openDrawer}
+        {/* Settings */}
+        <IconBtn
+          src="/icons/settings.png"
+          alt={t("toolbar.settings")}
+          size={20}
           title={t("toolbar.settings")}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: "2px 4px",
-            lineHeight: 0,
-          }}
-        >
-          <img
-            src="/icons/settings.png"
-            alt={t("toolbar.settings")}
-            width={22}
-            height={22}
-            style={{ display: "block", opacity: 0.85 }}
-          />
-        </button>
+          onClick={openDrawer}
+        />
 
-        {/* Zen mode toggle: hides toolbar + canvas controls. Cmd+F11 / F11 to toggle back. */}
-        <button
-          onClick={toggleZenMode}
+        <Divider />
+
+        {/* Zen mode */}
+        <IconBtn
+          src="/icons/zen-mode.png"
+          alt={t("toolbar.zenMode")}
+          size={17}
           title={t("toolbar.zenMode")}
-          style={{
-            background: "none",
-            border: "1px solid var(--color-border)",
-            borderRadius: 4,
-            color: zenMode ? "var(--color-accent)" : "var(--color-text-muted)",
-            cursor: "pointer",
-            width: 26,
-            height: 26,
-            fontSize: 13,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          
-          {"⛶"}
-        </button>
+          activeAccent={zenMode}
+          onClick={toggleZenMode}
+        />
 
-        {/* Span all monitors: resize the window to the union bounding box
-            of every connected display. Cmd+Shift+Enter / Ctrl+Shift+Enter. */}
-        <button
+        {/* Span all monitors */}
+        <IconBtn
+          title={t("toolbar.spanMonitors")}
+          activeAccent={spanAllMonitors}
           onClick={() => {
             import("../../utils/spanMonitors").then((m) => m.toggleSpanAllMonitors());
           }}
-          title={t("toolbar.spanMonitors")}
-          style={{
-            background: "none",
-            border: "1px solid var(--color-border)",
-            borderRadius: 4,
-            color: spanAllMonitors ? "var(--color-accent)" : "var(--color-text-muted)",
-            cursor: "pointer",
-            width: 26,
-            height: 26,
-            fontSize: 13,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
         >
-          {"⫿"}
-        </button>
+          <span style={{ fontSize: 14, lineHeight: 1 }}>{"⫿"}</span>
+        </IconBtn>
       </div>
     </div>
   );
