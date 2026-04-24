@@ -2,6 +2,10 @@
   "settings": {
     "title": "设置",
     "language": "语言",
+    "theme": "主题",
+    "themeSystem": "跟随系统",
+    "themeDark": "深色",
+    "themeLight": "浅色",
     "workspaceDir": "工作区目录",
     "workspaceDirPlaceholder": "未设置(系统默认)",
     "workspaceDirHint": "新终端将在此目录中打开",
@@ -28,7 +32,7 @@
     "bgFilePlaceholder": "/绝对路径 或 https://...",
     "browseFile": "浏览文件",
     "opacity": "窗口不透明度",
-    "opacityHint": "拖到 0 整个窗口就透明了，可以看见桌面。鼠标也会自动穿透；按 Cmd+Shift+F11（或 Ctrl+Shift+F11）覆盖。",
+    "opacityHint": "拖到 0 整个窗口就透明，可以看见桌面。",
     "terminalOpacity": "终端不透明度",
     "isHdpi": "HDPI / Retina 屏",
     "isHdpiHint": "在普通分辨率（1x）显示器上取消勾选，会用更粗的字体和连线，在 canvas 缩放后依然清晰。",
@@ -74,6 +78,7 @@
     "fullscreen": "全屏 (F11)",
     "exitFullscreen": "退出全屏 (F11)",
     "zenMode": "隐藏界面 (Cmd+F11 / F11)",
+    "spanMonitors": "横跨所有显示器 (Cmd+Shift+Enter / Ctrl+Shift+Enter)",
     "ctrlK": "Ctrl+K"
   },
   "terminal": {

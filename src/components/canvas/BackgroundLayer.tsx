@@ -2,12 +2,10 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../../store/settingsStore";
 import ShaderCanvas from "./ShaderCanvas";
 
-// Solid app background color. Behind it is the (possibly transparent)
-// Tauri webview, so when the user dials opacity below 1 the desktop
-// shows through. Above it sits any user-chosen background content
-// (image/video/url/shader).
-const BG_RGB = "19, 20, 27"; // #13141b
-
+// Solid app background color. Reads the live --color-bg-rgb CSS variable
+// so it updates when the user switches dark/light theme. Behind it is
+// the (possibly transparent) Tauri webview, so when the user dials
+// opacity below 1 the desktop shows through.
 export default function BackgroundLayer() {
   const bg = useSettingsStore((s) => s.settings?.background);
   if (!bg) return null;
@@ -74,7 +72,7 @@ export default function BackgroundLayer() {
       <div
         style={{
           ...fill,
-          background: `rgba(${BG_RGB}, ${opacity})`,
+          background: `rgba(var(--color-bg-rgb), ${opacity})`,
         }}
       />
       {/* Shader/image/video content. The slider is applied as a CSS alpha

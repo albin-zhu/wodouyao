@@ -187,9 +187,9 @@ export default function CommandPalette() {
           transform: "translateX(-50%)",
           width: 500,
           zIndex: 9999,
-          background: "#1f2335",
+          background: "var(--color-surface)",
           borderRadius: 12,
-          border: "1px solid #292e42",
+          border: "1px solid var(--color-border)",
           boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
           overflow: "hidden",
         }}
@@ -204,10 +204,10 @@ export default function CommandPalette() {
             style={{
               width: "100%",
               padding: "10px 12px",
-              background: "#13141b",
-              border: "1px solid #292e42",
+              background: "var(--color-bg)",
+              border: "1px solid var(--color-border)",
               borderRadius: 8,
-              color: "#c0caf5",
+              color: "var(--color-text)",
               fontSize: 14,
               outline: "none",
               fontFamily: "inherit",
@@ -227,20 +227,20 @@ export default function CommandPalette() {
               style={{
                 padding: "10px 16px",
                 cursor: "pointer",
-                background: i === selectedIndex ? "#292e42" : "transparent",
-                borderLeft: i === selectedIndex ? "2px solid #7aa2f7" : "2px solid transparent",
+                background: i === selectedIndex ? "var(--color-surface-alt)" : "transparent",
+                borderLeft: i === selectedIndex ? "2px solid var(--color-accent)" : "2px solid transparent",
               }}
             >
-              <div style={{ color: "#c0caf5", fontSize: 14 }}>{cmd.label}</div>
-              <div style={{ color: "#565f89", fontSize: 12 }}>{cmd.description}</div>
+              <div style={{ color: "var(--color-text)", fontSize: 14 }}>{cmd.label}</div>
+              <div style={{ color: "var(--color-text-muted)", fontSize: 12 }}>{cmd.description}</div>
             </div>
           ))}
         </div>
         <div
           style={{
             padding: "8px 16px",
-            borderTop: "1px solid #292e42",
-            color: "#565f89",
+            borderTop: "1px solid var(--color-border)",
+            color: "var(--color-text-muted)",
             fontSize: 11,
           }}
         >

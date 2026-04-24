@@ -80,7 +80,7 @@ export default function IntegrationsSection() {
           <div
             key={row.agent}
             style={{
-              background: "#13141b",
+              background: "var(--color-bg)",
               borderRadius: 6,
               padding: 10,
               marginBottom: 8,
@@ -97,7 +97,7 @@ export default function IntegrationsSection() {
               <div style={{ minWidth: 0 }}>
                 <div
                   style={{
-                    color: "#c0caf5",
+                    color: "var(--color-text)",
                     fontSize: 13,
                     display: "flex",
                     alignItems: "center",
@@ -110,8 +110,8 @@ export default function IntegrationsSection() {
                       fontSize: 10,
                       padding: "2px 6px",
                       borderRadius: 3,
-                      background: installed ? "#9ece6a33" : "#565f8933",
-                      color: installed ? "#9ece6a" : "#565f89",
+                      background: installed ? "color-mix(in srgb, var(--color-success) 20%, transparent)" : "color-mix(in srgb, var(--color-text-muted) 20%, transparent)",
+                      color: installed ? "var(--color-success)" : "var(--color-text-muted)",
                       textTransform: "uppercase",
                       letterSpacing: 0.5,
                     }}
@@ -121,7 +121,7 @@ export default function IntegrationsSection() {
                 </div>
                 <div
                   style={{
-                    color: "#565f89",
+                    color: "var(--color-text-muted)",
                     fontSize: 11,
                     fontFamily: "monospace",
                     marginTop: 2,
@@ -133,10 +133,10 @@ export default function IntegrationsSection() {
                   {row.target}
                 </div>
                 {row.docNote && (
-                  <div style={{ color: "#565f89", fontSize: 11, marginTop: 2 }}>
+                  <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: 2 }}>
                     {row.docNote}
                     {status?.doc_installed === false && installed && (
-                      <span style={{ color: "#f7768e" }}> (missing)</span>
+                      <span style={{ color: "var(--color-danger)" }}> (missing)</span>
                     )}
                   </div>
                 )}
@@ -146,8 +146,8 @@ export default function IntegrationsSection() {
                   disabled={isBusy}
                   onClick={() => onInstall(row.agent)}
                   style={{
-                    background: "#7aa2f7",
-                    color: "#1a1b26",
+                    background: "var(--color-accent)",
+                    color: "var(--color-bg-alt)",
                     border: "none",
                     borderRadius: 4,
                     padding: "4px 10px",
@@ -163,8 +163,8 @@ export default function IntegrationsSection() {
                     disabled={isBusy}
                     onClick={() => onUninstall(row.agent)}
                     style={{
-                      background: "#292e42",
-                      color: "#c0caf5",
+                      background: "var(--color-surface-alt)",
+                      color: "var(--color-text)",
                       border: "none",
                       borderRadius: 4,
                       padding: "4px 10px",
@@ -184,7 +184,7 @@ export default function IntegrationsSection() {
       {error && (
         <div
           style={{
-            color: "#f7768e",
+            color: "var(--color-danger)",
             fontSize: 11,
             fontFamily: "monospace",
             marginTop: 4,

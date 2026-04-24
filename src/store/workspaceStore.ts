@@ -28,14 +28,10 @@ interface WorkspaceStore {
   ) => Promise<void>;
   createWorkspace: (
     name: string,
-    buildWorkspace: () => Workspace
+    cwd?: string | null
   ) => Promise<string>;
   deleteWorkspace: (id: string) => Promise<void>;
-  renameWorkspace: (
-    id: string,
-    name: string,
-    buildWorkspace: () => Workspace
-  ) => Promise<void>;
+  renameWorkspace: (id: string, name: string) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
@@ -106,28 +102,38 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
   },
 
-  createWorkspace: async (name, buildWorkspace) => {
-    const ws = buildWorkspace();
-    ws.id = generateId();
-    ws.name = name;
-    ws.updated_at = Date.now();
-    ws.created_at = Date.now();
+  createWorkspace: async (name, cwd) => {
+    const id = generateId();
+    const now = Date.now();
+    // Save a BLANK workspace — no terminals, no notes, no wires.
+    // Stamping live entities from the current WS would contaminate the new
+    // one and is the root cause of cross-workspace leakage.
+    const ws: Workspace = {
+      id,
+      name,
+      cwd: cwd ?? undefined,
+      canvas: { pan_x: 0, pan_y: 0, zoom: 1, grid_visible: true, grid_size: 40 },
+      terminals: [],
+      wires: [],
+      tasks: [],
+      notes: [],
+      file_nodes: [],
+      task_boards: [],
+      created_at: now,
+      updated_at: now,
+    };
 
     try {
       await saveWorkspace(ws);
-      const meta: WorkspaceMeta = {
-        id: ws.id,
-        name: ws.name,
-        terminal_count: ws.terminals.length,
-        updated_at: ws.updated_at,
-      };
-      set({ currentWorkspace: meta });
       await get().loadWorkspaceList();
-      return ws.id;
+      return id;
     } catch (e) {
       console.error("Failed to create workspace:", e);
-      return ws.id;
+      return id;
     }
+    // Note: we do NOT set currentWorkspace here. The caller (WorkspaceSwitcher)
+    // must call loadWorkspaceById(id, applyWorkspace) to do a proper
+    // reconcile-switch, which isolates notes/canvas/wires from the old WS.
   },
 
   deleteWorkspace: async (id) => {
@@ -187,7 +193,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
   },
 
-  renameWorkspace: async (id, name, _buildWorkspace) => {
+  renameWorkspace: async (id, name) => {
     try {
       const ws = await loadWorkspace(id);
       ws.name = name;

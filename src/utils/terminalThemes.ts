@@ -127,3 +127,131 @@ export const ACCENT_COLORS = [
 
 export const DEFAULT_COLOR = "#7aa2f7";
 export const DEFAULT_THEME: TerminalTheme = "tokyonight";
+
+// Light-mode counterparts. Well-known official palettes where they exist
+// (Tokyo Night Light, Solarized Light); otherwise sensible inversions.
+// Darker ANSI colors so text stays legible on the pale backgrounds.
+export const TERMINAL_THEMES_LIGHT: Record<TerminalTheme, ITheme> = {
+  tokyonight: {
+    background: "#d5d6db",
+    foreground: "#343b58",
+    cursor: "#343b58",
+    selectionBackground: "#b6b9c7",
+    black: "#4c505e",
+    red: "#8c4351",
+    green: "#485e30",
+    yellow: "#8f5e15",
+    blue: "#34548a",
+    magenta: "#5a4a78",
+    cyan: "#0f4b6e",
+    white: "#343b58",
+    brightBlack: "#6c6e75",
+    brightRed: "#8c4351",
+    brightGreen: "#485e30",
+    brightYellow: "#8f5e15",
+    brightBlue: "#34548a",
+    brightMagenta: "#5a4a78",
+    brightCyan: "#0f4b6e",
+    brightWhite: "#343b58",
+  },
+  dracula: {
+    background: "#f8f8f2",
+    foreground: "#282a36",
+    cursor: "#282a36",
+    selectionBackground: "#bfbfbf",
+    black: "#000000",
+    red: "#cc4433",
+    green: "#388e3c",
+    yellow: "#b58900",
+    blue: "#4527a0",
+    magenta: "#c2185b",
+    cyan: "#00838f",
+    white: "#282a36",
+    brightBlack: "#44475a",
+    brightRed: "#d14",
+    brightGreen: "#4caf50",
+    brightYellow: "#c8a415",
+    brightBlue: "#5e35b1",
+    brightMagenta: "#d81b60",
+    brightCyan: "#00acc1",
+    brightWhite: "#1a1b1f",
+  },
+  nord: {
+    background: "#eceff4",
+    foreground: "#2e3440",
+    cursor: "#2e3440",
+    selectionBackground: "#d8dee9",
+    black: "#3b4252",
+    red: "#bf616a",
+    green: "#587539",
+    yellow: "#a17410",
+    blue: "#5e81ac",
+    magenta: "#b48ead",
+    cyan: "#2e8d9a",
+    white: "#2e3440",
+    brightBlack: "#4c566a",
+    brightRed: "#bf616a",
+    brightGreen: "#587539",
+    brightYellow: "#a17410",
+    brightBlue: "#5e81ac",
+    brightMagenta: "#b48ead",
+    brightCyan: "#2e8d9a",
+    brightWhite: "#2e3440",
+  },
+  monokai: {
+    background: "#fafafa",
+    foreground: "#272822",
+    cursor: "#272822",
+    selectionBackground: "#c2c1b6",
+    black: "#000000",
+    red: "#d81b60",
+    green: "#558b2f",
+    yellow: "#a6760f",
+    blue: "#1565c0",
+    magenta: "#6a1b9a",
+    cyan: "#00838f",
+    white: "#272822",
+    brightBlack: "#75715e",
+    brightRed: "#e91e63",
+    brightGreen: "#689f38",
+    brightYellow: "#bf8f17",
+    brightBlue: "#1976d2",
+    brightMagenta: "#7b1fa2",
+    brightCyan: "#0097a7",
+    brightWhite: "#1a1a1a",
+  },
+  solarized: {
+    background: "#fdf6e3",
+    foreground: "#657b83",
+    cursor: "#586e75",
+    selectionBackground: "#eee8d5",
+    black: "#073642",
+    red: "#dc322f",
+    green: "#859900",
+    yellow: "#b58900",
+    blue: "#268bd2",
+    magenta: "#d33682",
+    cyan: "#2aa198",
+    white: "#eee8d5",
+    brightBlack: "#002b36",
+    brightRed: "#cb4b16",
+    brightGreen: "#586e75",
+    brightYellow: "#657b83",
+    brightBlue: "#839496",
+    brightMagenta: "#6c71c4",
+    brightCyan: "#93a1a1",
+    brightWhite: "#fdf6e3",
+  },
+};
+
+/**
+ * Pick the right xterm theme map based on the current resolved theme
+ * attribute (`html[data-theme]`). Resolving by DOM attribute avoids
+ * threading the theme through every hook.
+ */
+export function getXtermThemeMap(): Record<TerminalTheme, ITheme> {
+  const t = typeof document !== "undefined"
+    ? document.documentElement.dataset.theme
+    : null;
+  return t === "light" ? TERMINAL_THEMES_LIGHT : TERMINAL_THEMES;
+}

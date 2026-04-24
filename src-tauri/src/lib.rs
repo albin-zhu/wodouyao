@@ -88,9 +88,40 @@ fn open_url(url: String) -> Result<(), String> {
     open::that(&url).map_err(|e| e.to_string())
 }
 
+/// Force-enable font smoothing (AppleFontSmoothing = 2) for this app
+/// only. macOS 10.14+ disabled subpixel AA globally, which makes WebKit
+/// text look thin and ugly on non-Retina screens (1x MacBook external
+/// monitors, non-Retina MacBooks, scaled "more space" modes). Writing
+/// this preference scoped to our bundle id gets the old-style smoothing
+/// back without affecting anything else on the user's machine.
+#[cfg(target_os = "macos")]
+fn enable_macos_font_smoothing() {
+    let _ = std::process::Command::new("defaults")
+        .args([
+            "write",
+            "-g",
+            "com.wodouyao.app",
+            "AppleFontSmoothing",
+            "-int",
+            "2",
+        ])
+        .status();
+    let _ = std::process::Command::new("defaults")
+        .args([
+            "write",
+            "com.wodouyao.app",
+            "AppleFontSmoothing",
+            "-int",
+            "2",
+        ])
+        .status();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     hydrate_login_shell_env();
+    #[cfg(target_os = "macos")]
+    enable_macos_font_smoothing();
     let topology = WireTopology::new();
     let identities = IdentityRegistry::new();
     let team_registry = TeamRegistry::new();

@@ -11,7 +11,7 @@ import { useWorkspaceStore } from "./workspaceStore";
 
 const DEFAULT_NOTE_WIDTH = 240;
 const DEFAULT_NOTE_HEIGHT = 160;
-const DEFAULT_NOTE_COLOR = "#e0af68";
+const DEFAULT_NOTE_COLOR = "var(--color-warning)";
 
 function fromIpc(n: NoteIpc): NoteNode {
   return {

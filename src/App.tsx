@@ -31,9 +31,8 @@ export default function App() {
   useWiresSync();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const zenMode = useCanvasStore((s) => s.zenMode);
-  const clickThroughOverride = useCanvasStore((s) => s.clickThroughOverride);
-  const bgOpacity = useSettingsStore((s) => s.settings?.background?.opacity ?? 1);
   const isHdpi = useSettingsStore((s) => s.settings?.is_hdpi ?? true);
+  const theme = useSettingsStore((s) => s.settings?.theme ?? "system");
 
   // Toggle body class so global.css applies the non-HDPI font smoothing
   // and border-snap rules. Cheaper than re-rendering every component.
@@ -41,22 +40,31 @@ export default function App() {
     document.body.classList.toggle("wd-no-hdpi", !isHdpi);
   }, [isHdpi]);
 
-  // Click-through: when window is fully transparent, mouse events fall
-  // through to the desktop. Manual override (Cmd+Shift+F11) wins over auto.
+  // Theme: flip html[data-theme] and mirror to localStorage so the FOUC
+  // bootstrap script in index.html has an up-to-date value on next launch.
+  // "system" subscribes to prefers-color-scheme so the app flips live when
+  // the user changes macOS Appearance in System Settings.
   useEffect(() => {
-    const wantPassthrough =
-      clickThroughOverride !== null
-        ? clickThroughOverride
-        : bgOpacity === 0;
-    let cancelled = false;
-    import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
-      if (cancelled) return;
-      getCurrentWindow().setIgnoreCursorEvents(wantPassthrough).catch(() => {});
-    });
-    return () => {
-      cancelled = true;
+    try { localStorage.setItem("wd-theme", theme); } catch (_) { /* ignore */ }
+
+    const apply = (resolved: "dark" | "light") => {
+      document.documentElement.dataset.theme = resolved;
+      // Broadcast so anything that reads computed CSS vars (BackgroundLayer,
+      // WireLayer, xterm themes) can re-read without React plumbing.
+      window.dispatchEvent(new CustomEvent("wd-theme-changed", { detail: resolved }));
     };
-  }, [bgOpacity, clickThroughOverride]);
+
+    if (theme === "dark" || theme === "light") {
+      apply(theme);
+      return;
+    }
+    // system
+    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    apply(mq.matches ? "light" : "dark");
+    const listener = (e: MediaQueryListEvent) => apply(e.matches ? "light" : "dark");
+    mq.addEventListener("change", listener);
+    return () => mq.removeEventListener("change", listener);
+  }, [theme]);
 
   useEffect(() => {
     loadSettings();

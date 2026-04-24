@@ -17,9 +17,9 @@ const STATUS_GLYPH: Record<TaskStatus, string> = {
 };
 
 const STATUS_COLOR: Record<TaskStatus, string> = {
-  pending: "#565f89",
-  in_progress: "#7aa2f7",
-  completed: "#9ece6a",
+  pending: "var(--color-text-muted)",
+  in_progress: "var(--color-accent)",
+  completed: "var(--color-success)",
 };
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
@@ -57,7 +57,7 @@ function TaskRow({ task }: { task: Task }) {
         padding: "4px 8px",
         borderRadius: 4,
         cursor: "grab",
-        background: hovered ? "#292e42" : "transparent",
+        background: hovered ? "var(--color-surface-alt)" : "transparent",
         transition: "background 0.1s",
         position: "relative",
       }}
@@ -101,7 +101,7 @@ function TaskRow({ task }: { task: Task }) {
         style={{
           flex: 1,
           fontSize: 12,
-          color: task.status === "completed" ? "#565f89" : "#c0caf5",
+          color: task.status === "completed" ? "var(--color-text-muted)" : "var(--color-text)",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -132,7 +132,7 @@ function TaskRow({ task }: { task: Task }) {
           style={{
             background: "none",
             border: "none",
-            color: "#f7768e",
+            color: "var(--color-danger)",
             cursor: "pointer",
             fontSize: 10,
             padding: "0 2px",
@@ -231,8 +231,8 @@ function TaskBoardNodeImpl({ board }: Props) {
         display: "flex",
         flexDirection: "column",
         borderRadius: 10,
-        background: "#1a1b26",
-        border: "1px solid #7aa2f744",
+        background: "var(--color-bg-alt)",
+        border: "1px solid color-mix(in srgb, var(--color-accent) 27%, transparent)",
         boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
         pointerEvents: "auto",
         overflow: "hidden",
@@ -246,15 +246,15 @@ function TaskBoardNodeImpl({ board }: Props) {
           display: "flex",
           alignItems: "center",
           padding: "0 10px",
-          background: "#1f2335",
-          borderBottom: "1px solid #292e42",
+          background: "var(--color-surface)",
+          borderBottom: "1px solid var(--color-border)",
           cursor: "grab",
           flexShrink: 0,
           gap: 6,
           userSelect: "none",
         }}
       >
-        <span style={{ color: "#7aa2f7", fontSize: 13 }}>{"\u2713"}</span>
+        <span style={{ color: "var(--color-accent)", fontSize: 13 }}>{"\u2713"}</span>
         {editing ? (
           <input
             ref={inputRef}
@@ -274,10 +274,10 @@ function TaskBoardNodeImpl({ board }: Props) {
             }}
             style={{
               flex: 1,
-              background: "#13141b",
-              border: "1px solid #7aa2f7",
+              background: "var(--color-bg)",
+              border: "1px solid var(--color-accent)",
               borderRadius: 4,
-              color: "#c0caf5",
+              color: "var(--color-text)",
               fontSize: 12,
               fontWeight: 600,
               padding: "2px 6px",
@@ -294,7 +294,7 @@ function TaskBoardNodeImpl({ board }: Props) {
               flex: 1,
               fontSize: 13,
               fontWeight: 600,
-              color: "#c0caf5",
+              color: "var(--color-text)",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -303,7 +303,7 @@ function TaskBoardNodeImpl({ board }: Props) {
             {board.label}
           </span>
         )}
-        <span style={{ color: "#565f89", fontSize: 11, flexShrink: 0 }}>
+        <span style={{ color: "var(--color-text-muted)", fontSize: 11, flexShrink: 0 }}>
           {activeCount}/{totalCount}
         </span>
         {/* Wire anchor */}
@@ -315,8 +315,8 @@ function TaskBoardNodeImpl({ board }: Props) {
               width: 10,
               height: 10,
               borderRadius: "50%",
-              background: "#7aa2f7",
-              border: "2px solid #1f2335",
+              background: "var(--color-accent)",
+              border: "2px solid var(--color-surface)",
               cursor: "crosshair",
               flexShrink: 0,
             }}
@@ -330,7 +330,7 @@ function TaskBoardNodeImpl({ board }: Props) {
             style={{
               background: "none",
               border: "none",
-              color: "#565f89",
+              color: "var(--color-text-muted)",
               cursor: "pointer",
               fontSize: 12,
               padding: "0 2px",
@@ -347,7 +347,7 @@ function TaskBoardNodeImpl({ board }: Props) {
           display: "flex",
           gap: 2,
           padding: "4px 8px",
-          borderBottom: "1px solid #292e42",
+          borderBottom: "1px solid var(--color-border)",
           flexShrink: 0,
         }}
       >
@@ -357,9 +357,9 @@ function TaskBoardNodeImpl({ board }: Props) {
             onMouseDown={(e) => e.stopPropagation()}
             onClick={() => setFilter(f)}
             style={{
-              background: filter === f ? "#7aa2f7" : "transparent",
-              color: filter === f ? "#1a1b26" : "#565f89",
-              border: `1px solid ${filter === f ? "#7aa2f7" : "#292e42"}`,
+              background: filter === f ? "var(--color-accent)" : "transparent",
+              color: filter === f ? "var(--color-bg-alt)" : "var(--color-text-muted)",
+              border: `1px solid ${filter === f ? "var(--color-accent)" : "var(--color-surface-alt)"}`,
               borderRadius: 3,
               padding: "2px 8px",
               fontSize: 10,
@@ -383,7 +383,7 @@ function TaskBoardNodeImpl({ board }: Props) {
         onWheel={(e) => e.stopPropagation()}
       >
         {tasks.length === 0 ? (
-          <div style={{ color: "#565f89", fontSize: 11, padding: "8px", textAlign: "center" }}>
+          <div style={{ color: "var(--color-text-muted)", fontSize: 11, padding: "8px", textAlign: "center" }}>
             No tasks
           </div>
         ) : (
@@ -395,7 +395,7 @@ function TaskBoardNodeImpl({ board }: Props) {
       <div
         style={{
           padding: "6px 8px",
-          borderTop: "1px solid #292e42",
+          borderTop: "1px solid var(--color-border)",
           flexShrink: 0,
         }}
       >
@@ -408,11 +408,11 @@ function TaskBoardNodeImpl({ board }: Props) {
           style={{
             width: "100%",
             boxSizing: "border-box",
-            background: "#13141b",
-            border: "1px solid #292e42",
+            background: "var(--color-bg)",
+            border: "1px solid var(--color-border)",
             borderRadius: 5,
             padding: "5px 8px",
-            color: "#c0caf5",
+            color: "var(--color-text)",
             fontSize: 11,
             outline: "none",
           }}

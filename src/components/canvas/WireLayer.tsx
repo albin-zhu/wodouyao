@@ -11,7 +11,7 @@ import { useWorkspaceStore } from "../../store/workspaceStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import type { Team, Role } from "../../types/team";
 
-const DEFAULT_WIRE_STROKE = "#7aa2f7";
+const DEFAULT_WIRE_STROKE = "var(--color-accent)";
 
 interface WireStyle {
   stroke: string;
@@ -238,7 +238,7 @@ export default function WireLayer() {
                   style={{ cursor: "pointer" }}
                   opacity={0}
                 >
-                  <circle cx={midX} cy={midY - 12 / zoom} r={8 / zoom} fill="#f7768e" />
+                  <circle cx={midX} cy={midY - 12 / zoom} r={8 / zoom} fill="var(--color-danger)" />
                   <text
                     x={midX}
                     y={midY - 12 / zoom + 4 / zoom}
@@ -267,7 +267,7 @@ export default function WireLayer() {
               <path
                 d={path}
                 fill="none"
-                stroke="#7aa2f7"
+                stroke="var(--color-accent)"
                 strokeWidth={2 / zoom}
                 strokeDasharray={`${6 / zoom} ${4 / zoom}`}
                 opacity={0.6}
@@ -285,9 +285,9 @@ export default function WireLayer() {
           left: 0,
           top: 0,
           display: hoveredWire ? "block" : "none",
-          background: "#1f2335",
-          color: "#c0caf5",
-          border: "1px solid #292e42",
+          background: "var(--color-surface)",
+          color: "var(--color-text)",
+          border: "1px solid var(--color-border)",
           borderRadius: 4,
           padding: "4px 8px",
           fontSize: 11,
@@ -300,7 +300,7 @@ export default function WireLayer() {
         <div>
           {sourceName}  →  {targetName}
         </div>
-        <div style={{ color: "#565f89" }}>click to delete</div>
+        <div style={{ color: "var(--color-text-muted)" }}>click to delete</div>
       </div>
     </>
   );

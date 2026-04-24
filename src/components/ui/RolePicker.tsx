@@ -24,8 +24,8 @@ export default function RolePicker({ value, onChange, compact = false, allowNone
             title={meta.hint}
             style={{
               background: active ? `${meta.color}33` : "transparent",
-              color: active ? meta.color : "#565f89",
-              border: `1px solid ${active ? meta.color : "#3b4261"}`,
+              color: active ? meta.color : "var(--color-text-muted)",
+              border: `1px solid ${active ? meta.color : "var(--color-border-strong)"}`,
               borderRadius: 6,
               padding,
               fontSize: 11,

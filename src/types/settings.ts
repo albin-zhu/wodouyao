@@ -20,6 +20,8 @@ export interface EnvOverride {
   value: string;
 }
 
+export type ThemeMode = "system" | "dark" | "light";
+
 export interface AppSettings {
   default_shell_path: string | null;
   font_size: number;
@@ -43,4 +45,6 @@ export interface AppSettings {
    *  hairline borders, antialiased fonts, etc. When false, switch to
    *  thicker borders and subpixel-rendered text optimised for 1x screens. */
   is_hdpi: boolean;
+  /** UI colour theme. "system" follows the OS appearance live. */
+  theme: ThemeMode;
 }

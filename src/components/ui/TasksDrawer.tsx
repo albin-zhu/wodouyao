@@ -43,7 +43,7 @@ function TaskRow({ task }: { task: Task }) {
   const [hovered, setHovered] = useState(false);
 
   const owner = task.owner_term_id ? terminals.get(task.owner_term_id) : undefined;
-  const ownerColor = owner?.color ?? "#3b4261";
+  const ownerColor = owner?.color ?? "var(--color-border-strong)";
   const ownerName = owner?.name ?? (task.owner_term_id ? task.owner_term_id.slice(0, 8) : t("tasks.unowned"));
   const blockers = task.blocked_by ?? [];
   const isPulsing = task.status === "in_progress";
@@ -59,8 +59,8 @@ function TaskRow({ task }: { task: Task }) {
       onMouseLeave={() => setHovered(false)}
       style={{
         position: "relative",
-        background: "#13141b",
-        border: "1px solid #292e42",
+        background: "var(--color-bg)",
+        border: "1px solid var(--color-border)",
         borderRadius: 6,
         marginBottom: 6,
         padding: "8px 10px 8px 14px",
@@ -96,10 +96,10 @@ function TaskRow({ task }: { task: Task }) {
             background: "transparent",
             color:
               task.status === "completed"
-                ? "#9ece6a"
+                ? "var(--color-success)"
                 : task.status === "in_progress"
-                ? "#7aa2f7"
-                : "#565f89",
+                ? "var(--color-accent)"
+                : "var(--color-text-muted)",
             cursor: "pointer",
             fontSize: 12,
             lineHeight: 1,
@@ -111,7 +111,7 @@ function TaskRow({ task }: { task: Task }) {
         </button>
         <span
           style={{
-            color: task.status === "completed" ? "#565f89" : "#c0caf5",
+            color: task.status === "completed" ? "var(--color-text-muted)" : "var(--color-text)",
             fontSize: 12,
             flex: 1,
             textDecoration: task.status === "completed" ? "line-through" : "none",
@@ -132,7 +132,7 @@ function TaskRow({ task }: { task: Task }) {
             style={{
               background: "none",
               border: "none",
-              color: "#f7768e",
+              color: "var(--color-danger)",
               cursor: "pointer",
               fontSize: 11,
               padding: "0 4px",
@@ -145,7 +145,7 @@ function TaskRow({ task }: { task: Task }) {
       <div
         style={{
           marginTop: 4,
-          color: "#565f89",
+          color: "var(--color-text-muted)",
           fontSize: 10,
           display: "flex",
           gap: 8,
@@ -156,10 +156,10 @@ function TaskRow({ task }: { task: Task }) {
         <span style={{ color: ownerColor }}>{"\u25CF"} {ownerName}</span>
         <span>{timeAgo(task.created_at, t)}</span>
         {blockers.length > 0 && (
-          <span style={{ color: "#e0af68" }}>{t("tasks.blockedBy", { count: blockers.length })}</span>
+          <span style={{ color: "var(--color-warning)" }}>{t("tasks.blockedBy", { count: blockers.length })}</span>
         )}
         {(task.acceptance?.length ?? 0) > 0 && (
-          <span style={{ color: "#7dcfff" }}>
+          <span style={{ color: "var(--color-info)" }}>
             {"\u2713"} {task.acceptance.length}
           </span>
         )}
@@ -168,7 +168,7 @@ function TaskRow({ task }: { task: Task }) {
         <div
           style={{
             marginTop: 8,
-            color: "#a9b1d6",
+            color: "var(--color-text-dim)",
             fontSize: 11,
             whiteSpace: "pre-wrap",
             lineHeight: 1.5,
@@ -178,7 +178,7 @@ function TaskRow({ task }: { task: Task }) {
         </div>
       )}
       {expanded && task.acceptance && task.acceptance.length > 0 && (
-        <ul style={{ margin: "8px 0 0 18px", padding: 0, color: "#a9b1d6", fontSize: 11 }}>
+        <ul style={{ margin: "8px 0 0 18px", padding: 0, color: "var(--color-text-dim)", fontSize: 11 }}>
           {task.acceptance.map((a, i) => (
             <li key={i}>{a}</li>
           ))}
@@ -258,8 +258,8 @@ export default function TasksDrawer() {
           width: 360,
           height: "100vh",
           zIndex: 9000,
-          background: "#1f2335",
-          borderLeft: "1px solid #292e42",
+          background: "var(--color-surface)",
+          borderLeft: "1px solid var(--color-border)",
           boxShadow: "-8px 0 32px rgba(0,0,0,0.4)",
           display: "flex",
           flexDirection: "column",
@@ -273,13 +273,13 @@ export default function TasksDrawer() {
             alignItems: "center",
             justifyContent: "space-between",
             padding: "0 16px",
-            borderBottom: "1px solid #292e42",
+            borderBottom: "1px solid var(--color-border)",
             flexShrink: 0,
           }}
         >
-          <span style={{ color: "#c0caf5", fontWeight: 600, fontSize: 14 }}>
+          <span style={{ color: "var(--color-text)", fontWeight: 600, fontSize: 14 }}>
             {t("tasks.title")}
-            <span style={{ color: "#565f89", fontWeight: 400, marginLeft: 8 }}>
+            <span style={{ color: "var(--color-text-muted)", fontWeight: 400, marginLeft: 8 }}>
               {t("tasks.activeTotal", { active: activeCount, total: tasks.length })}
             </span>
           </span>
@@ -288,7 +288,7 @@ export default function TasksDrawer() {
             style={{
               background: "none",
               border: "none",
-              color: "#565f89",
+              color: "var(--color-text-muted)",
               cursor: "pointer",
               fontSize: 18,
               padding: "2px 6px",
@@ -298,7 +298,7 @@ export default function TasksDrawer() {
           </button>
         </div>
 
-        <div style={{ padding: "12px 14px", borderBottom: "1px solid #292e42", flexShrink: 0 }}>
+        <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>
           <input
             value={quickAdd}
             onChange={(e) => setQuickAdd(e.target.value)}
@@ -306,11 +306,11 @@ export default function TasksDrawer() {
             placeholder={t("tasks.addPlaceholder")}
             style={{
               width: "100%",
-              background: "#13141b",
-              border: "1px solid #292e42",
+              background: "var(--color-bg)",
+              border: "1px solid var(--color-border)",
               borderRadius: 6,
               padding: "8px 10px",
-              color: "#c0caf5",
+              color: "var(--color-text)",
               fontSize: 12,
               outline: "none",
               boxSizing: "border-box",
@@ -322,9 +322,9 @@ export default function TasksDrawer() {
                 key={f}
                 onClick={() => setFilter(f)}
                 style={{
-                  background: filter === f ? "#7aa2f7" : "transparent",
-                  color: filter === f ? "#1a1b26" : "#565f89",
-                  border: "1px solid " + (filter === f ? "#7aa2f7" : "#292e42"),
+                  background: filter === f ? "var(--color-accent)" : "transparent",
+                  color: filter === f ? "var(--color-bg-alt)" : "var(--color-text-muted)",
+                  border: "1px solid " + (filter === f ? "var(--color-accent)" : "var(--color-surface-alt)"),
                   borderRadius: 4,
                   padding: "3px 10px",
                   fontSize: 11,
@@ -340,7 +340,7 @@ export default function TasksDrawer() {
 
         <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
           {filtered.length === 0 ? (
-            <div style={{ color: "#565f89", fontSize: 12, lineHeight: 1.6 }}>
+            <div style={{ color: "var(--color-text-muted)", fontSize: 12, lineHeight: 1.6 }}>
               {t("tasks.emptyState")}
             </div>
           ) : (

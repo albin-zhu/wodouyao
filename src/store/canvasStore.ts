@@ -17,19 +17,20 @@ interface CanvasStore extends CanvasView {
   /** When true, hide all app chrome (toolbar, canvas controls) so only
    *  terminals/notes/wires/background show. Toggled by F11 / Cmd+F11. */
   zenMode: boolean;
-  /** User-controlled click-through override.
-   *   null  → auto: enabled when window opacity hits 0
-   *   true  → forced on
-   *   false → forced off */
-  clickThroughOverride: boolean | null;
+  /** When true, the window is sized + positioned to span every monitor.
+   *  Snapshot of pre-span bounds is kept on `prevWindowBounds` so the
+   *  next toggle restores the previous geometry. */
+  spanAllMonitors: boolean;
+  prevWindowBounds: { x: number; y: number; width: number; height: number } | null;
   setPan: (x: number, y: number) => void;
   adjustPan: (dx: number, dy: number) => void;
   setZoom: (zoom: number, centerX?: number, centerY?: number) => void;
   resetView: () => void;
   toggleZenMode: () => void;
-  /** Cycle override: null → false → true → null. The Cmd+Shift+F11 shortcut
-   *  is the escape hatch when click-through hides the UI from the cursor. */
-  toggleClickThrough: () => void;
+  setSpanAllMonitors: (
+    on: boolean,
+    prev: { x: number; y: number; width: number; height: number } | null
+  ) => void;
   /** Snapshot the current view under `outgoingId` (if non-null) and restore
    *  view for `incomingId` if one was previously snapshotted. Otherwise
    *  leaves the active view untouched (so a brand-new workspace inherits
@@ -45,7 +46,8 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
   gridSize: GRID_SIZE,
   workspaceViews: new Map(),
   zenMode: false,
-  clickThroughOverride: null,
+  spanAllMonitors: false,
+  prevWindowBounds: null,
 
   setPan: (x, y) => set({ panX: x, panY: y }),
 
@@ -70,17 +72,8 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
 
   toggleZenMode: () => set((state) => ({ zenMode: !state.zenMode })),
 
-  toggleClickThrough: () =>
-    set((state) => {
-      // Cycle: null (auto) → false (force off) → true (force on) → null
-      const next =
-        state.clickThroughOverride === null
-          ? false
-          : state.clickThroughOverride === false
-          ? true
-          : null;
-      return { clickThroughOverride: next };
-    }),
+  setSpanAllMonitors: (on, prev) =>
+    set({ spanAllMonitors: on, prevWindowBounds: prev }),
 
   switchTo: (incomingId, outgoingId) =>
     set((state) => {

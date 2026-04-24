@@ -43,14 +43,14 @@ export default function PasteConfirmDialog({ text, onConfirm, onCancel }: PasteC
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "#1f2335",
-          border: "1px solid #292e42",
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-border)",
           borderRadius: 8,
           boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
           padding: 14,
           minWidth: 260,
           maxWidth: "100%",
-          color: "#c0caf5",
+          color: "var(--color-text)",
           fontSize: 12,
           display: "flex",
           flexDirection: "column",
@@ -60,13 +60,13 @@ export default function PasteConfirmDialog({ text, onConfirm, onCancel }: PasteC
         <div style={{ fontWeight: 600, fontSize: 13 }}>
           Paste {totalLines} lines?
         </div>
-        <div style={{ color: "#565f89", fontSize: 11 }}>
+        <div style={{ color: "var(--color-text-muted)", fontSize: 11 }}>
           Each line may be executed in the terminal.
         </div>
         <div
           style={{
-            background: "#13141b",
-            border: "1px solid #292e42",
+            background: "var(--color-bg)",
+            border: "1px solid var(--color-border)",
             borderRadius: 4,
             padding: "6px 8px",
             fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
@@ -74,7 +74,7 @@ export default function PasteConfirmDialog({ text, onConfirm, onCancel }: PasteC
             maxHeight: 80,
             overflow: "hidden",
             whiteSpace: "pre",
-            color: "#c0caf5",
+            color: "var(--color-text)",
           }}
         >
           {previewLines.map((l, i) => (
@@ -90,7 +90,7 @@ export default function PasteConfirmDialog({ text, onConfirm, onCancel }: PasteC
             </div>
           ))}
           {hasMore && (
-            <div style={{ color: "#565f89" }}>… {totalLines - 3} more</div>
+            <div style={{ color: "var(--color-text-muted)" }}>… {totalLines - 3} more</div>
           )}
         </div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -98,9 +98,9 @@ export default function PasteConfirmDialog({ text, onConfirm, onCancel }: PasteC
             onClick={onCancel}
             style={{
               background: "none",
-              border: "1px solid #292e42",
+              border: "1px solid var(--color-border)",
               borderRadius: 4,
-              color: "#c0caf5",
+              color: "var(--color-text)",
               padding: "5px 12px",
               fontSize: 12,
               cursor: "pointer",
@@ -111,10 +111,10 @@ export default function PasteConfirmDialog({ text, onConfirm, onCancel }: PasteC
           <button
             onClick={onConfirm}
             style={{
-              background: "#7aa2f7",
-              border: "1px solid #7aa2f7",
+              background: "var(--color-accent)",
+              border: "1px solid var(--color-accent)",
               borderRadius: 4,
-              color: "#1a1b26",
+              color: "var(--color-bg-alt)",
               padding: "5px 12px",
               fontSize: 12,
               fontWeight: 600,

@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useCallback } from "react";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasStore } from "../../store/canvasStore";
 import { useWireStore } from "../../store/wireStore";
+import { useWorkspaceStore } from "../../store/workspaceStore";
 import { useTerminal } from "../../hooks/useTerminal";
 import { readTerminalBuffer } from "../../services/terminalRegistry";
 
@@ -11,10 +12,12 @@ export default function TerminalPanel() {
   const terminalsMap = useTerminalStore((s) => s.terminals);
   const bringToFront = useTerminalStore((s) => s.bringToFront);
   const zenMode = useCanvasStore((s) => s.zenMode);
-  const terminals = useMemo(
-    () => Array.from(terminalsMap.values()),
-    [terminalsMap]
-  );
+  const currentWsId = useWorkspaceStore((s) => s.currentWorkspace?.id ?? null);
+  const terminals = useMemo(() => {
+    const all = Array.from(terminalsMap.values());
+    if (currentWsId === null) return all;
+    return all.filter((t) => (t.workspaceId ?? currentWsId) === currentWsId);
+  }, [terminalsMap, currentWsId]);
   const { setPan } = useCanvasStore();
   const zoom = useCanvasStore((s) => s.zoom);
   const wiresMap = useWireStore((s) => s.wires);
@@ -89,13 +92,13 @@ export default function TerminalPanel() {
   const statusColor = (status: string) => {
     switch (status) {
       case "running":
-        return "#9ece6a";
+        return "var(--color-success)";
       case "terminated":
-        return "#565f89";
+        return "var(--color-text-muted)";
       case "error":
-        return "#f7768e";
+        return "var(--color-danger)";
       default:
-        return "#e0af68";
+        return "var(--color-warning)";
     }
   };
 
@@ -117,10 +120,10 @@ export default function TerminalPanel() {
           position: "fixed",
           ...posStyle,
           zIndex: 50,
-          background: "#1f2335",
-          border: "1px solid #292e42",
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-border)",
           borderRadius: 8,
-          color: "#7aa2f7",
+          color: "var(--color-accent)",
           padding: "6px 10px",
           fontSize: 12,
           fontWeight: 600,
@@ -142,8 +145,8 @@ export default function TerminalPanel() {
         zIndex: 50,
         width: 220,
         maxHeight: 320,
-        background: "#1f2335",
-        border: "1px solid #292e42",
+        background: "var(--color-surface)",
+        border: "1px solid var(--color-border)",
         borderRadius: 8,
         boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
         display: "flex",
@@ -156,14 +159,14 @@ export default function TerminalPanel() {
       <div
         style={{
           padding: "8px 10px",
-          borderBottom: "1px solid #292e42",
+          borderBottom: "1px solid var(--color-border)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           cursor: "grab",
         }}
       >
-        <span style={{ color: "#c0caf5", fontSize: 12, fontWeight: 600 }}>
+        <span style={{ color: "var(--color-text)", fontSize: 12, fontWeight: 600 }}>
           Terminals ({terminals.length})
         </span>
         <button
@@ -171,7 +174,7 @@ export default function TerminalPanel() {
           style={{
             background: "none",
             border: "none",
-            color: "#565f89",
+            color: "var(--color-text-muted)",
             cursor: "pointer",
             fontSize: 14,
             padding: "0 4px",
@@ -190,10 +193,10 @@ export default function TerminalPanel() {
             placeholder="Filter..."
             style={{
               width: "100%",
-              background: "#13141b",
-              border: "1px solid #292e42",
+              background: "var(--color-bg)",
+              border: "1px solid var(--color-border)",
               borderRadius: 4,
-              color: "#c0caf5",
+              color: "var(--color-text)",
               padding: "4px 8px",
               fontSize: 11,
               outline: "none",
@@ -205,7 +208,7 @@ export default function TerminalPanel() {
       {/* Terminal list */}
       <div style={{ flex: 1, overflowY: "auto" }}>
         {filtered.length === 0 && (
-          <div style={{ padding: "12px 10px", color: "#565f89", fontSize: 11 }}>
+          <div style={{ padding: "12px 10px", color: "var(--color-text-muted)", fontSize: 11 }}>
             No terminals
           </div>
         )}
@@ -221,7 +224,7 @@ export default function TerminalPanel() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                borderBottom: "1px solid #1a1b26",
+                borderBottom: "1px solid var(--color-bg-alt)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
@@ -236,7 +239,7 @@ export default function TerminalPanel() {
                 />
                 <span
                   style={{
-                    color: "#c0caf5",
+                    color: "var(--color-text)",
                     fontSize: 12,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -248,7 +251,7 @@ export default function TerminalPanel() {
                 {wireCount > 0 && (
                   <span
                     style={{
-                      color: "#7aa2f7",
+                      color: "var(--color-accent)",
                       fontSize: 10,
                       flexShrink: 0,
                     }}
@@ -267,7 +270,7 @@ export default function TerminalPanel() {
                 style={{
                   background: "none",
                   border: "none",
-                  color: "#565f89",
+                  color: "var(--color-text-muted)",
                   cursor: "pointer",
                   fontSize: 11,
                   padding: "0 4px",
@@ -284,7 +287,7 @@ export default function TerminalPanel() {
                 style={{
                   background: "none",
                   border: "none",
-                  color: "#565f89",
+                  color: "var(--color-text-muted)",
                   cursor: "pointer",
                   fontSize: 11,
                   padding: "0 4px",

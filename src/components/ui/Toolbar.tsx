@@ -19,14 +19,13 @@ const MODE_BUTTONS: { mode: CanvasMode; label: string; titleKey: string }[] = [
 ];
 
 const AGENT_STYLES: Record<string, { bg: string; color: string; icon: string }> = {
-  claude: { bg: "#ff9e6420", color: "#ff9e64", icon: "\u2726" },  // ✦
-  codex: { bg: "#9ece6a20", color: "#9ece6a", icon: "\u25C8" },   // ◈
-  opencode: { bg: "#7dcfff20", color: "#7dcfff", icon: "\u25C7" }, // ◇
+  claude: { bg: "color-mix(in srgb, var(--color-warning-alt) 13%, transparent)", color: "var(--color-warning-alt)", icon: "\u2726" },  // ✦
+  codex: { bg: "color-mix(in srgb, var(--color-success) 13%, transparent)", color: "var(--color-success)", icon: "\u25C8" },   // ◈
+  opencode: { bg: "color-mix(in srgb, var(--color-info) 13%, transparent)", color: "var(--color-info)", icon: "\u25C7" }, // ◇
 };
 
 export default function Toolbar() {
   const { t } = useTranslation();
-  const terminalCount = useTerminalStore((s) => s.terminals.size);
   const anyMaximized = useTerminalStore((s) =>
     Array.from(s.terminals.values()).some((t) => !!t.prevBounds)
   );
@@ -45,6 +44,7 @@ export default function Toolbar() {
   const setMode = useCanvasInteractionStore((s) => s.setMode);
   const zenMode = useCanvasStore((s) => s.zenMode);
   const toggleZenMode = useCanvasStore((s) => s.toggleZenMode);
+  const spanAllMonitors = useCanvasStore((s) => s.spanAllMonitors);
 
   const quickCommands = settings?.quick_commands ?? [];
 
@@ -61,14 +61,14 @@ export default function Toolbar() {
         // Reserve space on the left for the macOS traffic-light buttons
         // (Overlay title bar style; they sit at ~12px from the left edge).
         padding: "0 16px 0 80px",
-        background: "#1f2335",
-        borderBottom: "1px solid #292e42",
+        background: "var(--color-surface)",
+        borderBottom: "1px solid var(--color-border)",
         zIndex: 20,
         flexShrink: 0,
       }}
     >
       <div data-tauri-drag-region style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span data-tauri-drag-region style={{ color: "#7aa2f7", fontWeight: 600, fontSize: 14 }}>Wodouyao</span>
+        <span data-tauri-drag-region style={{ color: "var(--color-accent)", fontWeight: 600, fontSize: 14 }}>Wodouyao</span>
         <WorkspaceSwitcher />
         <button
           onClick={() => {
@@ -81,8 +81,8 @@ export default function Toolbar() {
           title={t("toolbar.forkTitle")}
           style={{
             background: "none",
-            border: "1px solid #292e42",
-            color: "#565f89",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-text-muted)",
             borderRadius: 4,
             padding: "2px 8px",
             fontSize: 11,
@@ -91,15 +91,12 @@ export default function Toolbar() {
         >
           {"\u29BE"} {t("toolbar.fork")}
         </button>
-        <span style={{ color: "#565f89", fontSize: 12 }}>
-          {t("toolbar.terminalCount", { count: terminalCount })}
-        </span>
 
         {/* Mode toggle buttons */}
         <div
           style={{
             display: "flex",
-            border: "1px solid #292e42",
+            border: "1px solid var(--color-border)",
             borderRadius: 6,
             overflow: "hidden",
             marginLeft: 4,
@@ -111,14 +108,14 @@ export default function Toolbar() {
               onClick={() => setMode(btn.mode)}
               title={t(btn.titleKey)}
               style={{
-                background: currentMode === btn.mode ? "#7aa2f7" : "#1f2335",
-                color: currentMode === btn.mode ? "#1a1b26" : "#565f89",
+                background: currentMode === btn.mode ? "var(--color-accent)" : "var(--color-surface)",
+                color: currentMode === btn.mode ? "var(--color-bg-alt)" : "var(--color-text-muted)",
                 border: "none",
                 padding: "4px 10px",
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: "pointer",
-                borderRight: "1px solid #292e42",
+                borderRight: "1px solid var(--color-border)",
               }}
             >
               {btn.label}
@@ -126,6 +123,15 @@ export default function Toolbar() {
           ))}
         </div>
       </div>
+
+      {/* Invisible drag strip in the centre — fills leftover space between
+          the two button groups. This is the main grab target since it has
+          no interactive children to eat mousedown. */}
+      <div
+        data-tauri-drag-region
+        style={{ flex: 1, height: "100%", cursor: "default" }}
+      />
+
       <div data-tauri-drag-region style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {/* Quick Command Buttons */}
         {quickCommands.map((cmd) => {
@@ -142,9 +148,9 @@ export default function Toolbar() {
               }
               title={cmd.label}
               style={{
-                background: agentStyle?.bg ?? "#292e42",
-                color: agentStyle?.color ?? "#c0caf5",
-                border: `1px solid ${agentStyle?.color ?? "#3b4261"}40`,
+                background: agentStyle?.bg ?? "var(--color-surface-alt)",
+                color: agentStyle?.color ?? "var(--color-text)",
+                border: `1px solid ${agentStyle?.color ?? "var(--color-border-strong)"}40`,
                 borderRadius: 6,
                 padding: "4px 10px",
                 fontSize: 11,
@@ -172,8 +178,8 @@ export default function Toolbar() {
               : t("toolbar.newTerminalTitleDialog")
           }
           style={{
-            background: "#7aa2f7",
-            color: "#1a1b26",
+            background: "var(--color-accent)",
+            color: "var(--color-bg-alt)",
             border: "none",
             borderRadius: 6,
             padding: "6px 14px",
@@ -188,9 +194,9 @@ export default function Toolbar() {
           onClick={() => addNote()}
           title={t("toolbar.addNote", "New sticky note")}
           style={{
-            background: "#e0af6822",
-            color: "#e0af68",
-            border: "1px solid #e0af6866",
+            background: "color-mix(in srgb, var(--color-warning) 13%, transparent)",
+            color: "var(--color-warning)",
+            border: "1px solid color-mix(in srgb, var(--color-warning) 40%, transparent)",
             borderRadius: 6,
             padding: "6px 12px",
             fontSize: 12,
@@ -204,9 +210,9 @@ export default function Toolbar() {
           onClick={() => addBoard()}
           title="New task board"
           style={{
-            background: "#7aa2f722",
-            color: "#7aa2f7",
-            border: "1px solid #7aa2f766",
+            background: "color-mix(in srgb, var(--color-accent) 13%, transparent)",
+            color: "var(--color-accent)",
+            border: "1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)",
             borderRadius: 6,
             padding: "6px 12px",
             fontSize: 12,
@@ -216,7 +222,7 @@ export default function Toolbar() {
         >
           {"\u2713"} Board
         </button>
-        <span style={{ color: "#565f89", fontSize: 11 }}>
+        <span style={{ color: "var(--color-text-muted)", fontSize: 11 }}>
           {t("toolbar.ctrlK")}
         </span>
 
@@ -248,9 +254,9 @@ export default function Toolbar() {
           style={{
             position: "relative",
             background: "none",
-            border: "1px solid #292e42",
+            border: "1px solid var(--color-border)",
             borderRadius: 4,
-            color: "#c0caf5",
+            color: "var(--color-text)",
             cursor: "pointer",
             padding: "2px 8px",
             fontSize: 12,
@@ -265,8 +271,8 @@ export default function Toolbar() {
           {tasksActiveCount > 0 && (
             <span
               style={{
-                background: "#7aa2f7",
-                color: "#1a1b26",
+                background: "var(--color-accent)",
+                color: "var(--color-bg-alt)",
                 fontSize: 10,
                 fontWeight: 700,
                 borderRadius: 8,
@@ -308,9 +314,9 @@ export default function Toolbar() {
           title={t("toolbar.zenMode")}
           style={{
             background: "none",
-            border: "1px solid #292e42",
+            border: "1px solid var(--color-border)",
             borderRadius: 4,
-            color: zenMode ? "#7aa2f7" : "#565f89",
+            color: zenMode ? "var(--color-accent)" : "var(--color-text-muted)",
             cursor: "pointer",
             width: 26,
             height: 26,
@@ -322,6 +328,30 @@ export default function Toolbar() {
         >
           
           {"⛶"}
+        </button>
+
+        {/* Span all monitors: resize the window to the union bounding box
+            of every connected display. Cmd+Shift+Enter / Ctrl+Shift+Enter. */}
+        <button
+          onClick={() => {
+            import("../../utils/spanMonitors").then((m) => m.toggleSpanAllMonitors());
+          }}
+          title={t("toolbar.spanMonitors")}
+          style={{
+            background: "none",
+            border: "1px solid var(--color-border)",
+            borderRadius: 4,
+            color: spanAllMonitors ? "var(--color-accent)" : "var(--color-text-muted)",
+            cursor: "pointer",
+            width: 26,
+            height: 26,
+            fontSize: 13,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {"⫿"}
         </button>
       </div>
     </div>

@@ -6,11 +6,11 @@ interface TerminalStatusBadgeProps {
 }
 
 const STATUS_COLORS: Record<TerminalStatus, string> = {
-  starting: "#e0af68",
-  running: "#9ece6a",
-  idle: "#565f89",
-  error: "#f7768e",
-  terminated: "#3b4261",
+  starting: "var(--color-warning)",
+  running: "var(--color-success)",
+  idle: "var(--color-text-muted)",
+  error: "var(--color-danger)",
+  terminated: "var(--color-border-strong)",
 };
 
 export default function TerminalStatusBadge({ status }: TerminalStatusBadgeProps) {

@@ -8,11 +8,11 @@ import DrawPreview from "../canvas/DrawPreview";
 export default function TerminalLayer() {
   const terminalsMap = useTerminalStore((s) => s.terminals);
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspace?.id ?? null);
-  const terminals = useMemo(() => {
-    const all = Array.from(terminalsMap.values());
-    if (currentWorkspaceId === null) return all;
-    return all.filter((t) => (t.workspaceId ?? currentWorkspaceId) === currentWorkspaceId);
-  }, [terminalsMap, currentWorkspaceId]);
+  // Render ALL terminals regardless of workspace — we just hide the ones
+  // that belong to other workspaces using display:none. This keeps xterm
+  // instances alive (PTY output keeps flowing, scrollback is preserved)
+  // so switching back shows the terminal exactly as it was left.
+  const terminals = useMemo(() => Array.from(terminalsMap.values()), [terminalsMap]);
   const maximizedId = useMemo(
     () => terminals.find((t) => !!t.prevBounds)?.id ?? null,
     [terminals]
@@ -34,18 +34,27 @@ export default function TerminalLayer() {
         } as React.CSSProperties
       }
     >
-      {terminals.map((t) => (
-        <div
-          key={t.id}
-          style={
-            maximizedId !== null && t.id !== maximizedId
-              ? { visibility: "hidden", pointerEvents: "none" }
-              : undefined
-          }
-        >
-          <TerminalNode terminal={t} />
-        </div>
-      ))}
+      {terminals.map((t) => {
+        const inCurrentWs =
+          currentWorkspaceId === null ||
+          (t.workspaceId ?? currentWorkspaceId) === currentWorkspaceId;
+        const hidden = !inCurrentWs;
+        const maximizedHide = maximizedId !== null && t.id !== maximizedId && inCurrentWs;
+        return (
+          <div
+            key={t.id}
+            style={
+              hidden
+                ? { display: "none" }
+                : maximizedHide
+                ? { visibility: "hidden", pointerEvents: "none" }
+                : undefined
+            }
+          >
+            <TerminalNode terminal={t} />
+          </div>
+        );
+      })}
       <DrawPreview />
     </div>
   );

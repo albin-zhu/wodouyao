@@ -87,6 +87,8 @@ pub struct AppSettings {
     pub terminal_opacity: f64,
     #[serde(default = "default_is_hdpi")]
     pub is_hdpi: bool,
+    #[serde(default = "default_theme")]
+    pub theme: String,
 }
 
 fn default_terminal_opacity() -> f64 {
@@ -95,6 +97,10 @@ fn default_terminal_opacity() -> f64 {
 
 fn default_is_hdpi() -> bool {
     true
+}
+
+fn default_theme() -> String {
+    "system".into()
 }
 
 impl Default for AppSettings {
@@ -111,6 +117,7 @@ impl Default for AppSettings {
             env_overrides: Vec::new(),
             terminal_opacity: 1.0,
             is_hdpi: true,
+            theme: "system".into(),
             quick_commands: vec![
                 QuickCommand {
                     id: "claude".into(),

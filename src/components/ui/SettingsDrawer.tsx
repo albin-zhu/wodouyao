@@ -90,11 +90,11 @@ export default function SettingsDrawer() {
 
   const sectionStyle: React.CSSProperties = {
     padding: "16px 0",
-    borderBottom: "1px solid #292e42",
+    borderBottom: "1px solid var(--color-border)",
   };
 
   const labelStyle: React.CSSProperties = {
-    color: "#7aa2f7",
+    color: "var(--color-accent)",
     fontSize: 11,
     fontWeight: 600,
     textTransform: "uppercase",
@@ -123,8 +123,8 @@ export default function SettingsDrawer() {
           width: 320,
           height: "100vh",
           zIndex: 9000,
-          background: "#1f2335",
-          borderLeft: "1px solid #292e42",
+          background: "var(--color-surface)",
+          borderLeft: "1px solid var(--color-border)",
           boxShadow: "-8px 0 32px rgba(0,0,0,0.4)",
           display: "flex",
           flexDirection: "column",
@@ -139,11 +139,11 @@ export default function SettingsDrawer() {
             alignItems: "center",
             justifyContent: "space-between",
             padding: "0 16px",
-            borderBottom: "1px solid #292e42",
+            borderBottom: "1px solid var(--color-border)",
             flexShrink: 0,
           }}
         >
-          <span style={{ color: "#c0caf5", fontWeight: 600, fontSize: 14 }}>
+          <span style={{ color: "var(--color-text)", fontWeight: 600, fontSize: 14 }}>
             {t("settings.title")}
           </span>
           <button
@@ -151,7 +151,7 @@ export default function SettingsDrawer() {
             style={{
               background: "none",
               border: "none",
-              color: "#565f89",
+              color: "var(--color-text-muted)",
               cursor: "pointer",
               fontSize: 18,
               padding: "2px 6px",
@@ -177,10 +177,10 @@ export default function SettingsDrawer() {
               style={{
                 width: "100%",
                 padding: "8px 10px",
-                background: "#13141b",
-                border: "1px solid #292e42",
+                background: "var(--color-bg)",
+                border: "1px solid var(--color-border)",
                 borderRadius: 6,
-                color: "#c0caf5",
+                color: "var(--color-text)",
                 fontSize: 13,
                 outline: "none",
               }}
@@ -188,6 +188,41 @@ export default function SettingsDrawer() {
               <option value="en">English</option>
               <option value="zh">{"\u4E2D\u6587"}</option>
             </select>
+          </div>
+
+          {/* Theme */}
+          <div style={sectionStyle}>
+            <div style={labelStyle}>{t("settings.theme")}</div>
+            <div style={{ display: "flex", border: "1px solid var(--color-border)", borderRadius: 6, overflow: "hidden" }}>
+              {(["system", "dark", "light"] as const).map((v) => {
+                const active = (settings.theme ?? "system") === v;
+                const label =
+                  v === "system"
+                    ? t("settings.themeSystem")
+                    : v === "dark"
+                    ? t("settings.themeDark")
+                    : t("settings.themeLight");
+                return (
+                  <button
+                    key={v}
+                    onClick={() => updateSettings({ theme: v })}
+                    style={{
+                      flex: 1,
+                      background: active ? "var(--color-accent)" : "var(--color-bg)",
+                      color: active ? "var(--color-bg-alt)" : "var(--color-text-muted)",
+                      border: "none",
+                      padding: "8px 10px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      borderRight: v !== "light" ? "1px solid var(--color-border)" : "none",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Workspace Directory */}
@@ -205,10 +240,10 @@ export default function SettingsDrawer() {
                 style={{
                   flex: 1,
                   padding: "8px 10px",
-                  background: "#13141b",
-                  border: "1px solid #292e42",
+                  background: "var(--color-bg)",
+                  border: "1px solid var(--color-border)",
                   borderRadius: 6,
-                  color: "#c0caf5",
+                  color: "var(--color-text)",
                   fontSize: 13,
                   outline: "none",
                 }}
@@ -223,9 +258,9 @@ export default function SettingsDrawer() {
                 }}
                 title={t("settings.browseFolder")}
                 style={{
-                  background: "#292e42",
+                  background: "var(--color-surface-alt)",
                   border: "none",
-                  color: "#c0caf5",
+                  color: "var(--color-text)",
                   borderRadius: 6,
                   padding: "0 10px",
                   cursor: "pointer",
@@ -242,9 +277,9 @@ export default function SettingsDrawer() {
                   }}
                   title={t("settings.clear")}
                   style={{
-                    background: "#292e42",
+                    background: "var(--color-surface-alt)",
                     border: "none",
-                    color: "#565f89",
+                    color: "var(--color-text-muted)",
                     borderRadius: 6,
                     padding: "0 10px",
                     cursor: "pointer",
@@ -255,7 +290,7 @@ export default function SettingsDrawer() {
                 </button>
               )}
             </div>
-            <div style={{ color: "#565f89", fontSize: 11, marginTop: 4 }}>
+            <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: 4 }}>
               {t("settings.workspaceDirHint")}
             </div>
           </div>
@@ -267,9 +302,9 @@ export default function SettingsDrawer() {
               <button
                 onClick={() => handleFontSize(settings.font_size - 1)}
                 style={{
-                  background: "#292e42",
+                  background: "var(--color-surface-alt)",
                   border: "none",
-                  color: "#c0caf5",
+                  color: "var(--color-text)",
                   borderRadius: 4,
                   width: 28,
                   height: 28,
@@ -281,7 +316,7 @@ export default function SettingsDrawer() {
               </button>
               <span
                 style={{
-                  color: "#c0caf5",
+                  color: "var(--color-text)",
                   fontSize: 14,
                   minWidth: 30,
                   textAlign: "center",
@@ -292,9 +327,9 @@ export default function SettingsDrawer() {
               <button
                 onClick={() => handleFontSize(settings.font_size + 1)}
                 style={{
-                  background: "#292e42",
+                  background: "var(--color-surface-alt)",
                   border: "none",
-                  color: "#c0caf5",
+                  color: "var(--color-text)",
                   borderRadius: 4,
                   width: 28,
                   height: 28,
@@ -313,8 +348,8 @@ export default function SettingsDrawer() {
             <div
               style={{
                 display: "flex",
-                background: "#13141b",
-                border: "1px solid #292e42",
+                background: "var(--color-bg)",
+                border: "1px solid var(--color-border)",
                 borderRadius: 6,
                 padding: 2,
                 gap: 2,
@@ -333,8 +368,8 @@ export default function SettingsDrawer() {
                     }
                     style={{
                       flex: 1,
-                      background: active ? "#7aa2f7" : "transparent",
-                      color: active ? "#1a1b26" : "#c0caf5",
+                      background: active ? "var(--color-accent)" : "transparent",
+                      color: active ? "var(--color-bg-alt)" : "var(--color-text)",
                       border: "none",
                       borderRadius: 4,
                       padding: "6px 8px",
@@ -348,7 +383,7 @@ export default function SettingsDrawer() {
                 );
               })}
             </div>
-            <div style={{ color: "#565f89", fontSize: 11, marginTop: 6 }}>
+            <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: 6 }}>
               {t("settings.shiftClickHint")}
             </div>
           </div>
@@ -373,7 +408,7 @@ export default function SettingsDrawer() {
                 }
                 style={{ margin: 0 }}
               />
-              <span style={{ color: "#c0caf5", fontSize: 13 }}>
+              <span style={{ color: "var(--color-text)", fontSize: 13 }}>
                 {t("settings.autoSpawnTerminal")}
               </span>
             </label>
@@ -387,10 +422,10 @@ export default function SettingsDrawer() {
                 style={{
                   width: "100%",
                   padding: "8px 10px",
-                  background: "#13141b",
-                  border: "1px solid #292e42",
+                  background: "var(--color-bg)",
+                  border: "1px solid var(--color-border)",
                   borderRadius: 6,
-                  color: "#c0caf5",
+                  color: "var(--color-text)",
                   fontSize: 12,
                   fontFamily: "monospace",
                   outline: "none",
@@ -398,7 +433,7 @@ export default function SettingsDrawer() {
                 }}
               />
             )}
-            <div style={{ color: "#565f89", fontSize: 11, marginTop: 6 }}>
+            <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: 6 }}>
               {t("settings.wireToEmptyHint")}
             </div>
           </div>
@@ -414,10 +449,10 @@ export default function SettingsDrawer() {
               style={{
                 width: "100%",
                 padding: "8px 10px",
-                background: "#13141b",
-                border: "1px solid #292e42",
+                background: "var(--color-bg)",
+                border: "1px solid var(--color-border)",
                 borderRadius: 6,
-                color: "#c0caf5",
+                color: "var(--color-text)",
                 fontSize: 13,
                 outline: "none",
                 marginBottom: 8,
@@ -443,10 +478,10 @@ export default function SettingsDrawer() {
                   style={{
                     flex: 1,
                     padding: "8px 10px",
-                    background: "#13141b",
-                    border: "1px solid #292e42",
+                    background: "var(--color-bg)",
+                    border: "1px solid var(--color-border)",
                     borderRadius: 6,
-                    color: "#c0caf5",
+                    color: "var(--color-text)",
                     fontSize: 12,
                     fontFamily: "monospace",
                     outline: "none",
@@ -463,9 +498,9 @@ export default function SettingsDrawer() {
                     }}
                     title={t("settings.browseFile")}
                     style={{
-                      background: "#292e42",
+                      background: "var(--color-surface-alt)",
                       border: "none",
-                      color: "#c0caf5",
+                      color: "var(--color-text)",
                       borderRadius: 6,
                       padding: "0 10px",
                       cursor: "pointer",
@@ -488,10 +523,10 @@ export default function SettingsDrawer() {
                     style={{
                       flex: 1,
                       padding: "8px 10px",
-                      background: "#13141b",
-                      border: "1px solid #292e42",
+                      background: "var(--color-bg)",
+                      border: "1px solid var(--color-border)",
                       borderRadius: 6,
-                      color: "#c0caf5",
+                      color: "var(--color-text)",
                       fontSize: 13,
                       outline: "none",
                     }}
@@ -513,9 +548,9 @@ export default function SettingsDrawer() {
                     onClick={refreshShaders}
                     title={t("settings.bgShaderRefresh")}
                     style={{
-                      background: "#292e42",
+                      background: "var(--color-surface-alt)",
                       border: "none",
-                      color: "#c0caf5",
+                      color: "var(--color-text)",
                       borderRadius: 6,
                       padding: "0 10px",
                       cursor: "pointer",
@@ -529,7 +564,7 @@ export default function SettingsDrawer() {
                 <div
                   style={{
                     fontSize: 11,
-                    color: "#565f89",
+                    color: "var(--color-text-muted)",
                     marginBottom: 8,
                     lineHeight: 1.4,
                   }}
@@ -540,7 +575,7 @@ export default function SettingsDrawer() {
             )}
 
             <div>
-              <div style={{ color: "#565f89", fontSize: 11, marginBottom: 4 }}>
+              <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginBottom: 4 }}>
                 {t("settings.opacity")}: {(bg.opacity ?? 1).toFixed(2)}
               </div>
               <input
@@ -554,13 +589,13 @@ export default function SettingsDrawer() {
                 }
                 style={{ width: "100%" }}
               />
-              <div style={{ color: "#565f89", fontSize: 10, marginTop: 4, lineHeight: 1.4 }}>
+              <div style={{ color: "var(--color-text-muted)", fontSize: 10, marginTop: 4, lineHeight: 1.4 }}>
                 {t("settings.opacityHint")}
               </div>
             </div>
 
             <div style={{ marginTop: 12 }}>
-              <div style={{ color: "#565f89", fontSize: 11, marginBottom: 4 }}>
+              <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginBottom: 4 }}>
                 {t("settings.terminalOpacity")}: {(settings.terminal_opacity ?? 1).toFixed(2)}
               </div>
               <input
@@ -584,11 +619,11 @@ export default function SettingsDrawer() {
                 onChange={(e) => updateSettings({ is_hdpi: e.target.checked })}
                 style={{ cursor: "pointer" }}
               />
-              <label htmlFor="wd-hdpi" style={{ color: "#c0caf5", fontSize: 12, cursor: "pointer" }}>
+              <label htmlFor="wd-hdpi" style={{ color: "var(--color-text)", fontSize: 12, cursor: "pointer" }}>
                 {t("settings.isHdpi")}
               </label>
             </div>
-            <div style={{ color: "#565f89", fontSize: 10, marginTop: 4, lineHeight: 1.4 }}>
+            <div style={{ color: "var(--color-text-muted)", fontSize: 10, marginTop: 4, lineHeight: 1.4 }}>
               {t("settings.isHdpiHint")}
             </div>
           </div>
@@ -606,7 +641,7 @@ export default function SettingsDrawer() {
             </div>
             <div
               style={{
-                color: "#565f89",
+                color: "var(--color-text-muted)",
                 fontSize: 11,
                 lineHeight: 1.5,
                 marginBottom: 8,
@@ -639,10 +674,10 @@ export default function SettingsDrawer() {
                   spellCheck={false}
                   style={{
                     flex: "0 0 180px",
-                    background: "#13141b",
-                    border: "1px solid #292e42",
+                    background: "var(--color-bg)",
+                    border: "1px solid var(--color-border)",
                     borderRadius: 4,
-                    color: "#c0caf5",
+                    color: "var(--color-text)",
                     padding: "4px 8px",
                     fontSize: 12,
                     fontFamily:
@@ -664,10 +699,10 @@ export default function SettingsDrawer() {
                   spellCheck={false}
                   style={{
                     flex: 1,
-                    background: "#13141b",
-                    border: "1px solid #292e42",
+                    background: "var(--color-bg)",
+                    border: "1px solid var(--color-border)",
                     borderRadius: 4,
-                    color: "#c0caf5",
+                    color: "var(--color-text)",
                     padding: "4px 8px",
                     fontSize: 12,
                     fontFamily:
@@ -686,7 +721,7 @@ export default function SettingsDrawer() {
                   style={{
                     background: "none",
                     border: "none",
-                    color: "#f7768e",
+                    color: "var(--color-danger)",
                     cursor: "pointer",
                     fontSize: 13,
                     padding: "0 4px",
@@ -706,9 +741,9 @@ export default function SettingsDrawer() {
                 updateSettings({ env_overrides: next });
               }}
               style={{
-                background: "#292e42",
-                color: "#c0caf5",
-                border: "1px solid #3b4261",
+                background: "var(--color-surface-alt)",
+                color: "var(--color-text)",
+                border: "1px solid var(--color-border-strong)",
                 borderRadius: 4,
                 padding: "4px 12px",
                 fontSize: 11,
@@ -728,7 +763,7 @@ export default function SettingsDrawer() {
               <div
                 key={cmd.id}
                 style={{
-                  background: "#13141b",
+                  background: "var(--color-bg)",
                   borderRadius: 6,
                   padding: 10,
                   marginBottom: 8,
@@ -741,10 +776,10 @@ export default function SettingsDrawer() {
                       onChange={(e) => setEditLabel(e.target.value)}
                       placeholder={t("settings.label")}
                       style={{
-                        background: "#1f2335",
-                        border: "1px solid #292e42",
+                        background: "var(--color-surface)",
+                        border: "1px solid var(--color-border)",
                         borderRadius: 4,
-                        color: "#c0caf5",
+                        color: "var(--color-text)",
                         padding: "4px 8px",
                         fontSize: 13,
                         outline: "none",
@@ -755,10 +790,10 @@ export default function SettingsDrawer() {
                       onChange={(e) => setEditCommand(e.target.value)}
                       placeholder={t("settings.command")}
                       style={{
-                        background: "#1f2335",
-                        border: "1px solid #292e42",
+                        background: "var(--color-surface)",
+                        border: "1px solid var(--color-border)",
                         borderRadius: 4,
-                        color: "#c0caf5",
+                        color: "var(--color-text)",
                         padding: "4px 8px",
                         fontSize: 13,
                         fontFamily: "monospace",
@@ -769,8 +804,8 @@ export default function SettingsDrawer() {
                       <button
                         onClick={saveEditCmd}
                         style={{
-                          background: "#7aa2f7",
-                          color: "#1a1b26",
+                          background: "var(--color-accent)",
+                          color: "var(--color-bg-alt)",
                           border: "none",
                           borderRadius: 4,
                           padding: "4px 12px",
@@ -783,8 +818,8 @@ export default function SettingsDrawer() {
                       <button
                         onClick={() => setEditingCmd(null)}
                         style={{
-                          background: "#292e42",
-                          color: "#c0caf5",
+                          background: "var(--color-surface-alt)",
+                          color: "var(--color-text)",
                           border: "none",
                           borderRadius: 4,
                           padding: "4px 12px",
@@ -805,12 +840,12 @@ export default function SettingsDrawer() {
                     }}
                   >
                     <div>
-                      <div style={{ color: "#c0caf5", fontSize: 13 }}>
+                      <div style={{ color: "var(--color-text)", fontSize: 13 }}>
                         {cmd.label}
                       </div>
                       <div
                         style={{
-                          color: "#565f89",
+                          color: "var(--color-text-muted)",
                           fontSize: 11,
                           fontFamily: "monospace",
                         }}
@@ -824,7 +859,7 @@ export default function SettingsDrawer() {
                         style={{
                           background: "none",
                           border: "none",
-                          color: "#565f89",
+                          color: "var(--color-text-muted)",
                           cursor: "pointer",
                           fontSize: 12,
                           padding: "2px 8px",
@@ -838,7 +873,7 @@ export default function SettingsDrawer() {
                         style={{
                           background: "none",
                           border: "none",
-                          color: "#f7768e",
+                          color: "var(--color-danger)",
                           cursor: "pointer",
                           fontSize: 12,
                           padding: "2px 8px",
@@ -854,10 +889,10 @@ export default function SettingsDrawer() {
             <button
               onClick={addQuickCmd}
               style={{
-                background: "#13141b",
-                border: "1px dashed #292e42",
+                background: "var(--color-bg)",
+                border: "1px dashed var(--color-border)",
                 borderRadius: 6,
-                color: "#7aa2f7",
+                color: "var(--color-accent)",
                 cursor: "pointer",
                 padding: "8px 12px",
                 fontSize: 12,

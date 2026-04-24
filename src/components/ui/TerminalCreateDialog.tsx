@@ -121,8 +121,8 @@ export default function TerminalCreateDialog() {
       <div
         onKeyDown={handleKeyDown}
         style={{
-          background: "#1f2335",
-          border: "1px solid #292e42",
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-border)",
           borderRadius: 12,
           padding: 24,
           width: 420,
@@ -134,7 +134,7 @@ export default function TerminalCreateDialog() {
         <h3
           style={{
             margin: "0 0 20px 0",
-            color: "#c0caf5",
+            color: "var(--color-text)",
             fontSize: 16,
             fontWeight: 600,
           }}
@@ -158,19 +158,19 @@ export default function TerminalCreateDialog() {
                         name: a.name.charAt(0).toUpperCase() + a.name.slice(1),
                         color:
                           a.name === "claude"
-                            ? "#ff9e64"
+                            ? "var(--color-warning-alt)"
                             : a.name === "codex"
-                              ? "#9ece6a"
-                              : "#7dcfff",
+                              ? "var(--color-success)"
+                              : "var(--color-info)",
                         position: terminalCreateDefaults?.position,
                         size: terminalCreateDefaults?.size,
                       });
                       closeTerminalCreate();
                     }}
                     style={{
-                      background: "#292e42",
-                      color: "#c0caf5",
-                      border: "1px solid #3b4261",
+                      background: "var(--color-surface-alt)",
+                      color: "var(--color-text)",
+                      border: "1px solid var(--color-border-strong)",
                       borderRadius: 6,
                       padding: "6px 14px",
                       fontSize: 12,
@@ -221,8 +221,8 @@ export default function TerminalCreateDialog() {
         <label style={labelStyle}>Theme</label>
         <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
           {themeNames.map((t) => {
-            const bg = TERMINAL_THEMES[t].background ?? "#1a1b26";
-            const fg = TERMINAL_THEMES[t].foreground ?? "#a9b1d6";
+            const bg = TERMINAL_THEMES[t].background ?? "var(--color-bg-alt)";
+            const fg = TERMINAL_THEMES[t].foreground ?? "var(--color-text-dim)";
             return (
               <button
                 key={t}
@@ -232,8 +232,8 @@ export default function TerminalCreateDialog() {
                   color: fg,
                   border:
                     theme === t
-                      ? "2px solid #7aa2f7"
-                      : "1px solid #3b4261",
+                      ? "2px solid var(--color-accent)"
+                      : "1px solid var(--color-border-strong)",
                   borderRadius: 6,
                   padding: "4px 10px",
                   fontSize: 11,
@@ -314,7 +314,7 @@ export default function TerminalCreateDialog() {
           />
           <span>Fast startup (skip shell rc)</span>
         </label>
-        <div style={{ color: "#565f89", fontSize: 11, marginTop: -4 }}>
+        <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginTop: -4 }}>
           Shell opens instantly but loses your PATH / aliases / prompt.
         </div>
 
@@ -341,7 +341,7 @@ export default function TerminalCreateDialog() {
 
 const labelStyle: React.CSSProperties = {
   display: "block",
-  color: "#565f89",
+  color: "var(--color-text-muted)",
   fontSize: 12,
   marginBottom: 4,
   fontWeight: 500,
@@ -349,11 +349,11 @@ const labelStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  background: "#13141b",
-  border: "1px solid #292e42",
+  background: "var(--color-bg)",
+  border: "1px solid var(--color-border)",
   borderRadius: 6,
   padding: "8px 10px",
-  color: "#c0caf5",
+  color: "var(--color-text)",
   fontSize: 13,
   marginBottom: 14,
   outline: "none",
@@ -361,8 +361,8 @@ const inputStyle: React.CSSProperties = {
 };
 
 const cancelBtnStyle: React.CSSProperties = {
-  background: "#292e42",
-  color: "#c0caf5",
+  background: "var(--color-surface-alt)",
+  color: "var(--color-text)",
   border: "none",
   borderRadius: 6,
   padding: "8px 16px",
@@ -371,8 +371,8 @@ const cancelBtnStyle: React.CSSProperties = {
 };
 
 const createBtnStyle: React.CSSProperties = {
-  background: "#7aa2f7",
-  color: "#1a1b26",
+  background: "var(--color-accent)",
+  color: "var(--color-bg-alt)",
   border: "none",
   borderRadius: 6,
   padding: "8px 16px",

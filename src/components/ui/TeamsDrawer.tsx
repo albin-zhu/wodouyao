@@ -55,7 +55,7 @@ function TeamCard({
   return (
     <div
       style={{
-        background: "#13141b",
+        background: "var(--color-bg)",
         border: `1px solid ${team.palette.base}55`,
         borderRadius: 6,
         padding: 12,
@@ -80,7 +80,7 @@ function TeamCard({
           <span style={{ fontSize: 16 }}>{paletteEmoji(team.palette.key)}</span>
           <span
             style={{
-              color: "#c0caf5",
+              color: "var(--color-text)",
               fontSize: 14,
               fontWeight: 600,
             }}
@@ -94,8 +94,8 @@ function TeamCard({
               onClick={onArrange}
               title={t("teams.arrangeTitle")}
               style={{
-                background: "#292e42",
-                color: "#7aa2f7",
+                background: "var(--color-surface-alt)",
+                color: "var(--color-accent)",
                 border: "none",
                 borderRadius: 4,
                 padding: "3px 8px",
@@ -111,8 +111,8 @@ function TeamCard({
               onClick={onJoin}
               title={t("teams.joinTitle")}
               style={{
-                background: "#292e42",
-                color: "#9ece6a",
+                background: "var(--color-surface-alt)",
+                color: "var(--color-success)",
                 border: "none",
                 borderRadius: 4,
                 padding: "3px 8px",
@@ -126,8 +126,8 @@ function TeamCard({
           <button
             onClick={onDissolve}
             style={{
-              background: pendingDissolve ? "#f7768e" : "#292e42",
-              color: pendingDissolve ? "#1a1b26" : "#f7768e",
+              background: pendingDissolve ? "var(--color-danger)" : "var(--color-surface-alt)",
+              color: pendingDissolve ? "var(--color-bg-alt)" : "var(--color-danger)",
               border: "none",
               borderRadius: 4,
               padding: "3px 8px",
@@ -140,7 +140,7 @@ function TeamCard({
           </button>
         </div>
       </div>
-      <div style={{ color: "#565f89", fontSize: 11, marginBottom: 8 }}>
+      <div style={{ color: "var(--color-text-muted)", fontSize: 11, marginBottom: 8 }}>
         {t("teams.memberCount", { count: team.members.length })}
         {"  \u00B7  "}
         {t("teams.taskCount", { count: team.tasks.length })}
@@ -150,7 +150,7 @@ function TeamCard({
           <div key={role} style={{ marginTop: 6 }}>
             <div
               style={{
-                color: "#7aa2f7",
+                color: "var(--color-accent)",
                 fontSize: 10,
                 fontWeight: 600,
                 textTransform: "uppercase",
@@ -164,7 +164,7 @@ function TeamCard({
               <div
                 key={m.term_id}
                 style={{
-                  color: "#c0caf5",
+                  color: "var(--color-text)",
                   fontSize: 11,
                   fontFamily: "monospace",
                   paddingLeft: 6,
@@ -235,9 +235,9 @@ function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }
         onClick={() => setExpanded(true)}
         style={{
           width: "100%",
-          background: "#13141b",
-          color: "#7aa2f7",
-          border: "1px dashed #292e42",
+          background: "var(--color-bg)",
+          color: "var(--color-accent)",
+          border: "1px dashed var(--color-border)",
           borderRadius: 6,
           padding: "10px 12px",
           fontSize: 12,
@@ -254,8 +254,8 @@ function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }
   return (
     <div
       style={{
-        background: "#13141b",
-        border: "1px solid #292e42",
+        background: "var(--color-bg)",
+        border: "1px solid var(--color-border)",
         borderRadius: 6,
         padding: 12,
         marginBottom: 12,
@@ -263,7 +263,7 @@ function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }
     >
       <div
         style={{
-          color: "#c0caf5",
+          color: "var(--color-text)",
           fontSize: 12,
           fontWeight: 600,
           marginBottom: 8,
@@ -280,9 +280,9 @@ function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }
         style={{
           width: "100%",
           boxSizing: "border-box",
-          background: "#1a1b26",
-          color: "#c0caf5",
-          border: "1px solid #292e42",
+          background: "var(--color-bg-alt)",
+          color: "var(--color-text)",
+          border: "1px solid var(--color-border)",
           borderRadius: 4,
           padding: "6px 8px",
           fontSize: 12,
@@ -300,7 +300,7 @@ function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }
       >
         <label
           style={{
-            color: "#565f89",
+            color: "var(--color-text-muted)",
             fontSize: 11,
             minWidth: 56,
           }}
@@ -312,9 +312,9 @@ function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }
           onChange={(e) => setPalette(e.target.value)}
           style={{
             flex: 1,
-            background: "#1a1b26",
-            color: "#c0caf5",
-            border: "1px solid #292e42",
+            background: "var(--color-bg-alt)",
+            color: "var(--color-text)",
+            border: "1px solid var(--color-border)",
             borderRadius: 4,
             padding: "5px 6px",
             fontSize: 12,
@@ -334,7 +334,7 @@ function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }
           display: "flex",
           alignItems: "center",
           gap: 6,
-          color: canBeLead ? "#c0caf5" : "#565f89",
+          color: canBeLead ? "var(--color-text)" : "var(--color-text-muted)",
           fontSize: 11,
           marginBottom: 10,
           cursor: canBeLead ? "pointer" : "help",
@@ -348,7 +348,7 @@ function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }
         />
         As lead?
         {!canBeLead && (
-          <span style={{ color: "#565f89", marginLeft: 4 }}>
+          <span style={{ color: "var(--color-text-muted)", marginLeft: 4 }}>
             (needs focused terminal)
           </span>
         )}
@@ -356,7 +356,7 @@ function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }
       {error && (
         <div
           style={{
-            color: "#f7768e",
+            color: "var(--color-danger)",
             fontSize: 11,
             marginBottom: 8,
           }}
@@ -370,8 +370,8 @@ function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }
           disabled={busy}
           style={{
             flex: 1,
-            background: "#7aa2f7",
-            color: "#1a1b26",
+            background: "var(--color-accent)",
+            color: "var(--color-bg-alt)",
             border: "none",
             borderRadius: 4,
             padding: "6px 10px",
@@ -387,8 +387,8 @@ function NewTeamForm({ focusedTerminalId }: { focusedTerminalId: string | null }
           onClick={handleCancel}
           disabled={busy}
           style={{
-            background: "#292e42",
-            color: "#c0caf5",
+            background: "var(--color-surface-alt)",
+            color: "var(--color-text)",
             border: "none",
             borderRadius: 4,
             padding: "6px 10px",
@@ -479,8 +479,8 @@ export default function TeamsDrawer() {
           width: 320,
           height: "100vh",
           zIndex: 9000,
-          background: "#1f2335",
-          borderLeft: "1px solid #292e42",
+          background: "var(--color-surface)",
+          borderLeft: "1px solid var(--color-border)",
           boxShadow: "-8px 0 32px rgba(0,0,0,0.4)",
           display: "flex",
           flexDirection: "column",
@@ -494,11 +494,11 @@ export default function TeamsDrawer() {
             alignItems: "center",
             justifyContent: "space-between",
             padding: "0 16px",
-            borderBottom: "1px solid #292e42",
+            borderBottom: "1px solid var(--color-border)",
             flexShrink: 0,
           }}
         >
-          <span style={{ color: "#c0caf5", fontWeight: 600, fontSize: 14 }}>
+          <span style={{ color: "var(--color-text)", fontWeight: 600, fontSize: 14 }}>
             Teams
           </span>
           <button
@@ -506,7 +506,7 @@ export default function TeamsDrawer() {
             style={{
               background: "none",
               border: "none",
-              color: "#565f89",
+              color: "var(--color-text-muted)",
               cursor: "pointer",
               fontSize: 18,
               padding: "2px 6px",
@@ -520,7 +520,7 @@ export default function TeamsDrawer() {
           {teams.length === 0 ? (
             <div
               style={{
-                color: "#565f89",
+                color: "var(--color-text-muted)",
                 fontSize: 12,
                 lineHeight: 1.6,
               }}
@@ -530,8 +530,8 @@ export default function TeamsDrawer() {
                 style={{
                   marginTop: 8,
                   fontFamily: "monospace",
-                  color: "#7aa2f7",
-                  background: "#13141b",
+                  color: "var(--color-accent)",
+                  background: "var(--color-bg)",
                   padding: "6px 8px",
                   borderRadius: 4,
                 }}

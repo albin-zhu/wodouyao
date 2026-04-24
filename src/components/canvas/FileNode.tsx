@@ -17,11 +17,11 @@ interface FileNodeProps {
 const HEADER_H = 26;
 
 const KIND_ACCENT: Record<FileNodeType["kind"], string> = {
-  image: "#bb9af7",
-  text: "#7aa2f7",
-  video: "#f7768e",
-  directory: "#e0af68",
-  other: "#9ece6a",
+  image: "var(--color-accent-alt)",
+  text: "var(--color-accent)",
+  video: "var(--color-danger)",
+  directory: "var(--color-warning)",
+  other: "var(--color-success)",
 };
 
 const KIND_GLYPH: Record<FileNodeType["kind"], string> = {
@@ -106,7 +106,7 @@ function FileNodeImpl({ file }: FileNodeProps) {
         display: "flex",
         flexDirection: "column",
         borderRadius: 8,
-        background: "#1f2335",
+        background: "var(--color-surface)",
         border: `1px solid ${accent}66`,
         boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
         pointerEvents: "auto",
@@ -166,7 +166,7 @@ function FileNodeImpl({ file }: FileNodeProps) {
           overflow: "auto",
           padding: 6,
           fontSize: 11,
-          color: "#a9b1d6",
+          color: "var(--color-text-dim)",
           fontFamily:
             file.kind === "text"
               ? "'JetBrains Mono', Menlo, monospace"
@@ -195,9 +195,9 @@ function FileNodeImpl({ file }: FileNodeProps) {
         )}
         {file.kind === "text" && (
           previewError ? (
-            <span style={{ color: "#f7768e" }}>{previewError}</span>
+            <span style={{ color: "var(--color-danger)" }}>{previewError}</span>
           ) : textPreview === null ? (
-            <span style={{ color: "#565f89" }}>Loading...</span>
+            <span style={{ color: "var(--color-text-muted)" }}>Loading...</span>
           ) : (
             <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
               {textPreview}
@@ -206,27 +206,27 @@ function FileNodeImpl({ file }: FileNodeProps) {
         )}
         {file.kind === "directory" && (
           previewError ? (
-            <span style={{ color: "#f7768e" }}>{previewError}</span>
+            <span style={{ color: "var(--color-danger)" }}>{previewError}</span>
           ) : dirListing === null ? (
-            <span style={{ color: "#565f89" }}>Loading...</span>
+            <span style={{ color: "var(--color-text-muted)" }}>Loading...</span>
           ) : (
             <div>
               {dirListing.entries.map((e) => (
                 <div key={e.name} style={{ display: "flex", gap: 6 }}>
-                  <span style={{ color: e.is_dir ? "#e0af68" : "#565f89" }}>
+                  <span style={{ color: e.is_dir ? "var(--color-warning)" : "var(--color-text-muted)" }}>
                     {e.is_dir ? "\u{1F4C1}" : "\u{1F4C4}"}
                   </span>
-                  <span style={{ color: e.is_dir ? "#c0caf5" : "#a9b1d6" }}>{e.name}</span>
+                  <span style={{ color: e.is_dir ? "var(--color-text)" : "var(--color-text-dim)" }}>{e.name}</span>
                 </div>
               ))}
               {dirListing.truncated && (
-                <div style={{ color: "#565f89", marginTop: 4 }}>... (more)</div>
+                <div style={{ color: "var(--color-text-muted)", marginTop: 4 }}>... (more)</div>
               )}
             </div>
           )
         )}
         {file.kind === "other" && (
-          <div style={{ color: "#565f89", fontFamily: "'JetBrains Mono', monospace", wordBreak: "break-all" }}>
+          <div style={{ color: "var(--color-text-muted)", fontFamily: "'JetBrains Mono', monospace", wordBreak: "break-all" }}>
             {file.path}
           </div>
         )}
@@ -259,7 +259,7 @@ function FileNodeImpl({ file }: FileNodeProps) {
             height: 12,
             borderRadius: "50%",
             background: accent,
-            border: "2px solid #1f2335",
+            border: "2px solid var(--color-surface)",
             cursor: "crosshair",
             zIndex: 10,
             opacity: mode === "wire" ? 1 : 0.6,

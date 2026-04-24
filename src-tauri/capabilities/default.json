@@ -7,6 +7,12 @@
     "shell:allow-open",
     "core:event:default",
     "dialog:allow-open",
-    "dialog:allow-confirm"
+    "dialog:allow-confirm",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-position",
+    "core:window:allow-set-size",
+    "core:window:allow-outer-position",
+    "core:window:allow-outer-size",
+    "core:window:allow-available-monitors"
   ]
 }

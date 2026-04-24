@@ -22,7 +22,7 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
   const { kill } = useTerminal();
   const team = useTeamStore((s) => s.getTeamForTerminal(terminal.id));
   const opacity = useSettingsStore((s) => s.settings?.terminal_opacity ?? 1);
-  const titleBg = opacity < 1 ? `rgba(31, 35, 53, ${opacity})` : "#1f2335";
+  const titleBg = opacity < 1 ? `rgba(var(--color-surface-rgb), ${opacity})` : "var(--color-surface)";
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
   const roleMeta = terminal.role ? TERMINAL_ROLES[terminal.role] : undefined;
 
@@ -79,7 +79,7 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
         alignItems: "center",
         padding: "0 10px",
         background: titleBg,
-        borderBottom: terminal.isFolded ? "none" : "1px solid #292e42",
+        borderBottom: terminal.isFolded ? "none" : "1px solid var(--color-border)",
         borderLeft: `3px solid ${terminal.color}`,
         position: "relative",
         cursor: "grab",
@@ -102,7 +102,7 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
         style={{
           flex: 1,
           fontSize: 13,
-          color: "#c0caf5",
+          color: "var(--color-text)",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -115,7 +115,7 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
               marginRight: 6,
               borderRadius: 3,
               background: team.palette.base,
-              color: "#1a1b26",
+              color: "var(--color-bg-alt)",
               fontSize: 10,
               fontWeight: 600,
               letterSpacing: 0.3,
@@ -134,8 +134,8 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
           style={{
             marginLeft: 6,
             background: roleMeta ? `${roleMeta.color}22` : "transparent",
-            color: roleMeta?.color ?? "#3b4261",
-            border: `1px solid ${roleMeta?.color ?? "#3b4261"}66`,
+            color: roleMeta?.color ?? "var(--color-border-strong)",
+            border: `1px solid ${roleMeta?.color ?? "var(--color-border-strong)"}66`,
             borderRadius: 4,
             padding: "0 5px",
             fontSize: 10,
@@ -154,7 +154,7 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
         style={{
           background: "none",
           border: "none",
-          color: "#565f89",
+          color: "var(--color-text-muted)",
           cursor: "pointer",
           fontSize: 14,
           padding: "2px 6px",
@@ -169,7 +169,7 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
         style={{
           background: "none",
           border: "none",
-          color: isMaximized ? "#7aa2f7" : "#565f89",
+          color: isMaximized ? "var(--color-accent)" : "var(--color-text-muted)",
           cursor: "pointer",
           fontSize: 13,
           padding: "2px 6px",
@@ -184,7 +184,7 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
         style={{
           background: "none",
           border: "none",
-          color: "#565f89",
+          color: "var(--color-text-muted)",
           cursor: "pointer",
           fontSize: 14,
           padding: "2px 6px",
@@ -200,8 +200,8 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
             position: "absolute",
             top: 32,
             left: 24,
-            background: "#1f2335",
-            border: "1px solid #292e42",
+            background: "var(--color-surface)",
+            border: "1px solid var(--color-border)",
             borderRadius: 6,
             padding: 8,
             zIndex: 100,

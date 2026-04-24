@@ -5,7 +5,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 export default function WorkspaceSwitcher() {
   const { currentWorkspace, workspaces, loadWorkspaceById, deleteWorkspace, createWorkspace, loadWorkspaceList } =
     useWorkspaceStore();
-  const { buildWorkspace, applyWorkspace } = useWorkspace();
+  const { applyWorkspace } = useWorkspace();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -49,8 +49,11 @@ export default function WorkspaceSwitcher() {
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
-    await createWorkspace(newName.trim(), buildWorkspace);
-    // Set workspace CWD if provided
+    // createWorkspace now saves a BLANK workspace file (no terminals/notes
+    // copied from the current WS). Then switch into it via loadWorkspaceById
+    // so the full reconcile/isolation runs.
+    const newId = await createWorkspace(newName.trim(), newCwd.trim() || null);
+    await loadWorkspaceById(newId, applyWorkspace);
     if (newCwd.trim()) {
       useWorkspaceStore.getState().setWorkspaceCwd(newCwd.trim());
     }
@@ -74,7 +77,7 @@ export default function WorkspaceSwitcher() {
   const handleRenameSubmit = async () => {
     if (!renaming || !renameValue.trim()) return;
     const { renameWorkspace } = useWorkspaceStore.getState();
-    await renameWorkspace(renaming, renameValue.trim(), buildWorkspace);
+    await renameWorkspace(renaming, renameValue.trim());
     setRenaming(null);
   };
 
@@ -86,9 +89,9 @@ export default function WorkspaceSwitcher() {
         onClick={() => setDropdownOpen((v) => !v)}
         style={{
           background: "none",
-          border: "1px solid #292e42",
+          border: "1px solid var(--color-border)",
           borderRadius: 6,
-          color: "#c0caf5",
+          color: "var(--color-text)",
           padding: "4px 10px",
           fontSize: 12,
           cursor: "pointer",
@@ -107,7 +110,7 @@ export default function WorkspaceSwitcher() {
         >
           {displayName}
         </span>
-        <span style={{ color: "#565f89", fontSize: 10 }}>
+        <span style={{ color: "var(--color-text-muted)", fontSize: 10 }}>
           {dropdownOpen ? "\u25B2" : "\u25BC"}
         </span>
       </button>
@@ -120,8 +123,8 @@ export default function WorkspaceSwitcher() {
             left: 0,
             marginTop: 4,
             width: 260,
-            background: "#1f2335",
-            border: "1px solid #292e42",
+            background: "var(--color-surface)",
+            border: "1px solid var(--color-border)",
             borderRadius: 8,
             boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
             zIndex: 100,
@@ -134,7 +137,7 @@ export default function WorkspaceSwitcher() {
               <div
                 style={{
                   padding: "12px 14px",
-                  color: "#565f89",
+                  color: "var(--color-text-muted)",
                   fontSize: 12,
                 }}
               >
@@ -150,7 +153,7 @@ export default function WorkspaceSwitcher() {
                   cursor: "pointer",
                   background:
                     ws.id === currentWorkspace?.id
-                      ? "#292e42"
+                      ? "var(--color-surface-alt)"
                       : "transparent",
                   display: "flex",
                   justifyContent: "space-between",
@@ -170,10 +173,10 @@ export default function WorkspaceSwitcher() {
                     autoFocus
                     style={{
                       flex: 1,
-                      background: "#13141b",
-                      border: "1px solid #3b4261",
+                      background: "var(--color-bg)",
+                      border: "1px solid var(--color-border-strong)",
                       borderRadius: 4,
-                      color: "#c0caf5",
+                      color: "var(--color-text)",
                       padding: "2px 6px",
                       fontSize: 12,
                       outline: "none",
@@ -184,7 +187,7 @@ export default function WorkspaceSwitcher() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div
                         style={{
-                          color: "#c0caf5",
+                          color: "var(--color-text)",
                           fontSize: 13,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -193,7 +196,7 @@ export default function WorkspaceSwitcher() {
                       >
                         {ws.name}
                       </div>
-                      <div style={{ color: "#565f89", fontSize: 10 }}>
+                      <div style={{ color: "var(--color-text-muted)", fontSize: 10 }}>
                         {ws.terminal_count} terminal
                         {ws.terminal_count !== 1 ? "s" : ""}
                       </div>
@@ -212,7 +215,7 @@ export default function WorkspaceSwitcher() {
                         style={{
                           background: "none",
                           border: "none",
-                          color: "#565f89",
+                          color: "var(--color-text-muted)",
                           cursor: "pointer",
                           fontSize: 10,
                           padding: "2px 4px",
@@ -225,7 +228,7 @@ export default function WorkspaceSwitcher() {
                         style={{
                           background: "none",
                           border: "none",
-                          color: "#f7768e",
+                          color: "var(--color-danger)",
                           cursor: "pointer",
                           fontSize: 10,
                           padding: "2px 4px",
@@ -243,7 +246,7 @@ export default function WorkspaceSwitcher() {
           {/* New workspace */}
           <div
             style={{
-              borderTop: "1px solid #292e42",
+              borderTop: "1px solid var(--color-border)",
               padding: "8px 14px",
             }}
           >
@@ -259,10 +262,10 @@ export default function WorkspaceSwitcher() {
                   placeholder="Workspace name"
                   autoFocus
                   style={{
-                    background: "#13141b",
-                    border: "1px solid #3b4261",
+                    background: "var(--color-bg)",
+                    border: "1px solid var(--color-border-strong)",
                     borderRadius: 4,
-                    color: "#c0caf5",
+                    color: "var(--color-text)",
                     padding: "4px 8px",
                     fontSize: 12,
                     outline: "none",
@@ -273,10 +276,10 @@ export default function WorkspaceSwitcher() {
                   onChange={(e) => setNewCwd(e.target.value)}
                   placeholder="Working directory (optional)"
                   style={{
-                    background: "#13141b",
-                    border: "1px solid #3b4261",
+                    background: "var(--color-bg)",
+                    border: "1px solid var(--color-border-strong)",
                     borderRadius: 4,
-                    color: "#c0caf5",
+                    color: "var(--color-text)",
                     padding: "4px 8px",
                     fontSize: 12,
                     outline: "none",
@@ -285,8 +288,8 @@ export default function WorkspaceSwitcher() {
                 <button
                   onClick={handleCreate}
                   style={{
-                    background: "#7aa2f7",
-                    color: "#1a1b26",
+                    background: "var(--color-accent)",
+                    color: "var(--color-bg-alt)",
                     border: "none",
                     borderRadius: 4,
                     padding: "4px 10px",
@@ -303,8 +306,8 @@ export default function WorkspaceSwitcher() {
                 onClick={() => setCreating(true)}
                 style={{
                   width: "100%",
-                  background: "#292e42",
-                  color: "#c0caf5",
+                  background: "var(--color-surface-alt)",
+                  color: "var(--color-text)",
                   border: "none",
                   borderRadius: 4,
                   padding: "6px 0",

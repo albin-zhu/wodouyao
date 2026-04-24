@@ -191,7 +191,7 @@ export default function InfiniteCanvas() {
             spawn({
               command: cmd,
               name: cmd.charAt(0).toUpperCase() + cmd.slice(1),
-              color: cmd === "claude" ? "#ff9e64" : cmd === "codex" ? "#9ece6a" : "#7aa2f7",
+              color: cmd === "claude" ? "var(--color-warning-alt)" : cmd === "codex" ? "var(--color-success)" : "var(--color-accent)",
               position: { x: world.x, y: world.y },
             }).then((t) => {
               const kind = deriveWireKind(sourceId, t.id);

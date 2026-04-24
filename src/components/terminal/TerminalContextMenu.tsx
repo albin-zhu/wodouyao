@@ -162,8 +162,8 @@ export default function TerminalContextMenu() {
         left: menuX,
         top: menuY,
         zIndex: 10000,
-        background: "#1f2335",
-        border: "1px solid #292e42",
+        background: "var(--color-surface)",
+        border: "1px solid var(--color-border)",
         borderRadius: 8,
         boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
         minWidth: 180,
@@ -178,7 +178,7 @@ export default function TerminalContextMenu() {
           display: "flex",
           alignItems: "center",
           gap: 6,
-          borderBottom: "1px solid #292e42",
+          borderBottom: "1px solid var(--color-border)",
           marginBottom: 4,
         }}
       >
@@ -193,7 +193,7 @@ export default function TerminalContextMenu() {
         />
         <span
           style={{
-            color: "#c0caf5",
+            color: "var(--color-text)",
             fontSize: 12,
             fontWeight: 600,
             overflow: "hidden",
@@ -223,7 +223,7 @@ export default function TerminalContextMenu() {
           <div
             style={{
               padding: "4px 12px",
-              color: "#565f89",
+              color: "var(--color-text-muted)",
               fontSize: 10,
               fontWeight: 600,
               textTransform: "uppercase",
@@ -255,7 +255,7 @@ export default function TerminalContextMenu() {
             );
           })}
           <MenuItem label="Drag to connect..." onClick={handleStartWireDrag} />
-          <div style={{ borderTop: "1px solid #292e42", margin: "4px 0" }} />
+          <div style={{ borderTop: "1px solid var(--color-border)", margin: "4px 0" }} />
         </div>
       )}
 
@@ -269,7 +269,7 @@ export default function TerminalContextMenu() {
       {/* Copy Buffer */}
       <MenuItem label="Copy Buffer" onClick={handleCopyBuffer} />
 
-      <div style={{ borderTop: "1px solid #292e42", margin: "4px 0" }} />
+      <div style={{ borderTop: "1px solid var(--color-border)", margin: "4px 0" }} />
 
       {/* Rename */}
       {!renaming ? (
@@ -295,10 +295,10 @@ export default function TerminalContextMenu() {
             }}
             style={{
               width: "100%",
-              background: "#13141b",
-              border: "1px solid #292e42",
+              background: "var(--color-bg)",
+              border: "1px solid var(--color-border)",
               borderRadius: 4,
-              color: "#c0caf5",
+              color: "var(--color-text)",
               padding: "4px 8px",
               fontSize: 12,
               outline: "none",
@@ -349,7 +349,7 @@ export default function TerminalContextMenu() {
         </div>
       )}
 
-      <div style={{ borderTop: "1px solid #292e42", margin: "4px 0" }} />
+      <div style={{ borderTop: "1px solid var(--color-border)", margin: "4px 0" }} />
 
       {/* Fold/Unfold */}
       <MenuItem
@@ -389,7 +389,7 @@ function MenuItem({
         padding: "6px 12px",
         background: "none",
         border: "none",
-        color: disabled ? "#3b4261" : danger ? "#f7768e" : "#c0caf5",
+        color: disabled ? "var(--color-border-strong)" : danger ? "var(--color-danger)" : "var(--color-text)",
         fontSize: 12,
         cursor: disabled ? "default" : "pointer",
         textAlign: "left",
@@ -397,7 +397,7 @@ function MenuItem({
       }}
       onMouseEnter={(e) => {
         if (!disabled) {
-          (e.target as HTMLElement).style.background = "#292e42";
+          (e.target as HTMLElement).style.background = "var(--color-surface-alt)";
         }
       }}
       onMouseLeave={(e) => {
@@ -407,7 +407,7 @@ function MenuItem({
       {icon}
       <span style={{ flex: 1 }}>{label}</span>
       {shortcut && (
-        <span style={{ color: "#565f89", fontSize: 10 }}>{shortcut}</span>
+        <span style={{ color: "var(--color-text-muted)", fontSize: 10 }}>{shortcut}</span>
       )}
     </button>
   );

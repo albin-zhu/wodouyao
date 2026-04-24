@@ -2,6 +2,10 @@
   "settings": {
     "title": "Settings",
     "language": "Language",
+    "theme": "Theme",
+    "themeSystem": "System",
+    "themeDark": "Dark",
+    "themeLight": "Light",
     "workspaceDir": "Workspace Directory",
     "workspaceDirPlaceholder": "Not set (system default)",
     "workspaceDirHint": "New terminals will open in this directory",
@@ -28,7 +32,7 @@
     "bgFilePlaceholder": "/absolute/path or https://...",
     "browseFile": "Browse file",
     "opacity": "Window opacity",
-    "opacityHint": "Drag to 0 to make the whole window see-through to your desktop. Mouse clicks pass through automatically; press Cmd+Shift+F11 (or Ctrl+Shift+F11) to override.",
+    "opacityHint": "Drag to 0 to make the whole window see-through to your desktop.",
     "terminalOpacity": "Terminal opacity",
     "isHdpi": "HDPI / Retina display",
     "isHdpiHint": "Uncheck on standard-density screens (1x DPI) to use chunkier fonts and beefier wires that survive the canvas zoom.",
@@ -74,6 +78,7 @@
     "fullscreen": "Fullscreen (F11)",
     "exitFullscreen": "Exit fullscreen (F11)",
     "zenMode": "Hide UI (Cmd+F11 / F11)",
+    "spanMonitors": "Span all monitors (Cmd+Shift+Enter / Ctrl+Shift+Enter)",
     "ctrlK": "Ctrl+K"
   },
   "terminal": {

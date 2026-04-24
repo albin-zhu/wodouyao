@@ -5,6 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Wodouyao</title>
+    <script>
+      // Resolve theme before React mounts to avoid a dark-flash when the
+      // user has light mode saved. App.tsx keeps localStorage up to date.
+      (function () {
+        var saved = null;
+        try { saved = localStorage.getItem("wd-theme"); } catch (_) {}
+        var t = saved || "system";
+        if (t === "system") {
+          t = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+            ? "light"
+            : "dark";
+        }
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

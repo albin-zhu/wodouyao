@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback, useState } from "react";
 import { useTerminalIO } from "../../hooks/useTerminalIO";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useSettingsStore } from "../../store/settingsStore";
-import { TERMINAL_THEMES } from "../../utils/terminalThemes";
+import { getXtermThemeMap } from "../../utils/terminalThemes";
 
 function hexToRgba(hex: string, alpha: number): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex);
@@ -23,7 +23,7 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
   const { fit, termRef } = useTerminalIO(terminalId, containerRef);
   const themeName = useTerminalStore((s) => s.terminals.get(terminalId)?.theme ?? "tokyonight");
   const opacity = useSettingsStore((s) => s.settings?.terminal_opacity ?? 1);
-  const rawBg = TERMINAL_THEMES[themeName]?.background ?? "#1a1b26";
+  const rawBg = getXtermThemeMap()[themeName]?.background ?? "var(--color-bg-alt)";
   const bg = opacity < 1 ? hexToRgba(rawBg, opacity) : rawBg;
   const [pendingPaste, setPendingPaste] = useState<string | null>(null);
 

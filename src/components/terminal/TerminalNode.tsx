@@ -226,7 +226,7 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
         flexDirection: "column",
         borderRadius: 8,
         border: taskDropOver
-          ? `2px dashed #e0af68`
+          ? "2px dashed var(--color-warning)"
           : mode === "wire"
           ? `1px solid ${terminal.color}`
           : `1px solid ${terminal.color}40`,
@@ -271,9 +271,9 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
                 pointerEvents: "none",
               }}
             >
-              <line x1="12" y1="4" x2="4" y2="12" stroke="#c0caf5" strokeWidth="1.25" strokeLinecap="round" />
-              <line x1="13.5" y1="7.5" x2="7.5" y2="13.5" stroke="#c0caf5" strokeWidth="1.25" strokeLinecap="round" />
-              <line x1="15" y1="11" x2="11" y2="15" stroke="#c0caf5" strokeWidth="1.25" strokeLinecap="round" />
+              <line x1="12" y1="4" x2="4" y2="12" stroke="var(--color-text)" strokeWidth="1.25" strokeLinecap="round" />
+              <line x1="13.5" y1="7.5" x2="7.5" y2="13.5" stroke="var(--color-text)" strokeWidth="1.25" strokeLinecap="round" />
+              <line x1="15" y1="11" x2="11" y2="15" stroke="var(--color-text)" strokeWidth="1.25" strokeLinecap="round" />
             </svg>
           </div>
         </>
@@ -291,7 +291,7 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
             height: 12,
             borderRadius: "50%",
             background: terminal.color,
-            border: "2px solid #1f2335",
+            border: "2px solid var(--color-surface)",
             cursor: "crosshair",
             zIndex: 10,
             opacity: mode === "wire" ? 1 : 0.6,
