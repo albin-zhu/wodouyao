@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { CanvasAddon } from "@xterm/addon-canvas";
 import { invoke } from "@tauri-apps/api/core";
 import { writeTerminal, resizeTerminal, destroyTerminal } from "../services/tauriCommands";
@@ -103,16 +104,27 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
       },
     });
 
-    // Canvas renderer — required for xterm.js v5.5+ to render text. We
-    // intentionally do NOT use the WebGL addon: the whole TerminalLayer
-    // lives under a CSS `transform: scale()` (canvas pan/zoom), which the
-    // WebGL renderer can't handle correctly — glyphs and ANSI colors drop
-    // out on some GPUs (notably inside Tauri's webview), which is why
-    // Claude's output looked colorless. Canvas renderer is transform-safe.
+    // Renderer: try WebGL first (GPU-accelerated, now safe since each terminal
+    // has its own CSS transform layer instead of sharing a parent transform).
+    // Falls back to Canvas if the WebGL context is lost or unavailable.
+    const loadCanvasFallback = () => {
+      try {
+        term.loadAddon(new CanvasAddon());
+      } catch (e) {
+        console.error("[xterm] Canvas fallback failed:", e);
+      }
+    };
     try {
-      term.loadAddon(new CanvasAddon());
+      const webgl = new WebglAddon();
+      webgl.onContextLoss(() => {
+        console.warn("[xterm] WebGL context lost — falling back to Canvas");
+        webgl.dispose();
+        loadCanvasFallback();
+      });
+      term.loadAddon(webgl);
     } catch (e) {
-      console.error("[xterm] Canvas renderer failed:", e);
+      console.warn("[xterm] WebGL unavailable, using Canvas renderer:", e);
+      loadCanvasFallback();
     }
 
     term.focus();

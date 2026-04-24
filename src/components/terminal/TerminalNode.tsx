@@ -10,9 +10,12 @@ import type { TerminalNode as TerminalNodeType } from "../../types/terminal";
 
 interface TerminalNodeProps {
   terminal: TerminalNodeType;
+  panX: number;
+  panY: number;
+  zoom: number;
 }
 
-function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
+function TerminalNodeImpl({ terminal, panX, panY, zoom }: TerminalNodeProps) {
   const updateTerminal = useTerminalStore((s) => s.updateTerminal);
   const bringToFront = useTerminalStore((s) => s.bringToFront);
   const mode = useCanvasInteractionStore((s) => s.mode);
@@ -217,10 +220,17 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
       }}
       style={{
         position: "absolute",
-        left: terminal.position.x,
-        top: terminal.position.y,
+        // Screen position: convert world coords using current pan/zoom.
+        left: Math.round(terminal.position.x * zoom + panX),
+        top: Math.round(terminal.position.y * zoom + panY),
+        // Content stays in world-coordinate space; CSS scale zooms visually.
+        // This keeps xterm's internal layout stable (no PTY resize on zoom),
+        // and each terminal gets its own GPU compositing layer so WebGL
+        // rendering is isolated from sibling transforms.
         width: terminal.size.width,
         height: terminal.isFolded ? 36 : terminal.size.height,
+        transformOrigin: "0 0",
+        transform: `scale(${zoom})`,
         zIndex: terminal.zIndex,
         display: "flex",
         flexDirection: "column",

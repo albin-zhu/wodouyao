@@ -1,14 +1,23 @@
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
+import { useCanvasStore } from "../../store/canvasStore";
 
 export default function DrawPreview() {
   const drawRect = useCanvasInteractionStore((s) => s.drawRect);
+  const { panX, panY, zoom } = useCanvasStore();
 
   if (!drawRect) return null;
 
-  const x = Math.min(drawRect.startX, drawRect.endX);
-  const y = Math.min(drawRect.startY, drawRect.endY);
-  const w = Math.abs(drawRect.endX - drawRect.startX);
-  const h = Math.abs(drawRect.endY - drawRect.startY);
+  // drawRect is stored in world coordinates; convert to screen for rendering
+  // since TerminalLayer no longer applies a CSS transform.
+  const wx = Math.min(drawRect.startX, drawRect.endX);
+  const wy = Math.min(drawRect.startY, drawRect.endY);
+  const ww = Math.abs(drawRect.endX - drawRect.startX);
+  const wh = Math.abs(drawRect.endY - drawRect.startY);
+
+  const x = wx * zoom + panX;
+  const y = wy * zoom + panY;
+  const w = ww * zoom;
+  const h = wh * zoom;
 
   return (
     <div
@@ -36,7 +45,7 @@ export default function DrawPreview() {
           whiteSpace: "nowrap",
         }}
       >
-        {Math.round(w)} × {Math.round(h)}
+        {Math.round(ww)} × {Math.round(wh)}
       </span>
     </div>
   );

@@ -8,10 +8,6 @@ import DrawPreview from "../canvas/DrawPreview";
 export default function TerminalLayer() {
   const terminalsMap = useTerminalStore((s) => s.terminals);
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspace?.id ?? null);
-  // Render ALL terminals regardless of workspace — we just hide the ones
-  // that belong to other workspaces using display:none. This keeps xterm
-  // instances alive (PTY output keeps flowing, scrollback is preserved)
-  // so switching back shows the terminal exactly as it was left.
   const terminals = useMemo(() => Array.from(terminalsMap.values()), [terminalsMap]);
   const maximizedId = useMemo(
     () => terminals.find((t) => !!t.prevBounds)?.id ?? null,
@@ -20,6 +16,9 @@ export default function TerminalLayer() {
   const { panX, panY, zoom } = useCanvasStore();
 
   return (
+    // No CSS transform on this layer — transforms are applied per-node so
+    // each xterm WebGL context has its own isolated compositing layer.
+    // isolation:isolate ensures a new stacking context for z-index ordering.
     <div
       id="terminal-layer"
       style={
@@ -27,9 +26,12 @@ export default function TerminalLayer() {
           position: "absolute",
           top: 0,
           left: 0,
-          transformOrigin: "0 0",
-          transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
+          width: 0,
+          height: 0,
+          overflow: "visible",
           pointerEvents: "none",
+          isolation: "isolate",
+          // Keep --zoom for drag/resize handlers and StatusBadge that read it.
           "--zoom": zoom,
         } as React.CSSProperties
       }
@@ -51,7 +53,7 @@ export default function TerminalLayer() {
                 : undefined
             }
           >
-            <TerminalNode terminal={t} />
+            <TerminalNode terminal={t} panX={panX} panY={panY} zoom={zoom} />
           </div>
         );
       })}
