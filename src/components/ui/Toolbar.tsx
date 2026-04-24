@@ -62,8 +62,8 @@ function IconBtn({
         border: "none",
         borderRadius: 6,
         cursor: "pointer",
-        width: 30,
-        height: 30,
+        width: 28,
+        height: 28,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -162,7 +162,7 @@ export default function Toolbar() {
         <IconBtn
           src="/icons/fork.png"
           alt={t("toolbar.fork")}
-          size={15}
+          size={16}
           title={t("toolbar.forkTitle")}
           onClick={() => {
             const name = prompt(
@@ -202,8 +202,8 @@ export default function Toolbar() {
               <img
                 src={btn.img}
                 alt={btn.mode}
-                width={15}
-                height={15}
+                width={14}
+                height={14}
                 style={{
                   display: "block",
                   opacity: currentMode === btn.mode ? 1 : 0.5,
@@ -238,12 +238,13 @@ export default function Toolbar() {
               }
               title={cmd.label}
               style={{
-                background: agentStyle?.bg ?? "var(--color-surface-alt)",
+                background: "var(--color-bg)",
                 color: agentStyle?.color ?? "var(--color-text)",
-                border: `1px solid ${agentStyle?.color ?? "var(--color-border-strong)"}40`,
+                border: `1px solid ${agentStyle?.color ?? "var(--color-border-strong)"}`,
                 borderRadius: 6,
                 padding: "0 8px",
                 height: 28,
+                lineHeight: 1,
                 fontSize: 11,
                 fontWeight: 600,
                 cursor: "pointer",
@@ -254,7 +255,7 @@ export default function Toolbar() {
               }}
             >
               {agentStyle?.img && (
-                <img src={agentStyle.img} width={14} height={14} style={{ display: "block" }} />
+                <img src={agentStyle.img} width={16} height={16} style={{ display: "block" }} />
               )}
               {cmd.icon_label}
             </button>
@@ -278,6 +279,7 @@ export default function Toolbar() {
             borderRadius: 6,
             padding: "0 12px",
             height: 28,
+            lineHeight: 1,
             fontSize: 12,
             fontWeight: 600,
             cursor: "pointer",
@@ -286,7 +288,7 @@ export default function Toolbar() {
             gap: 5,
           }}
         >
-          <img src="/icons/add-terminal.png" width={13} height={13} style={{ display: "block", filter: "brightness(0) invert(1)" }} />
+          <img src="/icons/add-terminal.png" width={14} height={14} style={{ display: "block", filter: "brightness(0) invert(1)" }} />
           {t("toolbar.addTerminal")}
         </button>
 
@@ -301,6 +303,7 @@ export default function Toolbar() {
             borderRadius: 6,
             padding: "0 10px",
             height: 28,
+            lineHeight: 1,
             fontSize: 12,
             fontWeight: 600,
             cursor: "pointer",
@@ -320,6 +323,7 @@ export default function Toolbar() {
             borderRadius: 6,
             padding: "0 10px",
             height: 28,
+            lineHeight: 1,
             fontSize: 12,
             fontWeight: 600,
             cursor: "pointer",
@@ -334,7 +338,7 @@ export default function Toolbar() {
         <IconBtn
           src="/icons/teams.png"
           alt={t("toolbar.teams")}
-          size={20}
+          size={16}
           title={t("toolbar.teams")}
           onClick={openTeamsDrawer}
         />
@@ -343,7 +347,7 @@ export default function Toolbar() {
         <IconBtn
           src="/icons/tasks.png"
           alt={t("toolbar.tasks")}
-          size={18}
+          size={16}
           title={t("toolbar.tasks")}
           active={tasksActiveCount > 0}
           onClick={openTasksDrawer}
@@ -354,7 +358,7 @@ export default function Toolbar() {
         <IconBtn
           src="/icons/settings.png"
           alt={t("toolbar.settings")}
-          size={20}
+          size={16}
           title={t("toolbar.settings")}
           onClick={openDrawer}
         />
@@ -365,7 +369,7 @@ export default function Toolbar() {
         <IconBtn
           src="/icons/zen-mode.png"
           alt={t("toolbar.zenMode")}
-          size={17}
+          size={16}
           title={t("toolbar.zenMode")}
           activeAccent={zenMode}
           onClick={toggleZenMode}
