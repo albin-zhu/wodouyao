@@ -85,15 +85,46 @@ impl WireTopology {
         }
     }
 
+    /// Return peers of `term_id` scoped to the same workspace.
+    ///
+    /// The caller's workspace is inferred from the `workspace_id` on its own
+    /// wires — the first non-None value found wins. Then only peers reachable
+    /// via a wire whose `workspace_id` matches (or is None, for legacy /
+    /// hub-created cross-workspace wires) are returned.
+    ///
+    /// If the caller has no wires with a workspace_id (pure legacy setup),
+    /// all peers are returned unchanged — same as the old behaviour.
     pub fn peers_for(&self, term_id: &str) -> Vec<String> {
         let map = self.inner.lock().unwrap();
+
+        // Infer caller's workspace from the workspace_id on their wires.
+        let caller_ws: Option<String> = map
+            .values()
+            .filter(|w| w.source_id == term_id || w.target_id == term_id)
+            .find_map(|w| w.workspace_id.clone());
+
         let mut peers = Vec::new();
         for w in map.values() {
-            if w.source_id == term_id {
-                peers.push(w.target_id.clone());
+            // Wire must touch the caller.
+            let peer_id = if w.source_id == term_id {
+                &w.target_id
             } else if w.target_id == term_id {
-                peers.push(w.source_id.clone());
+                &w.source_id
+            } else {
+                continue;
+            };
+            // Workspace filter: if we know the caller's workspace, only
+            // include peers connected via a wire in the same workspace OR a
+            // wire with no workspace (legacy / explicit cross-workspace).
+            if let Some(ref ws) = caller_ws {
+                if let Some(ref wire_ws) = w.workspace_id {
+                    if wire_ws != ws {
+                        continue;
+                    }
+                }
+                // wire.workspace_id == None → cross-workspace hub wire, always included
             }
+            peers.push(peer_id.clone());
         }
         peers
     }
