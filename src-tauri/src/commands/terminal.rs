@@ -133,3 +133,24 @@ pub fn get_default_shell() -> shell::ShellInfo {
 pub fn list_available_shells() -> Vec<shell::ShellInfo> {
     shell::list_available_shells()
 }
+
+#[tauri::command]
+pub fn save_clipboard_image(data: Vec<u8>, ext: String) -> Result<String, String> {
+    let base = dirs::download_dir()
+        .or_else(dirs::home_dir)
+        .ok_or_else(|| "cannot locate downloads dir".to_string())?;
+
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+
+    let safe_ext = ext.trim_start_matches('.').to_string();
+    let safe_ext = if safe_ext.is_empty() { "png".into() } else { safe_ext };
+
+    let path = base.join(format!("clipboard-{}.{}", ts, safe_ext));
+    std::fs::write(&path, &data).map_err(|e| e.to_string())?;
+    path.to_str()
+        .ok_or_else(|| "non-UTF8 path".to_string())
+        .map(|s| s.to_string())
+}

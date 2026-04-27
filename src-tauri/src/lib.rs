@@ -220,6 +220,7 @@ pub fn run() {
             commands::terminal::resize_terminal,
             commands::terminal::get_default_shell,
             commands::terminal::list_available_shells,
+            commands::terminal::save_clipboard_image,
             commands::workspace::save_workspace,
             commands::workspace::load_workspace,
             commands::workspace::list_workspaces,

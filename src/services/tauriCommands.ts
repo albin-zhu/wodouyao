@@ -21,6 +21,10 @@ export async function resizeTerminal(id: string, cols: number, rows: number): Pr
   return invoke<void>("resize_terminal", { id, cols, rows });
 }
 
+export async function saveClipboardImage(data: number[], ext: string): Promise<string> {
+  return invoke<string>("save_clipboard_image", { data, ext });
+}
+
 export async function getDefaultShell(): Promise<ShellInfo> {
   return invoke<ShellInfo>("get_default_shell");
 }
