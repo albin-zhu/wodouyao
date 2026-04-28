@@ -82,6 +82,7 @@ export default function WireLayer() {
   }, [teamsMap]);
 
   const [hoveredWireId, setHoveredWireId] = useState<string | null>(null);
+  const [hoveredMidId, setHoveredMidId] = useState<string | null>(null);
   // Tooltip position tracked via ref + imperative DOM update so mousemove
   // doesn't trigger a full WireLayer re-render on every pixel.
   const tooltipRef = useRef<HTMLDivElement | null>(null);
@@ -91,6 +92,18 @@ export default function WireLayer() {
     el.style.left = `${clientX + 12}px`;
     el.style.top = `${clientY + 14}px`;
   }, []);
+
+  // Pan canvas to center on a node (same logic as CommandPalette focusTerminal).
+  const focusNode = useCallback((nodeId: string) => {
+    const term = terminals.get(nodeId);
+    if (!term) return;
+    if (term.isFolded) useTerminalStore.getState().unfoldTerminal(nodeId);
+    useTerminalStore.getState().bringToFront(nodeId);
+    const { zoom: z, setPan } = useCanvasStore.getState();
+    const cx = term.position.x + term.size.width / 2;
+    const cy = term.position.y + term.size.height / 2;
+    setPan(window.innerWidth / 2 - cx * z, window.innerHeight / 2 - cy * z);
+  }, [terminals]);
 
   const getAnchor = useCallback(
     (nodeId: string, side: "right" | "left") => {
@@ -191,14 +204,22 @@ export default function WireLayer() {
 
             return (
               <g key={wire.id}>
-                {/* Invisible wider path for hover */}
+                {/* Invisible wider path — left half focuses target, right half focuses source */}
                 <path
                   d={path}
                   fill="none"
                   stroke="transparent"
                   strokeWidth={12 / zoom}
                   style={{ cursor: "pointer" }}
-                  onClick={() => removeWire(wire.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const screenMidX = midX * zoom + panX;
+                    if (e.clientX < screenMidX) {
+                      focusNode(wire.targetId);
+                    } else {
+                      focusNode(wire.sourceId);
+                    }
+                  }}
                   onMouseEnter={(e) => {
                     setHoveredWireId(wire.id);
                     moveTooltip(e.clientX, e.clientY);
@@ -220,35 +241,37 @@ export default function WireLayer() {
                   strokeDasharray="none"
                   style={{ pointerEvents: "none" }}
                 />
-                {/* Direction arrow at midpoint */}
+                {/* Midpoint dot — click to delete */}
+                <circle
+                  cx={midX}
+                  cy={midY}
+                  r={6 / zoom}
+                  fill="transparent"
+                  style={{ cursor: "pointer", pointerEvents: "auto" }}
+                  onMouseEnter={() => setHoveredMidId(wire.id)}
+                  onMouseLeave={() => setHoveredMidId((p) => p === wire.id ? null : p)}
+                  onClick={(e) => { e.stopPropagation(); removeWire(wire.id); }}
+                />
                 <circle
                   cx={midX}
                   cy={midY}
                   r={4 / zoom}
-                  fill={wireColor}
-                  fillOpacity={wireOpacity}
+                  fill={hoveredMidId === wire.id ? "var(--color-danger)" : wireColor}
+                  fillOpacity={hoveredMidId === wire.id ? 1 : wireOpacity}
                   style={{ pointerEvents: "none" }}
                 />
-                {/* Delete button on hover - using a circle with X */}
-                <g
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeWire(wire.id);
-                  }}
-                  style={{ cursor: "pointer" }}
-                  opacity={0}
-                >
-                  <circle cx={midX} cy={midY - 12 / zoom} r={8 / zoom} fill="var(--color-danger)" />
+                {hoveredMidId === wire.id && (
                   <text
                     x={midX}
-                    y={midY - 12 / zoom + 4 / zoom}
+                    y={midY + 4 / zoom}
                     textAnchor="middle"
-                    fontSize={10 / zoom}
-                    fill="var(--color-surface)"
+                    fontSize={8 / zoom}
+                    fill="white"
+                    style={{ pointerEvents: "none", userSelect: "none" }}
                   >
                     ×
                   </text>
-                </g>
+                )}
               </g>
             );
           })}
