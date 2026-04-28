@@ -148,7 +148,7 @@ export default function TerminalOptionsSection({ opts, onPatch }: Props) {
             <span style={rowLabel}>{t("settings.term.lineHeight")}</span>
             <span style={rowValue}>{opts.line_height.toFixed(2)}</span>
           </div>
-          <input type="range" min={0.8} max={2} step={0.05} value={opts.line_height}
+          <input type="range" min={1} max={2} step={0.05} value={opts.line_height}
             onChange={(e) => onPatch({ line_height: parseFloat(e.target.value) })}
             style={{ width: "100%" }} />
         </div>
@@ -332,7 +332,12 @@ export default function TerminalOptionsSection({ opts, onPatch }: Props) {
           <input type="range" min={1} max={21} step={0.5} value={opts.minimum_contrast_ratio}
             onChange={(e) => onPatch({ minimum_contrast_ratio: parseFloat(e.target.value) })}
             style={{ width: "100%" }} />
-          <div style={{ color: "var(--color-text-muted)", fontSize: 10, marginTop: 4 }}>
+          {opts.minimum_contrast_ratio >= 10 && (
+            <div style={{ color: "var(--color-warning)", fontSize: 10, marginTop: 4 }}>
+              ⚠ {t("settings.term.contrastHighWarn")}
+            </div>
+          )}
+          <div style={{ color: "var(--color-text-muted)", fontSize: 10, marginTop: 2 }}>
             {t("settings.term.contrastHint")}
           </div>
         </div>

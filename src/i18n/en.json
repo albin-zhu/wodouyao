@@ -98,6 +98,7 @@
       "boldBrightColors": "Bold text in bright colors",
       "minContrastRatio": "Min contrast ratio",
       "contrastHint": "1 = off · 4.5 = WCAG AA · 7 = WCAG AAA",
+      "contrastHighWarn": "High value forces all ANSI colors to near-monochrome",
       "behavior": "Behavior",
       "macOptionMeta": "Option key = Meta (macOS)",
       "rightClickSelectsWord": "Right click selects word"

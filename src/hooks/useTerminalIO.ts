@@ -19,7 +19,7 @@ function toXtermOptions(opts: TerminalOptions, opacity: number, baseTheme: impor
     fontFamily: opts.font_family,
     fontWeight: opts.font_weight as import("@xterm/xterm").FontWeight,
     fontWeightBold: opts.font_weight_bold as import("@xterm/xterm").FontWeight,
-    lineHeight: opts.line_height,
+    lineHeight: Math.max(1, opts.line_height),
     letterSpacing: opts.letter_spacing,
     cursorBlink: opts.cursor_blink,
     cursorStyle: opts.cursor_style as "block" | "underline" | "bar",
@@ -115,6 +115,15 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
       console.error("[xterm] Canvas renderer failed:", e);
     }
 
+    // Re-apply theme after open() so the renderer picks it up even if
+    // the constructor options were partially applied.
+    try { term.options.theme = baseTheme; } catch { /* ignore */ }
+
+    // OSC 0/2 title sequences — update the canvas node's display name.
+    term.onTitleChange((title) => {
+      if (title) updateTerminal(terminalId, { name: title });
+    });
+
     term.focus();
 
     // Defer fit() so xterm.js has time to measure cell dimensions
@@ -189,7 +198,10 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
       const opts = useSettingsStore.getState().settings?.terminal_options ?? DEFAULT_TERMINAL_OPTIONS;
       const currentOpacity = useSettingsStore.getState().settings?.terminal_opacity ?? 1;
       const applied = toXtermOptions(opts, currentOpacity, base);
-      Object.assign(term.options, applied);
+      try { Object.assign(term.options, applied); } catch (e) { console.error("[xterm] options update failed:", e); }
+      // Set theme explicitly — Object.assign iterates in insertion order and
+      // may bail before reaching `theme` if an earlier property throws.
+      try { term.options.theme = applied.theme; } catch { /* ignore */ }
       if (fitAddonRef.current) {
         try { fitAddonRef.current.fit(); } catch { /* ignore */ }
       }

@@ -98,6 +98,7 @@
       "boldBrightColors": "粗体显示为亮色",
       "minContrastRatio": "最小对比度",
       "contrastHint": "1 = 关闭 · 4.5 = WCAG AA · 7 = WCAG AAA",
+      "contrastHighWarn": "值过高会强制所有 ANSI 颜色变为近单色",
       "behavior": "行为",
       "macOptionMeta": "Option 键 = Meta（macOS）",
       "rightClickSelectsWord": "右键单击选词"

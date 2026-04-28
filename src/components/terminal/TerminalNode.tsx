@@ -196,7 +196,7 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
       data-terminal-id={terminal.id}
       data-node-id={terminal.id}
       onMouseDown={handleMouseDown}
-      onContextMenu={handleContextMenu}
+      onContextMenuCapture={handleContextMenu}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onDragOver={(e) => {
