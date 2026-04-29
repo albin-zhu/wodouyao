@@ -8,6 +8,7 @@ import {
   type NoteIpc,
 } from "../services/tauriCommands";
 import { useWorkspaceStore } from "./workspaceStore";
+import { toast } from "./toastStore";
 
 const DEFAULT_NOTE_WIDTH = 240;
 const DEFAULT_NOTE_HEIGHT = 160;
@@ -72,7 +73,10 @@ export const useNoteStore = create<NoteStore>((set, get) => ({
       position: note.position,
       size: note.size,
       workspace_id: wsId,
-    }).catch(() => {});
+    }).catch((e) => {
+      console.error("[noteStore] create failed:", e);
+      toast("Failed to save note", "error");
+    });
 
     return note;
   },
@@ -83,7 +87,9 @@ export const useNoteStore = create<NoteStore>((set, get) => ({
       newMap.delete(id);
       return { notes: newMap };
     });
-    notesRemoveIpc(id).catch(() => {});
+    notesRemoveIpc(id).catch((e) => {
+      console.error("[noteStore] remove failed:", e);
+    });
   },
 
   updateNote: (id, updates) => {
@@ -100,7 +106,9 @@ export const useNoteStore = create<NoteStore>((set, get) => ({
     if (updates.position !== undefined) patch.position = updates.position;
     if (updates.size !== undefined) patch.size = updates.size;
     if (Object.keys(patch).length > 0) {
-      notesUpdateIpc(id, patch).catch(() => {});
+      notesUpdateIpc(id, patch).catch((e) => {
+        console.error("[noteStore] update failed:", e);
+      });
     }
   },
 

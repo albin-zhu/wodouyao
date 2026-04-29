@@ -31,7 +31,6 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
 
   interface ImageTooltip { x: number; y: number; src: string; filename: string }
   const [imageTooltip, setImageTooltip] = useState<ImageTooltip | null>(null);
-  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleClick = useCallback(() => {
     termRef.current?.focus();
@@ -178,14 +177,22 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
     // Characters that cannot appear in a file path
     const PATH_BREAK = /[\s"'`\[\](){}|<>]/;
 
+    let controller: AbortController | null = null;
+
     const onMove = (e: MouseEvent) => {
-      if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
-      tooltipTimerRef.current = setTimeout(() => {
+      // Cancel any in-flight delayed check from previous position.
+      controller?.abort();
+      controller = new AbortController();
+      const signal = controller.signal;
+
+      const timerId = setTimeout(() => {
+        if (signal.aborted) return;
+
         const term = termRef.current;
         if (!term) return;
 
         const rect = container.getBoundingClientRect();
-        const relX = e.clientX - rect.left - 4; // subtract container padding
+        const relX = e.clientX - rect.left - 4;
         const relY = e.clientY - rect.top  - 4;
         if (relX < 0 || relY < 0) { setImageTooltip(null); return; }
 
@@ -202,7 +209,6 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
         if (!line) { setImageTooltip(null); return; }
 
         const text = line.translateToString(true);
-        // Expand left and right from col to extract the token
         let s = col, end = col;
         while (s > 0 && !PATH_BREAK.test(text[s - 1])) s--;
         while (end < text.length && !PATH_BREAK.test(text[end])) end++;
@@ -212,7 +218,7 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
           try {
             const src = convertFileSrc(word);
             const filename = word.replace(/\\/g, "/").split("/").pop() ?? word;
-            setImageTooltip({ x: e.clientX, y: e.clientY, src, filename });
+            if (!signal.aborted) setImageTooltip({ x: e.clientX, y: e.clientY, src, filename });
           } catch {
             setImageTooltip(null);
           }
@@ -220,10 +226,14 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
           setImageTooltip(null);
         }
       }, 280);
+
+      // If aborted before timer fires, cancel it.
+      signal.addEventListener("abort", () => clearTimeout(timerId));
     };
 
     const onLeave = () => {
-      if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+      controller?.abort();
+      controller = null;
       setImageTooltip(null);
     };
 
@@ -232,7 +242,7 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
     return () => {
       container.removeEventListener("mousemove", onMove);
       container.removeEventListener("mouseleave", onLeave);
-      if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+      controller?.abort();
     };
   }, [termRef, containerRef]);
 

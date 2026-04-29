@@ -116,16 +116,13 @@ export default function CommandPalette() {
   const filtered = query
     ? [
         ...commands
-          .map((cmd) => ({
-            cmd,
-            score: Math.max(
-              fuzzyMatch(query, cmd.label).score,
-              fuzzyMatch(query, cmd.description).score
-            ),
-            match:
-              fuzzyMatch(query, cmd.label).match ||
-              fuzzyMatch(query, cmd.description).match,
-          }))
+          .map((cmd) => {
+            const byLabel = fuzzyMatch(query, cmd.label);
+            const byDesc  = fuzzyMatch(query, cmd.description);
+            const match   = byLabel.match || byDesc.match;
+            const score   = Math.max(byLabel.score, byDesc.score);
+            return { cmd, score, match };
+          })
           .filter((r) => r.match)
           .sort((a, b) => b.score - a.score)
           .map((r) => r.cmd),

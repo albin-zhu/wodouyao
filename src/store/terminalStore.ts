@@ -11,6 +11,9 @@ import { DEFAULT_COLOR, DEFAULT_THEME } from "../utils/terminalThemes";
 import { generateId } from "../utils/id";
 import { useWorkspaceStore } from "./workspaceStore";
 
+/** ms of silence after last PTY output before a terminal is considered idle. */
+const ACTIVE_WINDOW_MS = 1200;
+
 interface TerminalStore {
   terminals: Map<string, TerminalNode>;
   nextZIndex: number;
@@ -163,12 +166,31 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     }),
 
   markActivity: (id, ts) => {
-    // Mutate in place to avoid re-rendering every TerminalNode on each output
-    // chunk; the activity tick in useTerminalActivity reads this lazily and
-    // calls setStatus only when the derived state actually flips.
+    // Mutate lastOutputAt in place (no Zustand set) to avoid re-rendering
+    // every TerminalNode on each output chunk.
     const term = get().terminals.get(id);
-    if (term) {
-      term.lastOutputAt = ts;
+    if (!term) return;
+    term.lastOutputAt = ts;
+
+    // Event-driven idle detection: set status to "running" immediately, then
+    // schedule a flip to "idle" after the activity window. Any subsequent
+    // output cancels the pending flip via the stored timer handle.
+    if (term.status !== "error" && term.status !== "terminated" && term.lastExitCode === undefined) {
+      // Flip to running now (only if not already running, to avoid noisy sets).
+      if (term.status !== "running") {
+        get().setStatus(id, "running");
+      }
+      // Cancel any previously scheduled idle flip for this terminal.
+      const existing = (get() as any)._idleTimers?.get(id);
+      if (existing) clearTimeout(existing);
+      // Schedule idle flip after the activity window.
+      const timers: Map<string, ReturnType<typeof setTimeout>> =
+        ((get() as any)._idleTimers ??= new Map());
+      timers.set(id, setTimeout(() => {
+        timers.delete(id);
+        const t = get().terminals.get(id);
+        if (t && t.status === "running") get().setStatus(id, "idle");
+      }, ACTIVE_WINDOW_MS));
     }
   },
 

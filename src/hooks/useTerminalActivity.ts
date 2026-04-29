@@ -1,25 +1,29 @@
 import { useEffect } from "react";
 import { useTerminalStore } from "../store/terminalStore";
 
-const ACTIVE_WINDOW_MS = 1200;
+const STARTING_TIMEOUT_MS = 8000;
 
-/** Polls every 500 ms to flip terminal status between "running" and "idle"
- *  based on recent PTY output. Avoids re-rendering every node on each byte. */
+/**
+ * Handles the edge case where a terminal stays in "starting" indefinitely
+ * because it never emits output (e.g. the PTY spawned but the shell is hung).
+ * The running↔idle transition for active terminals is now event-driven inside
+ * terminalStore.markActivity — no polling needed there.
+ */
 export function useTerminalActivity() {
   useEffect(() => {
     const tick = setInterval(() => {
       const { terminals, setStatus } = useTerminalStore.getState();
       const now = Date.now();
       terminals.forEach((t) => {
-        if (t.status === "error" || t.status === "terminated") return;
+        if (t.status !== "starting") return;
         if (t.lastExitCode !== undefined) return;
-        const wasRecent = t.lastOutputAt !== undefined && now - t.lastOutputAt < ACTIVE_WINDOW_MS;
-        const target = wasRecent ? "running" : t.status === "starting" ? "starting" : "idle";
-        if (t.status !== target) {
-          setStatus(t.id, target);
+        // If still "starting" after STARTING_TIMEOUT_MS with no output, flip to idle.
+        const stallTime = t.lastOutputAt ?? t.createdAt;
+        if (now - stallTime > STARTING_TIMEOUT_MS) {
+          setStatus(t.id, "idle");
         }
       });
-    }, 500);
+    }, 2000);
     return () => clearInterval(tick);
   }, []);
 }
