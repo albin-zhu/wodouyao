@@ -188,6 +188,10 @@ pub struct AppSettings {
     pub theme: String,
     #[serde(default)]
     pub terminal_options: TerminalOptions,
+    /// Show FPS / frame-time HUD in the bottom-right corner. Useful when
+    /// profiling rendering performance.
+    #[serde(default)]
+    pub show_perf_hud: bool,
 }
 
 fn default_terminal_opacity() -> f64 {
@@ -218,6 +222,7 @@ impl Default for AppSettings {
             is_hdpi: true,
             theme: "system".into(),
             terminal_options: TerminalOptions::default(),
+            show_perf_hud: false,
             quick_commands: vec![
                 QuickCommand {
                     id: "claude".into(),

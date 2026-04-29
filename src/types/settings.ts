@@ -92,4 +92,6 @@ export interface AppSettings {
   is_hdpi: boolean;
   theme: ThemeMode;
   terminal_options: TerminalOptions;
+  /** Show FPS / frame-time HUD in the bottom-right corner. */
+  show_perf_hud: boolean;
 }

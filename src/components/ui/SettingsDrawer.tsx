@@ -333,6 +333,21 @@ export default function SettingsDrawer() {
   const renderAdvanced = () => (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
 
+      {/* Debug / Performance */}
+      <div style={card}>
+        <div style={cardHeader}>{t("settings.debug", "Debug")}</div>
+        <div style={{ padding: "10px 0" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input type="checkbox" checked={settings.show_perf_hud ?? false}
+              onChange={(e) => updateSettings({ show_perf_hud: e.target.checked })} style={{ margin: 0 }} />
+            <span style={{ color: "var(--color-text)", fontSize: 12 }}>{t("settings.showPerfHud", "Show performance HUD")}</span>
+          </label>
+          <div style={{ color: "var(--color-text-muted)", fontSize: 10, marginTop: 4, lineHeight: 1.5 }}>
+            {t("settings.perfHudHint", "Bottom-right overlay with FPS, frame time, JS heap, and node/wire counts.")}
+          </div>
+        </div>
+      </div>
+
       {/* Integrations */}
       <div style={card}>
         <div style={cardHeader}>{t("settings.integrations")}</div>
