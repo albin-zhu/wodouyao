@@ -3,6 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { CanvasAddon } from "@xterm/addon-canvas";
+import { ImageAddon } from "@xterm/addon-image";
 import { invoke } from "@tauri-apps/api/core";
 import { writeTerminal, resizeTerminal, destroyTerminal } from "../services/tauriCommands";
 import { listenTerminalOutput, listenTerminalExit } from "../services/tauriEvents";
@@ -138,6 +139,16 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
     // Re-apply theme after open() so the renderer picks it up even if
     // the constructor options were partially applied.
     try { term.options.theme = baseTheme; } catch { /* ignore */ }
+
+    // Inline image support: iTerm2 protocol (ESC]1337;File=...) and Sixel.
+    // This lets CLI tools like `imgcat`, `chafa`, or `wezterm imgcat` render
+    // images directly inside the terminal buffer. Must be loaded AFTER the
+    // renderer (CanvasAddon/WebGL) is in place.
+    try {
+      term.loadAddon(new ImageAddon({ enableSizeReports: true }));
+    } catch (e) {
+      console.warn("[xterm] ImageAddon failed to load:", e);
+    }
 
     // OSC 0/2 title sequences — update the canvas node's display name.
     term.onTitleChange((title) => {
