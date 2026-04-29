@@ -94,4 +94,8 @@ export interface AppSettings {
   terminal_options: TerminalOptions;
   /** Show FPS / frame-time HUD in the bottom-right corner. */
   show_perf_hud: boolean;
+  /** Use xterm's WebGL renderer. Faster but its glyph atlas can corrupt
+   *  under canvas zoom or DPR changes (especially on WKWebView). Default
+   *  is Canvas for reliability; opt in for CPU relief when zooming is rare. */
+  terminal_gpu_renderer: boolean;
 }

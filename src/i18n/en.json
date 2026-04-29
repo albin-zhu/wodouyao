@@ -41,6 +41,8 @@
     "debug": "Debug",
     "showPerfHud": "Show performance HUD",
     "perfHudHint": "Bottom-right overlay with FPS, frame time, JS heap, and node/wire counts.",
+    "terminalGpuRenderer": "Use WebGL terminal renderer",
+    "terminalGpuRendererHint": "Faster but may garble text when canvas zoom or DPR changes. Restart terminals after toggling.",
     "envOverrides": "Terminal environment variables",
     "envOverridesHint": "Injected into every new terminal. WODOUYAO_* keys are reserved. If you set PATH here, the wodouyao bin directory is still prepended automatically.",
     "envOverrideAdd": "Add variable",

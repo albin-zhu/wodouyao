@@ -336,14 +336,26 @@ export default function SettingsDrawer() {
       {/* Debug / Performance */}
       <div style={card}>
         <div style={cardHeader}>{t("settings.debug", "Debug")}</div>
-        <div style={{ padding: "10px 0" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-            <input type="checkbox" checked={settings.show_perf_hud ?? false}
-              onChange={(e) => updateSettings({ show_perf_hud: e.target.checked })} style={{ margin: 0 }} />
-            <span style={{ color: "var(--color-text)", fontSize: 12 }}>{t("settings.showPerfHud", "Show performance HUD")}</span>
-          </label>
-          <div style={{ color: "var(--color-text-muted)", fontSize: 10, marginTop: 4, lineHeight: 1.5 }}>
-            {t("settings.perfHudHint", "Bottom-right overlay with FPS, frame time, JS heap, and node/wire counts.")}
+        <div style={{ padding: "10px 0", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={settings.show_perf_hud ?? false}
+                onChange={(e) => updateSettings({ show_perf_hud: e.target.checked })} style={{ margin: 0 }} />
+              <span style={{ color: "var(--color-text)", fontSize: 12 }}>{t("settings.showPerfHud", "Show performance HUD")}</span>
+            </label>
+            <div style={{ color: "var(--color-text-muted)", fontSize: 10, marginTop: 4, lineHeight: 1.5 }}>
+              {t("settings.perfHudHint", "Bottom-right overlay with FPS, frame time, JS heap, and node/wire counts.")}
+            </div>
+          </div>
+          <div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={settings.terminal_gpu_renderer ?? false}
+                onChange={(e) => updateSettings({ terminal_gpu_renderer: e.target.checked })} style={{ margin: 0 }} />
+              <span style={{ color: "var(--color-text)", fontSize: 12 }}>{t("settings.terminalGpuRenderer", "Use WebGL terminal renderer")}</span>
+            </label>
+            <div style={{ color: "var(--color-text-muted)", fontSize: 10, marginTop: 4, lineHeight: 1.5 }}>
+              {t("settings.terminalGpuRendererHint", "Faster but may garble text when canvas zoom or DPR changes. Restart terminals after toggling.")}
+            </div>
           </div>
         </div>
       </div>

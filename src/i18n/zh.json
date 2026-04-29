@@ -41,6 +41,8 @@
     "debug": "调试",
     "showPerfHud": "显示性能 HUD",
     "perfHudHint": "右下角浮层显示 FPS、帧耗时、JS 堆内存以及节点/连线数量。",
+    "terminalGpuRenderer": "启用 WebGL 终端渲染器",
+    "terminalGpuRendererHint": "速度更快，但画布缩放或 DPR 变化时可能出现文字错位。开关后需要重开终端。",
     "envOverrides": "终端环境变量",
     "envOverridesHint": "会注入到新建的每个终端里。WODOUYAO_* 开头的键被保留不可覆盖。设置 PATH 时，wodouyao 命令所在目录仍会自动追加在最前。",
     "envOverrideAdd": "添加变量",

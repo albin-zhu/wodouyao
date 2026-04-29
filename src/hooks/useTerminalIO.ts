@@ -105,26 +105,33 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
       },
     });
 
-    // Renderer: try WebGL first (GPU-accelerated, now safe since each terminal
-    // has its own CSS transform layer instead of sharing a parent transform).
-    // Falls back to Canvas if the WebGL context is lost or unavailable.
+    // Renderer: Canvas is the default because it is robust under the per-node
+    // CSS transform (zoom). The WebGL renderer is faster but its glyph atlas
+    // gets corrupted when the effective DPR shifts (zoom, monitor swap) and
+    // on WKWebView in particular — symptoms are sliced/jumbled characters.
+    // Users who want WebGL anyway can opt in via settings.terminal_gpu_renderer.
     const loadCanvasFallback = () => {
       try {
         term.loadAddon(new CanvasAddon());
       } catch (e) {
-        console.error("[xterm] Canvas fallback failed:", e);
+        console.error("[xterm] Canvas renderer failed:", e);
       }
     };
-    try {
-      const webgl = new WebglAddon();
-      webgl.onContextLoss(() => {
-        console.warn("[xterm] WebGL context lost — falling back to Canvas");
-        webgl.dispose();
+    const useWebgl = settings?.terminal_gpu_renderer ?? false;
+    if (useWebgl) {
+      try {
+        const webgl = new WebglAddon();
+        webgl.onContextLoss(() => {
+          console.warn("[xterm] WebGL context lost — falling back to Canvas");
+          webgl.dispose();
+          loadCanvasFallback();
+        });
+        term.loadAddon(webgl);
+      } catch (e) {
+        console.warn("[xterm] WebGL unavailable, using Canvas renderer:", e);
         loadCanvasFallback();
-      });
-      term.loadAddon(webgl);
-    } catch (e) {
-      console.warn("[xterm] WebGL unavailable, using Canvas renderer:", e);
+      }
+    } else {
       loadCanvasFallback();
     }
 
@@ -224,16 +231,16 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
     return () => window.removeEventListener("wd-theme-changed", reApply);
   }, [opacity, terminalOptions, terminalId, appTheme]);
 
-  // Glyph atlas rebuild — the WebGL renderer caches rendered characters in a
-  // texture atlas. When the effective resolution of the canvas changes (canvas
-  // zoom via per-node CSS transform, window DPR change, or monitor swap), the
-  // atlas becomes inconsistent with the coordinate table and text shows up as
-  // sliced/jumbled glyphs. clearTextureAtlas() forces a full rebuild.
+  // Glyph atlas rebuild — only relevant under the WebGL renderer. The
+  // CanvasAddon redraws from scratch every frame so there is no atlas to
+  // go stale. Guarded by the setting to avoid needless work for the default
+  // (Canvas) path.
+  const gpuRenderer = useSettingsStore((s) => s.settings?.terminal_gpu_renderer ?? false);
   const canvasZoom = useCanvasStore((s) => s.zoom);
   useEffect(() => {
+    if (!gpuRenderer) return;
     const term = termRef.current;
     if (!term) return;
-    // Debounce so rapid wheel-zoom doesn't trigger a rebuild per frame.
     const timer = setTimeout(() => {
       try {
         (term as unknown as { clearTextureAtlas?: () => void }).clearTextureAtlas?.();
@@ -242,11 +249,12 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
       }
     }, 150);
     return () => clearTimeout(timer);
-  }, [canvasZoom]);
+  }, [canvasZoom, gpuRenderer]);
 
   // Also rebuild on devicePixelRatio change (dragging between Retina and
   // external monitor). matchMedia fires reliably on DPR crossings.
   useEffect(() => {
+    if (!gpuRenderer) return;
     const term = termRef.current;
     if (!term) return;
     const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
@@ -257,7 +265,7 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
     };
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
-  }, [terminalId]);
+  }, [terminalId, gpuRenderer]);
 
   const fit = useCallback(() => {
     const container = containerRef.current;

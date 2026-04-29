@@ -192,6 +192,11 @@ pub struct AppSettings {
     /// profiling rendering performance.
     #[serde(default)]
     pub show_perf_hud: bool,
+    /// Opt into xterm's WebGL renderer. Disabled by default because its
+    /// glyph texture atlas corrupts under canvas zoom / DPR changes on
+    /// WKWebView (sliced/jumbled characters). Canvas renderer is reliable.
+    #[serde(default)]
+    pub terminal_gpu_renderer: bool,
 }
 
 fn default_terminal_opacity() -> f64 {
@@ -223,6 +228,7 @@ impl Default for AppSettings {
             theme: "system".into(),
             terminal_options: TerminalOptions::default(),
             show_perf_hud: false,
+            terminal_gpu_renderer: false,
             quick_commands: vec![
                 QuickCommand {
                     id: "claude".into(),
