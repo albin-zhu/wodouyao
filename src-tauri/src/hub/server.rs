@@ -739,7 +739,7 @@ fn send(
     }
 
     let mode = parsed.mode.as_deref().unwrap_or("keys");
-    let mut bytes = match mode {
+    let bytes = match mode {
         "raw" => parsed.text.into_bytes(),
         "keys" => keys::parse_keys(&parsed.text),
         other => {
@@ -748,23 +748,11 @@ fn send(
         }
     };
 
-    // Every peer send is terminated with CR — keys OR raw — so the peer's
-    // shell / agent TUI consumes the payload immediately. No opt-out.
-    if !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
-        bytes.push(b'\r');
-    }
     let _ = identities; // identity lookup retained for future use; see note below.
 
-    let result = {
-        let mut mgr = match pty_manager.lock() {
-            Ok(g) => g,
-            Err(e) => {
-                let _ = request.respond(text(500, &format!("pty lock: {}", e)));
-                return;
-            }
-        };
-        mgr.write_to_session(&parsed.to, &bytes)
-    };
+    // Body + trailing CR go as separate writes via write_peer_send so Ink-based
+    // TUIs (Claude Code, codex) don't merge them into a paste event.
+    let result = write_peer_send(pty_manager, &parsed.to, &bytes);
 
     match result {
         Ok(()) => {
@@ -1403,6 +1391,48 @@ fn encode_payload(text: &str, mode: Option<&str>) -> Result<Vec<u8>, String> {
     }
 }
 
+/// Write a peer-send payload to the target session, but split the trailing
+/// Enter (CR) into its own write with a brief delay. Without the delay, Claude
+/// Code's Ink-based input handler (and similar TUIs) can see `"text\r"` arrive
+/// as a single chunk and treat it as a paste — the trailing `\r` becomes a
+/// literal newline in the input box instead of firing the Enter/submit event.
+/// Delivering CR in a separate chunk, after the body is already buffered,
+/// makes every modern agent TUI reliably submit.
+///
+/// Always normalizes the terminator to `\r` (CR), never `\n`: most agent TUIs
+/// run in raw mode and only treat CR as Enter.
+fn write_peer_send(
+    pty_manager: &Arc<Mutex<PtyManager>>,
+    target: &str,
+    bytes: &[u8],
+) -> Result<(), String> {
+    // Strip any trailing \r / \n run so we can re-emit a single, canonical CR.
+    let mut end = bytes.len();
+    while end > 0 {
+        let b = bytes[end - 1];
+        if b == b'\r' || b == b'\n' {
+            end -= 1;
+        } else {
+            break;
+        }
+    }
+    let body = &bytes[..end];
+
+    {
+        let mut mgr = pty_manager.lock().map_err(|e| format!("pty lock: {}", e))?;
+        if !body.is_empty() {
+            mgr.write_to_session(target, body)?;
+        }
+    }
+    // Drop the lock before sleeping so other hub requests aren't blocked.
+    std::thread::sleep(std::time::Duration::from_millis(30));
+    {
+        let mut mgr = pty_manager.lock().map_err(|e| format!("pty lock: {}", e))?;
+        mgr.write_to_session(target, b"\r")?;
+    }
+    Ok(())
+}
+
 fn fanout_send(
     pty_manager: &Arc<Mutex<PtyManager>>,
     targets: &[String],
@@ -1410,17 +1440,8 @@ fn fanout_send(
 ) -> (usize, Vec<serde_json::Value>) {
     let mut sent = 0usize;
     let mut failed: Vec<serde_json::Value> = Vec::new();
-    let mut mgr = match pty_manager.lock() {
-        Ok(g) => g,
-        Err(e) => {
-            for id in targets {
-                failed.push(serde_json::json!({ "id": id, "err": format!("pty lock: {}", e) }));
-            }
-            return (sent, failed);
-        }
-    };
     for id in targets {
-        match mgr.write_to_session(id, bytes) {
+        match write_peer_send(pty_manager, id, bytes) {
             Ok(()) => sent += 1,
             Err(e) => failed.push(serde_json::json!({ "id": id, "err": e })),
         }
@@ -1457,16 +1478,13 @@ fn team_broadcast(
         return;
     }
     let mode = parsed.mode.as_deref();
-    let mut bytes = match encode_payload(&parsed.text, mode) {
+    let bytes = match encode_payload(&parsed.text, mode) {
         Ok(b) => b,
         Err(e) => {
             let _ = request.respond(text(400, &e));
             return;
         }
     };
-    if !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
-        bytes.push(b'\r');
-    }
     let _ = identities;
     let targets: Vec<String> = team
         .members
@@ -1518,16 +1536,13 @@ fn team_dm(
         return;
     }
     let mode = parsed.mode.as_deref();
-    let mut bytes = match encode_payload(&parsed.text, mode) {
+    let bytes = match encode_payload(&parsed.text, mode) {
         Ok(b) => b,
         Err(e) => {
             let _ = request.respond(text(400, &e));
             return;
         }
     };
-    if !bytes.ends_with(b"\r") && !bytes.ends_with(b"\n") {
-        bytes.push(b'\r');
-    }
     let _ = identities;
     let targets: Vec<String> = team
         .members
