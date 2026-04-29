@@ -9,6 +9,7 @@ import { listenTerminalOutput, listenTerminalExit } from "../services/tauriEvent
 import { registerXterm, unregisterXterm } from "../services/terminalRegistry";
 import { useTerminalStore } from "../store/terminalStore";
 import { useSettingsStore } from "../store/settingsStore";
+import { useCanvasStore } from "../store/canvasStore";
 import { getXtermThemeMap } from "../utils/terminalThemes";
 import { DEFAULT_TERMINAL_OPTIONS } from "../types/settings";
 import type { TerminalTheme } from "../types/terminal";
@@ -222,6 +223,41 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
     window.addEventListener("wd-theme-changed", reApply);
     return () => window.removeEventListener("wd-theme-changed", reApply);
   }, [opacity, terminalOptions, terminalId, appTheme]);
+
+  // Glyph atlas rebuild — the WebGL renderer caches rendered characters in a
+  // texture atlas. When the effective resolution of the canvas changes (canvas
+  // zoom via per-node CSS transform, window DPR change, or monitor swap), the
+  // atlas becomes inconsistent with the coordinate table and text shows up as
+  // sliced/jumbled glyphs. clearTextureAtlas() forces a full rebuild.
+  const canvasZoom = useCanvasStore((s) => s.zoom);
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    // Debounce so rapid wheel-zoom doesn't trigger a rebuild per frame.
+    const timer = setTimeout(() => {
+      try {
+        (term as unknown as { clearTextureAtlas?: () => void }).clearTextureAtlas?.();
+      } catch (e) {
+        console.warn("[xterm] clearTextureAtlas failed:", e);
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [canvasZoom]);
+
+  // Also rebuild on devicePixelRatio change (dragging between Retina and
+  // external monitor). matchMedia fires reliably on DPR crossings.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    const onChange = () => {
+      try {
+        (term as unknown as { clearTextureAtlas?: () => void }).clearTextureAtlas?.();
+      } catch { /* ignore */ }
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [terminalId]);
 
   const fit = useCallback(() => {
     const container = containerRef.current;
