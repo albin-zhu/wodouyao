@@ -158,14 +158,27 @@ interface TerminalBodyProps {
 
 export default function TerminalBody({ terminalId }: TerminalBodyProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { fit, termRef } = useTerminalIO(terminalId, containerRef);
+  const [blockVersion, setBlockVersion] = useState(0);
+  const { blocksRef, registerHandlers, toggleCollapse } = useTerminalBlocks();
+
+  // Pass registerHandlers as onTerminalReady so OSC 133 is registered on the
+  // xterm instance at exactly the right moment — after open() + renderer load,
+  // before any PTY output arrives. This avoids the race where useEffect runs
+  // while termRef.current is still null.
+  const onTerminalReady = useCallback(
+    (term: Terminal) => {
+      const onUpdate = () => setBlockVersion((v) => v + 1);
+      return registerHandlers(term, onUpdate);
+    },
+    [registerHandlers],
+  );
+
+  const { fit, termRef } = useTerminalIO(terminalId, containerRef, onTerminalReady);
   const themeName = useTerminalStore((s) => s.terminals.get(terminalId)?.theme ?? "tokyonight");
   const opacity = useSettingsStore((s) => s.settings?.terminal_opacity ?? 1);
   const rawBg = getXtermThemeMap()[themeName]?.background ?? "var(--color-bg-alt)";
   const bg = opacity < 1 ? hexToRgba(rawBg, opacity) : rawBg;
   const [pendingPaste, setPendingPaste] = useState<string | null>(null);
-  const [blockVersion, setBlockVersion] = useState(0);
-  const { blocksRef, registerHandlers, toggleCollapse } = useTerminalBlocks(termRef);
 
   interface ImageTooltip { x: number; y: number; src: string; filename: string }
   const [imageTooltip, setImageTooltip] = useState<ImageTooltip | null>(null);
@@ -173,15 +186,6 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
   const handleClick = useCallback(() => {
     termRef.current?.focus();
   }, [termRef]);
-
-  // Register OSC 133 block tracking handlers once terminal is ready.
-  useEffect(() => {
-    const term = termRef.current;
-    if (!term) return;
-    const onUpdate = () => setBlockVersion((v) => v + 1);
-    return registerHandlers(term, onUpdate);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [termRef.current, registerHandlers]);
 
   // Resize observer to auto-fit terminal when container size changes.
   // Debounced + rAF-coalesced so fast mouse drags don't reflow xterm on

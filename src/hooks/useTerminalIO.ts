@@ -47,7 +47,11 @@ function toXtermOptions(opts: TerminalOptions, opacity: number, baseTheme: impor
   };
 }
 
-export function useTerminalIO(terminalId: string, containerRef: React.RefObject<HTMLDivElement | null>) {
+export function useTerminalIO(
+  terminalId: string,
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  onTerminalReady?: (term: Terminal) => (() => void) | void,
+) {
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const setStatus = useTerminalStore((s) => s.setStatus);
@@ -173,6 +177,14 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
     // Register in global registry for cross-terminal operations
     registerXterm(terminalId, term);
 
+    // Let callers (e.g. block tracking) register on the xterm instance at
+    // exactly the right moment — after open() and renderer load, before
+    // any PTY output arrives.
+    let readyCleanup: (() => void) | void;
+    if (onTerminalReady) {
+      readyCleanup = onTerminalReady(term);
+    }
+
     // Send user input to backend PTY only. Wires are ACL for hub peer
     // communication, not live keystroke mirroring — agents talk to peers
     // explicitly via the `wodouyao send` CLI.
@@ -206,6 +218,7 @@ export function useTerminalIO(terminalId: string, containerRef: React.RefObject<
 
     // Cleanup — runs on unmount (and between StrictMode re-mounts)
     return () => {
+      readyCleanup?.();
       unlistenFns.forEach((fn) => fn());
       unregisterXterm(terminalId);
       term.dispose();

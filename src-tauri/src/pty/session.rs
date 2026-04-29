@@ -138,12 +138,32 @@ impl PtySession {
                     // (if it exists) so the user's environment still
                     // loads, then append our exports.
                     script.push_str(r#"# wodouyao shell integration (OSC 133)
-__wdy_ps1_orig="${PS1:-}"
-__wdy_cmd_start() { printf '\033]133;C\007'; }
-__wdy_prompt() { local ec=$?; printf '\033]133;D;%s\007' "$ec"; printf '\033]133;A\007'; PS1="${__wdy_ps1_orig}"; }
-trap '__wdy_cmd_start' DEBUG
-PROMPT_COMMAND="${PROMPT_COMMAND:+${PROMPT_COMMAND};}__wdy_prompt"
-PS1='\[\033]133;B\007\]'"${PS1:-$ }"
+# Uses bash-preexec if available (supports preexec hook), otherwise falls back
+# to a PS1-only approach (no OSC B/C — only A/D boundaries are emitted).
+__wdy_precmd() {
+  local ec=$?
+  printf '\033]133;D;%s\007' "$ec"
+  printf '\033]133;A\007'
+}
+__wdy_preexec() {
+  printf '\033]133;C\007'
+}
+if declare -f precmd_functions &>/dev/null 2>&1 || [ -n "$BASH_VERSION" ]; then
+  # bash-preexec (https://github.com/rcaloras/bash-preexec) provides
+  # precmd_functions / preexec_functions for bash — source if present.
+  if [ -f ~/.bash-preexec.sh ]; then
+    source ~/.bash-preexec.sh
+    precmd_functions+=(__wdy_precmd)
+    preexec_functions+=(__wdy_preexec)
+  else
+    # Fallback: hook via PROMPT_COMMAND only (no preexec = no OSC C)
+    PROMPT_COMMAND="${PROMPT_COMMAND:+${PROMPT_COMMAND}; }__wdy_precmd"
+  fi
+else
+  PROMPT_COMMAND="${PROMPT_COMMAND:+${PROMPT_COMMAND}; }__wdy_precmd"
+fi
+# Emit initial prompt start so the first block boundary is detected.
+printf '\033]133;A\007'
 "#);
                     if let Some((dir, rc_path)) = write_temp_rc("wodouyao-bashrc", |w| {
                         if let Some(home) = std::env::var_os("HOME") {

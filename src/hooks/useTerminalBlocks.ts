@@ -22,7 +22,7 @@ interface PendingBlock {
   execRow: number;
 }
 
-export function useTerminalBlocks(_termRef: React.RefObject<Terminal | null>) {
+export function useTerminalBlocks() {
   const blocksRef = useRef<TerminalBlock[]>([]);
   const versionRef = useRef(0);
   const forceUpdateRef = useRef<(() => void) | null>(null);
