@@ -1,6 +1,8 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTerminalIO } from "../../hooks/useTerminalIO";
+import { useTerminalBlocks } from "../../hooks/useTerminalBlocks";
+import type { TerminalBlock } from "../../hooks/useTerminalBlocks";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { getXtermThemeMap } from "../../utils/terminalThemes";
@@ -12,9 +14,143 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 0xff}, ${(n >> 8) & 0xff}, ${n & 0xff}, ${alpha})`;
 }
 import { convertFileSrc } from "@tauri-apps/api/core";
+import type { Terminal } from "@xterm/xterm";
 import { writeTerminal, saveClipboardImage } from "../../services/tauriCommands";
 import PasteConfirmDialog from "./PasteConfirmDialog";
 import "@xterm/xterm/css/xterm.css";
+
+// ---------------------------------------------------------------------------
+// BlockOverlay — renders block separators and collapse controls on top of xterm
+// ---------------------------------------------------------------------------
+interface BlockOverlayProps {
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  termRef: React.RefObject<Terminal | null>;
+  blocksRef: React.MutableRefObject<TerminalBlock[]>;
+  blockVersion: number;
+  bg: string;
+  onToggleCollapse: (id: string) => void;
+}
+
+function BlockOverlay({
+  containerRef,
+  termRef,
+  blocksRef,
+  blockVersion: _blockVersion,
+  bg,
+  onToggleCollapse,
+}: BlockOverlayProps) {
+  const container = containerRef.current;
+  const term = termRef.current;
+  if (!container || !term) return null;
+
+  const w = container.clientWidth - 8;
+  const h = container.clientHeight - 8;
+  if (w <= 0 || h <= 0) return null;
+
+  const cellH = h / term.rows;
+  const blocks = blocksRef.current;
+  const currentRow = term.buffer.active.baseY + term.buffer.active.cursorY;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 4,
+        pointerEvents: "none",
+        overflow: "hidden",
+        zIndex: 10,
+      }}
+    >
+      {blocks.map((block) => {
+        const y = (block.row - term.buffer.active.baseY) * cellH;
+        if (y < -cellH || y > h + cellH) return null; // off-screen
+
+        const endRow = block.endRow ?? currentRow;
+        const outputStartY = (block.execRow - term.buffer.active.baseY) * cellH;
+        const outputEndY = (endRow - term.buffer.active.baseY) * cellH;
+        const outputHeight = Math.max(0, outputEndY - outputStartY);
+
+        return (
+          <div key={block.id}>
+            {/* Separator line at prompt row */}
+            <div
+              style={{
+                position: "absolute",
+                top: Math.max(0, y),
+                left: 0,
+                right: 0,
+                height: 1,
+                background: "rgba(255,255,255,0.08)",
+                pointerEvents: "none",
+              }}
+            />
+            {/* Collapse toggle button — pointer-events: auto */}
+            <div
+              style={{
+                position: "absolute",
+                top: Math.max(0, y) - 1,
+                right: 0,
+                width: 20,
+                height: 14,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                pointerEvents: "auto",
+                background: "rgba(26,27,38,0.85)",
+                borderRadius: "2px 0 0 2px",
+                fontSize: 10,
+                color: "rgba(192,202,245,0.5)",
+                userSelect: "none",
+                zIndex: 11,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleCollapse(block.id);
+              }}
+              title={block.collapsed ? "Expand block" : "Collapse block"}
+            >
+              {block.collapsed ? "▶" : "▼"}
+            </div>
+            {/* Collapse overlay — covers output rows */}
+            {block.collapsed && outputHeight > 0 && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: Math.max(0, outputStartY),
+                  left: 0,
+                  right: 0,
+                  height: outputHeight,
+                  background: bg,
+                  pointerEvents: "auto",
+                  zIndex: 10,
+                  display: "flex",
+                  alignItems: "center",
+                  paddingLeft: 8,
+                  fontSize: 11,
+                  color: "rgba(192,202,245,0.35)",
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleCollapse(block.id);
+                }}
+              >
+                {`${Math.max(0, endRow - block.execRow)} lines hidden`}
+                {block.exitCode !== undefined && block.exitCode !== 0 && (
+                  <span style={{ marginLeft: 8, color: "#f7768e" }}>
+                    exit {block.exitCode}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 interface TerminalBodyProps {
   terminalId: string;
@@ -28,6 +164,8 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
   const rawBg = getXtermThemeMap()[themeName]?.background ?? "var(--color-bg-alt)";
   const bg = opacity < 1 ? hexToRgba(rawBg, opacity) : rawBg;
   const [pendingPaste, setPendingPaste] = useState<string | null>(null);
+  const [blockVersion, setBlockVersion] = useState(0);
+  const { blocksRef, registerHandlers, toggleCollapse } = useTerminalBlocks(termRef);
 
   interface ImageTooltip { x: number; y: number; src: string; filename: string }
   const [imageTooltip, setImageTooltip] = useState<ImageTooltip | null>(null);
@@ -35,6 +173,15 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
   const handleClick = useCallback(() => {
     termRef.current?.focus();
   }, [termRef]);
+
+  // Register OSC 133 block tracking handlers once terminal is ready.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    const onUpdate = () => setBlockVersion((v) => v + 1);
+    return registerHandlers(term, onUpdate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [termRef.current, registerHandlers]);
 
   // Resize observer to auto-fit terminal when container size changes.
   // Debounced + rAF-coalesced so fast mouse drags don't reflow xterm on
@@ -76,6 +223,8 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
             const target = Math.max(0, anchorLine - t.rows + 1);
             t.scrollToLine(Math.min(target, nb.length - t.rows));
           }
+          // Recompute block overlay positions after resize.
+          setBlockVersion((v) => v + 1);
         });
       }, 60);
     });
@@ -84,7 +233,7 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
       observer.disconnect();
       if (timer) clearTimeout(timer);
     };
-  }, [fit, termRef]);
+  }, [fit, termRef, setBlockVersion]);
 
   // Intercept paste — xterm captures paste on its hidden textarea,
   // so we listen there with capture-phase to preempt xterm's handler.
@@ -267,6 +416,17 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
           onCancel={cancelPaste}
         />
       )}
+      {/* Block boundary overlay — recomputes on blockVersion or resize */}
+      <BlockOverlay
+        containerRef={containerRef}
+        termRef={termRef}
+        blocksRef={blocksRef}
+        blockVersion={blockVersion}
+        bg={bg}
+        onToggleCollapse={(id) =>
+          toggleCollapse(id, () => setBlockVersion((v) => v + 1))
+        }
+      />
     </div>
     {imageTooltip != null && createPortal(
       <div

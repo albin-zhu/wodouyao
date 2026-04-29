@@ -108,7 +108,7 @@ impl PtySession {
         // our overrides LAST so we win. Nothing is written to the user's
         // HOME; everything lives in a temp dir that we hand-delete.
         let mut rc_tempdir: Option<std::path::PathBuf> = None;
-        if !fast_start && !env.is_empty() {
+        if !fast_start {
             let shell_basename_raw = std::path::Path::new(shell_path)
                 .file_name()
                 .and_then(|s| s.to_str())
@@ -117,16 +117,18 @@ impl PtySession {
             let shell_basename = shell_basename_raw.trim_end_matches(".exe");
 
             let mut script = String::new();
-            script.push_str("# wodouyao: re-export user env overrides after rc\n");
-            for (k, v) in env {
-                if k.is_empty() {
-                    continue;
+            if !env.is_empty() {
+                script.push_str("# wodouyao: re-export user env overrides after rc\n");
+                for (k, v) in env {
+                    if k.is_empty() {
+                        continue;
+                    }
+                    script.push_str("export ");
+                    script.push_str(k);
+                    script.push('=');
+                    script.push_str(&shell_escape(v));
+                    script.push('\n');
                 }
-                script.push_str("export ");
-                script.push_str(k);
-                script.push('=');
-                script.push_str(&shell_escape(v));
-                script.push('\n');
             }
 
             match shell_basename {
@@ -135,6 +137,14 @@ impl PtySession {
                     // source only that file. We source ~/.bashrc first
                     // (if it exists) so the user's environment still
                     // loads, then append our exports.
+                    script.push_str(r#"# wodouyao shell integration (OSC 133)
+__wdy_ps1_orig="${PS1:-}"
+__wdy_cmd_start() { printf '\033]133;C\007'; }
+__wdy_prompt() { local ec=$?; printf '\033]133;D;%s\007' "$ec"; printf '\033]133;A\007'; PS1="${__wdy_ps1_orig}"; }
+trap '__wdy_cmd_start' DEBUG
+PROMPT_COMMAND="${PROMPT_COMMAND:+${PROMPT_COMMAND};}__wdy_prompt"
+PS1='\[\033]133;B\007\]'"${PS1:-$ }"
+"#);
                     if let Some((dir, rc_path)) = write_temp_rc("wodouyao-bashrc", |w| {
                         if let Some(home) = std::env::var_os("HOME") {
                             let home = std::path::Path::new(&home).join(".bashrc");
@@ -156,6 +166,13 @@ impl PtySession {
                     // zsh honors $ZDOTDIR: when set, .zshrc is read from
                     // there instead of $HOME. Drop a .zshrc that sources
                     // the real one, then runs our exports.
+                    script.push_str(r#"# wodouyao shell integration (OSC 133)
+__wdy_precmd() { printf '\033]133;D;%s\007' "$?"; printf '\033]133;A\007'; }
+__wdy_preexec() { printf '\033]133;B\007'; printf '\033]133;C\007'; }
+precmd_functions+=(__wdy_precmd)
+preexec_functions+=(__wdy_preexec)
+printf '\033]133;A\007'
+"#);
                     if let Some((dir, _)) = write_temp_rc_named("wodouyao-zdotdir", ".zshrc", |w| {
                         if let Some(home) = std::env::var_os("HOME") {
                             let home = std::path::Path::new(&home).join(".zshrc");
