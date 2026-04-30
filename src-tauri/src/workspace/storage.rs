@@ -48,6 +48,15 @@ pub struct TerminalNodeLayout {
     pub role: Option<String>,
     #[serde(default)]
     pub workspace_id: Option<String>,
+    /// Detected agent kind ("claude" / "codex" / "shell"). Used on
+    /// workspace reload to build a resume command instead of starting
+    /// a fresh session.
+    #[serde(default)]
+    pub agent_kind: Option<String>,
+    /// Specific agent session id to resume. Optional — if None, the
+    /// agent's "continue most recent" flag is used when reopening.
+    #[serde(default)]
+    pub session_id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

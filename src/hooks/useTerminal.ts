@@ -9,6 +9,19 @@ import { toast } from "../store/toastStore";
 import i18n from "../i18n";
 import type { TerminalNode, TerminalTheme, TerminalRole } from "../types/terminal";
 
+/** Detect which agent CLI a spawn command invokes, so on workspace reload
+ *  we can rebuild the command with a resume flag. Recognizes the first
+ *  token after any `bash -c '...'` wrapping. Returns "shell" for anything
+ *  not a known agent (wodouyao scripts, raw shells, etc.). */
+function detectAgentKind(command: string | undefined): TerminalNode["agentKind"] {
+  if (!command) return "shell";
+  const head = command.trim().split(/\s+/)[0] ?? "";
+  const basename = head.split("/").pop() ?? head;
+  if (basename === "claude") return "claude";
+  if (basename === "codex") return "codex";
+  return "shell";
+}
+
 export interface SpawnOptions {
   id?: string;
   command?: string;
@@ -47,6 +60,7 @@ export function useTerminal() {
         initialCommand: options?.command,
         position: pos,
         cwd,
+        agentKind: detectAgentKind(options?.command),
       };
       if (options?.name) overrides.name = options.name;
       if (options?.size) overrides.size = options.size;

@@ -24,6 +24,14 @@ export interface TerminalNode {
   theme: TerminalTheme;
   cwd?: string;
   role?: TerminalRole;
+  /** Agent kind detected from the initial command. Used by workspace
+   *  reload to rebuild the command with a resume flag (claude -r, codex
+   *  --resume) so the agent session picks up where it left off. */
+  agentKind?: "claude" | "codex" | "shell";
+  /** Specific agent session id to resume. If unset, we use the agent's
+   *  "continue most recent" flag (-c for claude, --resume for codex) and
+   *  let the CLI pick the session tied to cwd. */
+  sessionId?: string;
   /** Last time the PTY emitted output (ms). In-memory only. */
   lastOutputAt?: number;
   /** Last process exit code, if the shell has terminated. In-memory only. */

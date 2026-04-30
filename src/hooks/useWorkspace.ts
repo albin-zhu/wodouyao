@@ -21,6 +21,39 @@ import { createTerminal, saveWorkspace } from "../services/tauriCommands";
 import { generateId } from "../utils/id";
 import { DEFAULT_COLS, DEFAULT_ROWS } from "../utils/constants";
 
+/** Rewrite a terminal's spawn command so opening a saved workspace picks
+ *  up the previous agent session instead of starting fresh. Rules:
+ *
+ *    claude with session_id → `claude --dangerously-skip-permissions -r <id>`
+ *    claude without id      → `claude --dangerously-skip-permissions -c`
+ *    codex with session_id  → `codex --dangerously-bypass-approvals-and-sandbox --resume <id>`
+ *    codex without id       → `codex --dangerously-bypass-approvals-and-sandbox --resume`
+ *    shell / unknown        → original command verbatim
+ *
+ *  Callers pass the verbatim `initial_command`; we only swap when we
+ *  recognize a supported agent kind. If the user customized the command
+ *  (piping, env prefix, bash -c wrapper), we keep it as-is rather than
+ *  risk mangling — session recovery is best-effort. */
+function buildResumeCommand(
+  originalCommand: string | undefined,
+  agentKind: WorkspaceTerminalLayout["agent_kind"],
+  sessionId: string | undefined,
+): string | undefined {
+  if (!originalCommand || !agentKind) return originalCommand;
+  const trimmed = originalCommand.trim();
+  if (agentKind === "claude" && /^claude(\s|$)/.test(trimmed)) {
+    return sessionId
+      ? `claude --dangerously-skip-permissions -r ${sessionId}`
+      : `claude --dangerously-skip-permissions -c`;
+  }
+  if (agentKind === "codex" && /^codex(\s|$)/.test(trimmed)) {
+    return sessionId
+      ? `codex --dangerously-bypass-approvals-and-sandbox --resume ${sessionId}`
+      : `codex --dangerously-bypass-approvals-and-sandbox --resume`;
+  }
+  return originalCommand;
+}
+
 export function useWorkspace() {
   const terminals = useTerminalStore((s) => s.terminals);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
@@ -63,6 +96,8 @@ export function useWorkspace() {
       theme: t.theme,
       cwd: t.cwd,
       role: t.role,
+      agent_kind: t.agentKind,
+      session_id: t.sessionId,
     }));
 
     const wireLayouts: WorkspaceWireLayout[] = Array.from(wiresMap.values())
@@ -205,6 +240,15 @@ export function useWorkspace() {
         }
         // Fresh spawn — terminal does not exist yet (cold start, or fork
         // from a different ws where this terminal was never spawned).
+        // Rewrite the command to a resume form for known agents so the
+        // previous chat session is picked up. Session-id-specific resume
+        // (`-r <id>` / `--resume <id>`) wins when we have one stored;
+        // otherwise fall through to the agent's continue-most-recent flag.
+        const resumeCommand = buildResumeCommand(
+          layout.initial_command,
+          layout.agent_kind,
+          layout.session_id,
+        );
         const overrides: Partial<TerminalNode> = {
           id: layout.id,
           name: layout.name,
@@ -217,16 +261,19 @@ export function useWorkspace() {
           theme: (layout.theme as TerminalNode["theme"]) ?? "tokyonight",
           cwd: layout.cwd,
           role: layout.role as TerminalNode["role"],
+          agentKind: layout.agent_kind,
+          sessionId: layout.session_id,
           workspaceId: incomingId,
         };
         addTerminal(overrides);
         try {
           await createTerminal({
             id: layout.id,
-            command: layout.initial_command,
+            command: resumeCommand,
             cols: DEFAULT_COLS,
             rows: DEFAULT_ROWS,
             cwd: layout.cwd ?? ws.cwd,
+            workspace_id: incomingId,
           });
         } catch (err) {
           console.error("[workspace] Failed to create terminal:", err);

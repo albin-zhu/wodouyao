@@ -68,6 +68,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       theme: overrides?.theme ?? DEFAULT_THEME,
       cwd: overrides?.cwd,
       role: overrides?.role,
+      agentKind: overrides?.agentKind,
+      sessionId: overrides?.sessionId,
       workspaceId: overrides?.workspaceId ?? wsId,
       ...overrides,
       // Ensure id/workspaceId are not overwritten by spread when not provided

@@ -51,6 +51,10 @@ export interface WorkspaceTerminalLayout {
   theme?: string;
   cwd?: string;
   role?: string;
+  /** Recognized agent CLI on the initial command. Drives resume-on-reopen. */
+  agent_kind?: "claude" | "codex" | "shell";
+  /** Specific agent session to resume. Optional — uses continue-most-recent if absent. */
+  session_id?: string;
 }
 
 export interface WorkspaceWireLayout {
