@@ -1154,12 +1154,55 @@ cmd_task_remove() {
     esac
 }
 
+cmd_task_next() {
+    _role=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --role) [ $# -ge 2 ] || die "--role requires a value"
+                    _role=$2; shift 2 ;;
+            -*)     die "unknown flag: $1" ;;
+            *)      die "task next: unexpected arg: $1" ;;
+        esac
+    done
+    load_endpoint
+    _qs=""
+    [ -n "$_role" ] && _qs="?role=$_role"
+    _tmp=$(mktemp -t wd-task-next.XXXXXX) || die "mktemp failed"
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        "$URL/v1/tasks/next$_qs") || { rm -f "$_tmp"; die "task next failed"; }
+    case $_code in
+        200) cat "$_tmp"; printf '\n'; rm -f "$_tmp" ;;
+        204) rm -f "$_tmp"; exit 3 ;;  # no eligible task
+        *)   _msg=$(cat "$_tmp"); rm -f "$_tmp"; die "task next failed (HTTP $_code): $_msg" ;;
+    esac
+}
+
+cmd_task_claim() {
+    [ $# -ge 1 ] || die "task claim: usage <task-id>"
+    _tid=$1
+    [ -n "${WODOUYAO_ID:-}" ] || die "task claim: WODOUYAO_ID is unset"
+    load_endpoint
+    _tmp=$(mktemp -t wd-task-claim.XXXXXX) || die "mktemp failed"
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X POST "$URL/v1/tasks/$_tid/claim?from=$WODOUYAO_ID") \
+        || { rm -f "$_tmp"; die "task claim failed"; }
+    case $_code in
+        200) cat "$_tmp"; printf '\n'; rm -f "$_tmp" ;;
+        409) printf '%s: task already claimed: %s\n' "$SELF" "$_tid" >&2
+             cat "$_tmp" >&2; printf '\n' >&2; rm -f "$_tmp"; exit 5 ;;
+        404) rm -f "$_tmp"; die "task not found: $_tid" ;;
+        *)   _msg=$(cat "$_tmp"); rm -f "$_tmp"; die "task claim failed (HTTP $_code): $_msg" ;;
+    esac
+}
+
 cmd_task() {
-    [ $# -gt 0 ] || die "task: missing subcommand (list|add|take|done|update|remove)"
+    [ $# -gt 0 ] || die "task: missing subcommand (list|add|next|claim|take|done|update|remove)"
     _sub=$1; shift
     case $_sub in
         list)   cmd_task_list   "$@" ;;
         add)    cmd_task_add    "$@" ;;
+        next)   cmd_task_next   "$@" ;;
+        claim)  cmd_task_claim  "$@" ;;
         take)   cmd_task_take   "$@" ;;
         done)   cmd_task_done   "$@" ;;
         update) cmd_task_update "$@" ;;

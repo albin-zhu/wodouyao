@@ -31,6 +31,25 @@ pub struct Task {
     pub note_id: Option<String>,
     #[serde(default)]
     pub workspace_id: Option<String>,
+    /// Suggested terminal role (e.g. "architect", "backend", "frontend").
+    /// `wodouyao task next` filters by it for the calling agent. None means
+    /// "any role can take it".
+    #[serde(default)]
+    pub role_hint: Option<String>,
+    /// Where the task originated. "manual" (default), "prd", "task-master".
+    /// Free-form so future sources don't need a schema migration.
+    #[serde(default)]
+    pub source: Option<String>,
+    /// Parent task id for subtasks. None = top-level. Trees are flat in
+    /// storage — the parent_id link is the only structure.
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    /// 1–10 estimated complexity, set by PM expansion. Optional.
+    #[serde(default)]
+    pub complexity: Option<u8>,
+    /// Note id of the PRD this task came from, when source == "prd".
+    #[serde(default)]
+    pub prd_note_id: Option<String>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -50,6 +69,16 @@ pub struct TaskCreate {
     pub note_id: Option<String>,
     #[serde(default)]
     pub workspace_id: Option<String>,
+    #[serde(default)]
+    pub role_hint: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    #[serde(default)]
+    pub complexity: Option<u8>,
+    #[serde(default)]
+    pub prd_note_id: Option<String>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -69,6 +98,11 @@ pub struct TaskPatch {
     pub acceptance: Option<Vec<String>>,
     #[serde(default)]
     pub note_id: Option<Option<String>>,
+    /// Same nullable-optional shape as owner_term_id so PATCH can clear it.
+    #[serde(default, deserialize_with = "deserialize_optional_optional_string")]
+    pub role_hint: Option<Option<String>>,
+    #[serde(default)]
+    pub complexity: Option<Option<u8>>,
 }
 
 fn deserialize_optional_optional_string<'de, D>(
@@ -85,6 +119,13 @@ where
 #[derive(Clone)]
 pub struct TaskStore {
     inner: Arc<Mutex<HashMap<String, Task>>>,
+}
+
+#[derive(Debug)]
+pub enum ClaimResult {
+    Ok(Task),
+    AlreadyClaimed(Task),
+    NotFound,
 }
 
 fn now_ms() -> u64 {
@@ -121,6 +162,11 @@ impl TaskStore {
             acceptance: input.acceptance,
             note_id: input.note_id,
             workspace_id: input.workspace_id,
+            role_hint: input.role_hint,
+            source: input.source,
+            parent_id: input.parent_id,
+            complexity: input.complexity,
+            prd_note_id: input.prd_note_id,
         };
         self.inner.lock().unwrap().insert(task.id.clone(), task.clone());
         task
@@ -150,7 +196,62 @@ impl TaskStore {
         if let Some(n) = patch.note_id {
             task.note_id = n;
         }
+        if let Some(rh) = patch.role_hint {
+            task.role_hint = rh;
+        }
+        if let Some(c) = patch.complexity {
+            task.complexity = c;
+        }
         Some(task.clone())
+    }
+
+    /// Atomic claim: only succeeds if the task is currently unowned.
+    /// Returns the updated task, or None if not found / already claimed.
+    pub fn try_claim(&self, id: &str, owner: &str) -> ClaimResult {
+        let mut map = self.inner.lock().unwrap();
+        let Some(task) = map.get_mut(id) else {
+            return ClaimResult::NotFound;
+        };
+        if task.owner_term_id.is_some() && task.owner_term_id.as_deref() != Some(owner) {
+            return ClaimResult::AlreadyClaimed(task.clone());
+        }
+        task.owner_term_id = Some(owner.to_string());
+        if matches!(task.status, TaskStatus::Pending) {
+            task.status = TaskStatus::InProgress;
+        }
+        ClaimResult::Ok(task.clone())
+    }
+
+    /// Pick the next task suitable for `caller_role`. Filters:
+    ///   - status == Pending
+    ///   - owner_term_id is None
+    ///   - all blocked_by tasks are Completed
+    ///   - role_hint is None or matches caller_role (case-insensitive)
+    ///   - workspace matches if `ws_id` is Some
+    /// Returns the oldest matching task (FIFO by created_at).
+    pub fn next_for(&self, caller_role: Option<&str>, ws_id: Option<&str>) -> Option<Task> {
+        let map = self.inner.lock().unwrap();
+        let role_lc = caller_role.map(|r| r.to_lowercase());
+        let mut candidates: Vec<&Task> = map
+            .values()
+            .filter(|t| matches!(t.status, TaskStatus::Pending))
+            .filter(|t| t.owner_term_id.is_none())
+            .filter(|t| ws_id.map_or(true, |w| t.workspace_id.as_deref() == Some(w)))
+            .filter(|t| match (&t.role_hint, &role_lc) {
+                (None, _) => true,
+                (Some(hint), Some(role)) => hint.to_lowercase() == *role,
+                (Some(_), None) => false,
+            })
+            .filter(|t| {
+                t.blocked_by.iter().all(|dep_id| {
+                    map.get(dep_id)
+                        .map(|d| matches!(d.status, TaskStatus::Completed))
+                        .unwrap_or(true) // missing deps treated as resolved
+                })
+            })
+            .collect();
+        candidates.sort_by_key(|t| t.created_at);
+        candidates.first().map(|t| (*t).clone())
     }
 
     pub fn remove(&self, id: &str) -> bool {

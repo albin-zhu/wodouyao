@@ -17,7 +17,7 @@ use crate::file_nodes::FileNodeStore;
 use crate::notes::{NoteCreate, NotePatch as NoteStorePatch, NoteStore};
 use crate::pty::manager::PtyManager;
 use crate::task_boards::TaskBoardStore;
-use crate::tasks::{TaskCreate, TaskPatch as TaskStorePatch, TaskStore};
+use crate::tasks::{ClaimResult, TaskCreate, TaskPatch as TaskStorePatch, TaskStore};
 
 pub type AppHandleSlot = Arc<OnceLock<AppHandle>>;
 
@@ -138,6 +138,9 @@ fn handle(
         (&Method::Get, "/v1/teams") => teams_list(request, team_registry),
         (&Method::Get, "/v1/tasks") => tasks_list_route(request, task_store),
         (&Method::Post, "/v1/tasks") => tasks_create_route(request, task_store, app_handle),
+        (&Method::Get, "/v1/tasks/next") => {
+            tasks_next_route(request, task_store, identities, &query)
+        }
         (&Method::Get, "/v1/wires") => wires_list_route(request, topology),
         (&Method::Post, "/v1/wires") => wires_create_route(request, topology, app_handle),
         (&Method::Get, "/v1/terminals") => terminals_list_route(request, pty_manager, identities),
@@ -148,11 +151,20 @@ fn handle(
         (&Method::Get, "/v1/shaders") => shaders_list_route(request),
         _ => {
             if let Some(task_id) = path.strip_prefix("/v1/tasks/") {
-                match &method {
-                    &Method::Patch => tasks_patch_route(request, task_store, task_id, app_handle),
-                    &Method::Delete => tasks_delete_route(request, task_store, task_id, app_handle),
-                    _ => {
+                // /v1/tasks/{id}/claim — atomic owner assignment
+                if let Some(id) = task_id.strip_suffix("/claim") {
+                    if matches!(&method, &Method::Post) {
+                        tasks_claim_route(request, task_store, identities, id, app_handle);
+                    } else {
                         let _ = request.respond(empty(404));
+                    }
+                } else {
+                    match &method {
+                        &Method::Patch => tasks_patch_route(request, task_store, task_id, app_handle),
+                        &Method::Delete => tasks_delete_route(request, task_store, task_id, app_handle),
+                        _ => {
+                            let _ = request.respond(empty(404));
+                        }
                     }
                 }
             } else if let Some(wire_id) = path.strip_prefix("/v1/wires/") {
@@ -1697,6 +1709,65 @@ fn tasks_delete_route(
         let _ = request.respond(empty(204));
     } else {
         let _ = request.respond(text(404, "task not found"));
+    }
+}
+
+/// GET /v1/tasks/next?role=X&from=<term_id>&workspace=<ws>
+/// Returns the oldest pending unowned task whose deps are satisfied and
+/// whose role_hint matches `role` (or is None). 204 if nothing matches.
+/// Does NOT claim — caller must POST /v1/tasks/{id}/claim separately.
+fn tasks_next_route(
+    request: tiny_http::Request,
+    task_store: &TaskStore,
+    _identities: &IdentityRegistry,
+    query: &[(String, String)],
+) {
+    let role = query.iter().find(|(k, _)| k == "role").map(|(_, v)| v.as_str());
+    let ws = query.iter().find(|(k, _)| k == "workspace").map(|(_, v)| v.as_str());
+    match task_store.next_for(role, ws) {
+        Some(t) => {
+            let body = serde_json::to_string(&t).unwrap_or_else(|_| "{}".into());
+            let _ = request.respond(json(200, body));
+        }
+        None => {
+            let _ = request.respond(empty(204));
+        }
+    }
+}
+
+/// POST /v1/tasks/{id}/claim?from=<term_id>
+/// Atomic claim. 200 + task on success, 409 + current task on conflict,
+/// 404 if not found, 400 if `from` missing.
+fn tasks_claim_route(
+    request: tiny_http::Request,
+    task_store: &TaskStore,
+    _identities: &IdentityRegistry,
+    task_id: &str,
+    app_handle: &AppHandleSlot,
+) {
+    let url = request.url().to_string();
+    let (_, query) = split_query(&url);
+    let Some(from) = query
+        .iter()
+        .find(|(k, _)| k == "from")
+        .map(|(_, v)| v.clone())
+    else {
+        let _ = request.respond(text(400, "claim requires ?from=<terminal-id>"));
+        return;
+    };
+    match task_store.try_claim(task_id, &from) {
+        ClaimResult::Ok(t) => {
+            emit_tasks_updated(app_handle);
+            let body = serde_json::to_string(&t).unwrap_or_else(|_| "{}".into());
+            let _ = request.respond(json(200, body));
+        }
+        ClaimResult::AlreadyClaimed(t) => {
+            let body = serde_json::to_string(&t).unwrap_or_else(|_| "{}".into());
+            let _ = request.respond(json(409, body));
+        }
+        ClaimResult::NotFound => {
+            let _ = request.respond(text(404, "task not found"));
+        }
     }
 }
 

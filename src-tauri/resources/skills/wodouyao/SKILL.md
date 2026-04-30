@@ -1,6 +1,6 @@
 ---
 name: wodouyao
-description: "Collaborate with peer terminals inside a Wodouyao canvas via the `wodouyao` CLI. Use when the user wants to discover connected peers, spawn a new terminal on the canvas (e.g. 'open a new codex'), send commands to a peer, read a peer's output, register identity, fork the current agent session, or change the canvas background. Trigger phrases: connected peers, the other terminal, send to X, tell terminal Y to run, read what X is doing, delegate to a terminal, who am I on this canvas, open a new terminal, spawn a codex, create a worker terminal, fork this session, change background, 开一个新的, 建一个新的, 换背景."
+description: "Collaborate with peer terminals inside a Wodouyao canvas via the `wodouyao` CLI. Use when the user wants to discover connected peers, spawn a new terminal on the canvas (e.g. 'open a new codex'), send commands to a peer, read a peer's output, register identity, fork the current agent session, change the canvas background, or work with the shared task board (list/claim/complete tasks, find next task to do, work the backlog). Trigger phrases: connected peers, the other terminal, send to X, tell terminal Y to run, read what X is doing, delegate to a terminal, who am I on this canvas, open a new terminal, spawn a codex, create a worker terminal, fork this session, change background, task list, next task, claim task, mark task done, what should I work on, 开一个新的, 建一个新的, 换背景, 任务列表, 下一个任务, 认领任务, 完成任务, 我该干什么."
 ---
 
 # Wodouyao peer communication
@@ -213,6 +213,81 @@ applies — must have a wire to the peer.
 
 Exits 0 on clean server close (peer terminal destroyed), non-zero on
 connection errors.
+
+## Tasks (workspace-shared task board)
+
+Wodouyao keeps a task board scoped to the current workspace. Every terminal on the canvas shares the same backlog — agents pull work, claim it, report progress, and humans see status flip live in the TasksDrawer UI. **Use this instead of inventing your own ad-hoc todo lists.**
+
+Lifecycle: `pending` (no owner) → `in_progress` (claimed) → `completed`.
+
+### `wodouyao task list`
+
+Print every task in the current workspace. Columns: `id  status  subject  [owner=<term-id>]`. Cheap to run repeatedly.
+
+### `wodouyao task add <subject> [--desc D] [--blocked-by id1,id2]`
+
+Create a pending task. Subject is the imperative one-liner ("Add login validation"). `--blocked-by` lists ids of tasks that must be `completed` before this one becomes pickable by `task next`.
+
+### `wodouyao task next [--role X]`
+
+Pick the **oldest pending unowned task** whose deps are satisfied (and whose `role_hint` matches `X` if given). Prints the task JSON to stdout. **Does NOT claim** — read it first, decide, then `claim`.
+
+Exit codes:
+- `0` — task printed
+- `3` — nothing to do (no eligible task right now)
+
+```sh
+# Pull a backend-tagged task
+task=$(wodouyao task next --role backend) || { echo "nothing to do"; exit 0; }
+tid=$(echo "$task" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+wodouyao task claim "$tid"  # atomically take ownership
+```
+
+### `wodouyao task claim <task-id>`
+
+Atomic ownership grab. Sets `owner_term_id` to the caller and flips status to `in_progress`. Requires `WODOUYAO_ID` (always set in canvas terminals).
+
+Exit codes:
+- `0` — claim succeeded, task JSON printed
+- `5` — already claimed by someone else (the current task is printed to stderr)
+- `404` — id not found
+
+If `claim` returns 5, the task is gone — call `task next` again for the next candidate.
+
+### `wodouyao task take <task-id>`
+
+Legacy alias for "set owner regardless of current state". Prefer `claim` — it's atomic and won't steal a task that another agent is mid-execution on. Use `take` only when you deliberately want to reassign.
+
+### `wodouyao task done <task-id>`
+
+Mark `completed`. Unblocks any task that lists this one in `blocked_by`.
+
+### `wodouyao task update <task-id> [--subject S] [--desc D] [--add-acceptance A]`
+
+Edit fields on an existing task. Most useful for appending acceptance criteria as you discover them, or refining the subject after expansion.
+
+### `wodouyao task remove <task-id>`
+
+Delete the task entirely. Avoid unless the task was a duplicate or mistake — prefer `done` to leave the audit trail.
+
+## Working a task (recommended pattern)
+
+```sh
+# 1. Find work that fits this terminal's role
+task_json=$(wodouyao task next --role "$MY_ROLE") || exit 0  # exit 3 = nothing to do
+tid=$(echo "$task_json" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+
+# 2. Claim atomically — bail if someone beat you to it
+wodouyao task claim "$tid" || { echo "lost the race; trying again"; continue; }
+
+# 3. Do the work
+# ... (edit files, run tests, whatever the task says)
+
+# 4. Mark done
+wodouyao task done "$tid"
+```
+
+**Always claim before doing the work** — `next` only queries; multiple agents calling `next` simultaneously will all see the same task.
 
 ## Delegation pattern
 
