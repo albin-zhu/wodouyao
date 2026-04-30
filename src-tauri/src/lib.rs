@@ -214,6 +214,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::hub::get_hub_endpoint,
             commands::terminal::create_terminal,
             commands::terminal::destroy_terminal,
             commands::terminal::write_terminal,

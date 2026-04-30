@@ -132,6 +132,8 @@
     "newTerminalTitleDialog": "新终端(Shift+点击快速创建)",
     "tasks": "任务",
     "tasksActive": "{{count}} 个进行中",
+    "workflow": "工作流",
+    "bootstrapWorkflow": "一键创建多 agent 工作流（PM + worker）",
     "settings": "设置",
     "teams": "团队",
     "fork": "复制",
@@ -280,5 +282,17 @@
     "evaluatorHint": "运行测试 / 代码审查",
     "researcherHint": "探索 / 提出问题",
     "shellHint": "纯 shell"
+  },
+  "workflow": {
+    "title": "一键创建工作流",
+    "hint": "选择需要启动的角色。每个角色会启动一个已连线的 Claude 终端，带各自的角色 system prompt。选中 PM 会优先启动并担任协调者。",
+    "create": "创建 {{n}} 个终端",
+    "spawning": "启动中…",
+    "spawned": "已启动 {{n}} 个终端",
+    "failed": "工作流创建失败",
+    "pickAtLeastOne": "至少选一个角色"
+  },
+  "common": {
+    "cancel": "取消"
   }
 }

@@ -132,6 +132,8 @@
     "newTerminalTitleDialog": "New terminal (Shift+click for quick spawn)",
     "tasks": "Tasks",
     "tasksActive": "{{count}} active",
+    "workflow": "Workflow",
+    "bootstrapWorkflow": "Bootstrap multi-agent workflow (PM + workers)",
     "settings": "Settings",
     "teams": "Teams",
     "fork": "fork",
@@ -287,5 +289,17 @@
     "evaluatorHint": "runs tests / reviews",
     "researcherHint": "explores / asks questions",
     "shellHint": "plain shell"
+  },
+  "workflow": {
+    "title": "Bootstrap workflow",
+    "hint": "Pick which roles to spawn. Each becomes a wired Claude terminal with a role-specific system prompt. PM (if selected) gets the orchestration prompt and runs first.",
+    "create": "Create {{n}} terminals",
+    "spawning": "Spawning…",
+    "spawned": "Spawned {{n}} terminals",
+    "failed": "Workflow bootstrap failed",
+    "pickAtLeastOne": "Pick at least one role"
+  },
+  "common": {
+    "cancel": "Cancel"
   }
 }

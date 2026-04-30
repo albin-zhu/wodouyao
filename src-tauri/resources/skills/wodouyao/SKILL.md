@@ -1,6 +1,6 @@
 ---
 name: wodouyao
-description: "Collaborate with peer terminals inside a Wodouyao canvas via the `wodouyao` CLI. Use when the user wants to discover connected peers, spawn a new terminal on the canvas (e.g. 'open a new codex'), send commands to a peer, read a peer's output, register identity, fork the current agent session, change the canvas background, or work with the shared task board (list/claim/complete tasks, find next task to do, work the backlog). Trigger phrases: connected peers, the other terminal, send to X, tell terminal Y to run, read what X is doing, delegate to a terminal, who am I on this canvas, open a new terminal, spawn a codex, create a worker terminal, fork this session, change background, task list, next task, claim task, mark task done, what should I work on, 开一个新的, 建一个新的, 换背景, 任务列表, 下一个任务, 认领任务, 完成任务, 我该干什么."
+description: "Collaborate with peer terminals inside a Wodouyao canvas via the `wodouyao` CLI. Use when the user wants to discover connected peers, spawn a new terminal on the canvas (e.g. 'open a new codex'), send commands to a peer, read a peer's output, register identity, fork the current agent session, change the canvas background, work with the shared task board (list/claim/complete tasks, find next task to do, work the backlog), or bootstrap a multi-agent workflow (PM + backend + frontend in one shot). Trigger phrases: connected peers, the other terminal, send to X, tell terminal Y to run, read what X is doing, delegate to a terminal, who am I on this canvas, open a new terminal, spawn a codex, create a worker terminal, fork this session, change background, task list, next task, claim task, mark task done, what should I work on, set up the workflow, bootstrap workflow, open a team, spin up a team, 开一个新的, 建一个新的, 换背景, 任务列表, 下一个任务, 认领任务, 完成任务, 我该干什么, 建一个团队, 起一套工作流, 一键搭团队."
 ---
 
 # Wodouyao peer communication
@@ -288,6 +288,35 @@ wodouyao task done "$tid"
 ```
 
 **Always claim before doing the work** — `next` only queries; multiple agents calling `next` simultaneously will all see the same task.
+
+## Workflow bootstrap (multi-agent setup)
+
+When the user says "set up the workflow", "open a team", "建一个团队", "起一套工作流", or similar — they want a multi-agent canvas spun up in one shot. Use:
+
+### `wodouyao workflow init [--with role1,role2,...] [--mesh] [--cwd PATH]`
+
+Spawns one Claude terminal per role, wires them in a star (or full mesh with `--mesh`), and injects per-role system prompts. Default role set when `--with` is omitted: `pm,backend,frontend`.
+
+- `--with` — comma-separated roles. Built-ins: `pm`, `architect`, `backend`, `frontend`, `qa`, `devops`, `designer`, `planner`, `generator`, `evaluator`, `researcher`, `shell`. Users may have defined custom roles in settings — those work too.
+- `--mesh` — wire every pair (full mesh). Default is a star around the first listed role (typically `pm`).
+- `--cwd` — working directory for all spawned terminals; defaults to the current workspace cwd.
+
+The PM role gets the orchestration prompt (parses PRDs, watches stuck tasks, summarizes board state). Other roles get a generic role-aware prompt that nudges them to use `wodouyao task next --role <theirs>`.
+
+```sh
+# Standard "PM + backend + frontend" team
+wodouyao workflow init
+
+# Add QA + devops
+wodouyao workflow init --with pm,backend,frontend,qa,devops
+
+# Mesh-wired research squad
+wodouyao workflow init --with researcher,evaluator,planner --mesh
+```
+
+Prints the new terminal ids, one per line, in the order they were created. Exit 0 on success.
+
+The UI Toolbar's **✨ Workflow** button does the exact same thing — both go through `POST /v1/workflow/bootstrap`.
 
 ## Delegation pattern
 

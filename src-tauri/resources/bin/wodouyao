@@ -1533,6 +1533,76 @@ cmd_bg_set() {
         || die "bg set failed"
 }
 
+cmd_workflow() {
+    [ $# -gt 0 ] || die "workflow: missing subcommand (init)"
+    _sub=$1; shift
+    case $_sub in
+        init) cmd_workflow_init "$@" ;;
+        *)    die "workflow: unknown subcommand: $_sub" ;;
+    esac
+}
+
+# wodouyao workflow init [--with role1,role2,...] [--mesh] [--cwd PATH]
+# Spawns one terminal per role, wires them in a star (or mesh with --mesh),
+# and injects per-role system prompts. Default role set: pm,backend,frontend.
+cmd_workflow_init() {
+    _with="pm,backend,frontend"
+    _mesh="false"
+    _cwd=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --with) [ $# -ge 2 ] || die "--with requires a value"
+                    _with=$2; shift 2 ;;
+            --mesh) _mesh="true"; shift ;;
+            --cwd)  [ $# -ge 2 ] || die "--cwd requires a value"
+                    _cwd=$2; shift 2 ;;
+            -*)     die "unknown flag: $1" ;;
+            *)      die "workflow init: unexpected arg: $1" ;;
+        esac
+    done
+    load_endpoint
+    # Compose JSON. Use python3 for safety; fall back to a hand-rolled string
+    # if python3 isn't around (works since roles are simple identifiers).
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WD_WITH=$_with WD_MESH=$_mesh WD_CWD=$_cwd python3 -c '
+import json, os
+roles = [r.strip() for r in os.environ["WD_WITH"].split(",") if r.strip()]
+body = {"roles": [{"role": r} for r in roles],
+        "wire_mesh": os.environ["WD_MESH"] == "true"}
+cwd = os.environ.get("WD_CWD", "")
+if cwd: body["cwd"] = cwd
+print(json.dumps(body))
+')
+    else
+        _entries=""
+        _IFS_save=$IFS; IFS=,
+        for r in $_with; do
+            [ -n "$r" ] || continue
+            _entries="${_entries}${_entries:+,}{\"role\":\"$r\"}"
+        done
+        IFS=$_IFS_save
+        _body="{\"roles\":[$_entries],\"wire_mesh\":$_mesh"
+        [ -n "$_cwd" ] && _body="$_body,\"cwd\":\"$_cwd\""
+        _body="$_body}"
+    fi
+    _resp=$(curl_auth -f -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/workflow/bootstrap") \
+        || die "workflow init failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_resp" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    for tid in d.get("terminal_ids", []):
+        print(tid)
+except Exception:
+    sys.exit(0)
+'
+    else
+        printf '%s\n' "$_resp"
+    fi
+}
+
 cmd_bg() {
     [ $# -gt 0 ] || die "bg: missing subcommand (get|set|shaders)"
     _sub=$1; shift
@@ -1561,6 +1631,7 @@ case $sub in
     note)           cmd_note  "$@" ;;
     terminal)       cmd_terminal "$@" ;;
     bg)             cmd_bg "$@" ;;
+    workflow)       cmd_workflow "$@" ;;
     -h|--help|help) usage 0 ;;
     *)              die "unknown subcommand: $sub" ;;
 esac

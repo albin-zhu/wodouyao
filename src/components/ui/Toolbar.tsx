@@ -6,6 +6,7 @@ import { useTeamStore } from "../../store/teamStore";
 import { useNoteStore } from "../../store/noteStore";
 import { useTaskStore } from "../../store/taskStore";
 import { useTaskBoardStore } from "../../store/taskBoardStore";
+import { useDialogStore } from "../../store/dialogStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import { useNewTerminal } from "../../hooks/useNewTerminal";
 import { useForkWorkspace } from "../../hooks/useForkWorkspace";
@@ -118,6 +119,7 @@ export default function Toolbar() {
   const addNote = useNoteStore((s) => s.addNote);
   const addBoard = useTaskBoardStore((s) => s.addBoard);
   const openTasksDrawer = useTaskStore((s) => s.openDrawer);
+  const openBootstrap = useDialogStore((s) => s.openBootstrapWorkflow);
   const tasksMap = useTaskStore((s) => s.tasks);
   const tasksActiveCount = Array.from(tasksMap.values()).filter((t) => t.status !== "completed").length;
   const currentWorkspace = useWorkspaceStore((s) => s.currentWorkspace);
@@ -330,6 +332,26 @@ export default function Toolbar() {
           }}
         >
           Board
+        </button>
+
+        {/* ✨ Bootstrap workflow */}
+        <button
+          onClick={openBootstrap}
+          title={t("toolbar.bootstrapWorkflow", "Bootstrap multi-agent workflow")}
+          style={{
+            background: "color-mix(in srgb, var(--color-accent-alt) 13%, transparent)",
+            color: "var(--color-accent-alt)",
+            border: "1px solid color-mix(in srgb, var(--color-accent-alt) 35%, transparent)",
+            borderRadius: 6,
+            padding: "0 10px",
+            height: 28,
+            lineHeight: 1,
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          ✨ {t("toolbar.workflow", "Workflow")}
         </button>
 
         <Divider />

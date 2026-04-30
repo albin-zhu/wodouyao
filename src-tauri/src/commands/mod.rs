@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod file_nodes;
 pub mod file_preview;
+pub mod hub;
 pub mod integrations;
 pub mod notes;
 pub mod settings;

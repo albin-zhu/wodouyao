@@ -197,6 +197,26 @@ pub struct AppSettings {
     /// WKWebView (sliced/jumbled characters). Canvas renderer is reliable.
     #[serde(default)]
     pub terminal_gpu_renderer: bool,
+    /// System-prompt content appended to PM-role terminals on spawn.
+    /// Loaded from settings; also mirrored to ~/.wodouyao/pm-prompt.md.
+    /// Empty string = fall back to a built-in default prompt.
+    #[serde(default)]
+    pub pm_prompt: String,
+    /// User-defined roles, merged on top of the built-in role set at
+    /// runtime. Frontend resolves the merge.
+    #[serde(default)]
+    pub custom_roles: Vec<CustomRole>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct CustomRole {
+    pub key: String,
+    pub label: String,
+    pub color: String,
+    pub glyph: String,
+    pub hint: String,
+    #[serde(default)]
+    pub prompt: Option<String>,
 }
 
 fn default_terminal_opacity() -> f64 {
@@ -229,6 +249,8 @@ impl Default for AppSettings {
             terminal_options: TerminalOptions::default(),
             show_perf_hud: false,
             terminal_gpu_renderer: false,
+            pm_prompt: String::new(),
+            custom_roles: Vec::new(),
             quick_commands: vec![
                 QuickCommand {
                     id: "claude".into(),

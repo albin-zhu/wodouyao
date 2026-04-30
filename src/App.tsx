@@ -10,6 +10,7 @@ import TerminalCreateDialog from "./components/ui/TerminalCreateDialog";
 import TerminalContextMenu from "./components/terminal/TerminalContextMenu";
 import ToastContainer from "./components/ui/ToastContainer";
 import PerfHUD from "./components/ui/PerfHUD";
+import BootstrapWorkflowDialog from "./components/ui/BootstrapWorkflowDialog";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { useSettingsStore } from "./store/settingsStore";
 import { useCanvasStore } from "./store/canvasStore";
@@ -123,6 +124,7 @@ export default function App() {
       <TerminalContextMenu />
       <ToastContainer />
       <PerfHUD />
+      <BootstrapWorkflowDialog />
     </div>
   );
 }

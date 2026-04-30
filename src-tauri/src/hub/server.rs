@@ -12,7 +12,7 @@ use super::endpoint::{self, EndpointFile};
 use super::identity::{Identity, IdentityRegistry};
 use super::keys;
 use super::team::{Role, TaskPatch, TeamRegistry};
-use super::topology::WireTopology;
+use super::topology::{Wire, WireTopology};
 use crate::file_nodes::FileNodeStore;
 use crate::notes::{NoteCreate, NotePatch as NoteStorePatch, NoteStore};
 use crate::pty::manager::PtyManager;
@@ -122,6 +122,9 @@ fn handle(
         (&Method::Post, "/v1/self") => register_self(request, identities),
         (&Method::Post, "/v1/spawn") => spawn(request, topology, team_registry, app_handle),
         (&Method::Post, "/v1/fork") => fork(request, topology, identities, app_handle),
+        (&Method::Post, "/v1/workflow/bootstrap") => {
+            workflow_bootstrap(request, topology, app_handle)
+        }
         (&Method::Post, "/v1/send") => send(request, topology, pty_manager, identities),
         (&Method::Get, "/v1/read") => read(
             request,
@@ -446,6 +449,16 @@ struct SpawnBody {
     team: Option<String>,
     #[serde(default)]
     team_role: Option<String>,
+    /// Wodouyao terminal role (planner/generator/evaluator/researcher/shell
+    /// or "pm"). Plumbed through to the frontend so the new node carries it.
+    #[serde(default)]
+    role: Option<String>,
+    /// Extra system-prompt content appended to the agent's context. When set,
+    /// the spawn machinery writes a temp .md and launches `claude @file.md`
+    /// (or codex equivalent) so the agent picks it up before its first turn.
+    /// Used by workflow bootstrap to inject role-specific instructions.
+    #[serde(default)]
+    append_system_prompt: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -458,6 +471,7 @@ struct SpawnEventPayload {
     auto_wire_from: Option<String>,
     team_id: Option<String>,
     team_role: Option<String>,
+    role: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -490,6 +504,8 @@ fn spawn(
             auto_wire_from: None,
             team: None,
             team_role: None,
+            role: None,
+            append_system_prompt: None,
         }
     } else {
         match serde_json::from_str(&body) {
@@ -540,29 +556,10 @@ fn spawn(
         parsed.kind.as_deref().and_then(|k| match k {
             "claude" => {
                 let agent_name = parsed.name.as_deref().unwrap_or("Agent");
-                let prompt = format!(
-                    "# Role: {name}\n\n\
-                     You are running inside a Wodouyao canvas terminal as **{name}**.\n\n\
-                     ## Startup (run these NOW)\n\n\
-                     ```sh\n\
-                     wodouyao hello --name \"{name}\" --kind claude\n\
-                     wodouyao task list\n\
-                     ```\n\n\
-                     ## Key Commands\n\n\
-                     - `wodouyao peers` — list connected peers\n\
-                     - `wodouyao task list` — view tasks\n\
-                     - `wodouyao task take <id>` — claim a task\n\
-                     - `wodouyao task done <id>` — mark complete\n\
-                     - `wodouyao send <peer> \"text\" Enter` — send to peer\n\
-                     - `wodouyao read <peer>` — read peer output\n\
-                     - `wodouyao note add \"text\"` — add a sticky note\n\n\
-                     ## Workflow\n\n\
-                     1. Register identity (hello)\n\
-                     2. Check task list\n\
-                     3. Claim an unclaimed task (take)\n\
-                     4. Complete the work\n\
-                     5. Mark done, then check for more tasks\n",
-                    name = agent_name,
+                let prompt = build_spawn_prompt(
+                    agent_name,
+                    parsed.role.as_deref(),
+                    parsed.append_system_prompt.as_deref(),
                 );
                 let dir = std::env::temp_dir().join("wodouyao");
                 let _ = std::fs::create_dir_all(&dir);
@@ -586,6 +583,10 @@ fn spawn(
     // permission prompt.
     let command = command.map(auto_patch_agent_flags);
 
+    if let Some(c) = parsed.cwd.as_deref().filter(|s| !s.is_empty()) {
+        write_project_claude_md(c);
+    }
+
     let payload = SpawnEventPayload {
         id: new_id.clone(),
         name: parsed.name,
@@ -595,6 +596,7 @@ fn spawn(
         auto_wire_from: parsed.auto_wire_from,
         team_id,
         team_role: team_role_out,
+        role: parsed.role,
     };
 
     if let Err(e) = app.emit("hub-spawn-request", payload) {
@@ -605,6 +607,247 @@ fn spawn(
     let resp_body = serde_json::to_string(&SpawnResponse { id: new_id })
         .unwrap_or_else(|_| "{}".into());
     let _ = request.respond(json(200, resp_body));
+}
+
+/// Compose the .md file we hand to `claude @file` on spawn. Always includes
+/// the wodouyao quick-reference. If `role` is given, mentions it. If
+/// `append` is non-empty, appends it verbatim — that's where workflow
+/// bootstrap injects role-specific system prompts.
+fn build_spawn_prompt(name: &str, role: Option<&str>, append: Option<&str>) -> String {
+    let role_section = role
+        .filter(|r| !r.is_empty())
+        .map(|r| {
+            format!(
+                "\n## Your Role\n\nYou are the **{role}** terminal on this canvas. \
+                 When pulling tasks, prefer ones tagged for your role:\n\n\
+                 ```sh\n\
+                 wodouyao task next --role {role}\n\
+                 ```\n",
+                role = r,
+            )
+        })
+        .unwrap_or_default();
+    let append_section = append
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| format!("\n---\n\n{}\n", s))
+        .unwrap_or_default();
+
+    format!(
+        "# Role: {name}\n\n\
+         You are running inside a Wodouyao canvas terminal as **{name}**.\n\
+         {role_section}\n\
+         ## Startup (run these NOW)\n\n\
+         ```sh\n\
+         wodouyao hello --name \"{name}\" --kind claude\n\
+         wodouyao task list\n\
+         ```\n\n\
+         ## Key Commands\n\n\
+         - `wodouyao peers` — list connected peers\n\
+         - `wodouyao task list` — view tasks in this workspace\n\
+         - `wodouyao task next [--role X]` — find next pickable task\n\
+         - `wodouyao task claim <id>` — atomic ownership grab\n\
+         - `wodouyao task done <id>` — mark complete\n\
+         - `wodouyao send <peer> \"text\" Enter` — send to peer\n\
+         - `wodouyao read <peer>` — read peer output\n\
+         - `wodouyao note add \"text\"` — add a sticky note\n\n\
+         ## Workflow\n\n\
+         1. Register identity (hello)\n\
+         2. `task next` to find work, then `task claim` to take it\n\
+         3. Do the work\n\
+         4. `task done`, then loop to step 2\n\
+         {append_section}",
+    )
+}
+
+/// Drop a `.wodouyao/CLAUDE.md` cheat-sheet inside `cwd` if one isn't there
+/// already. Idempotent — never overwrites an existing file. Failures are
+/// silent because spawning a terminal must not be blocked by a write error
+/// (read-only volume, race against another spawn, etc.).
+fn write_project_claude_md(cwd: &str) {
+    let dir = std::path::Path::new(cwd).join(".wodouyao");
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let target = dir.join("CLAUDE.md");
+    if target.exists() {
+        return;
+    }
+    let body = include_str!("../../resources/project_claude_md_template.md");
+    let _ = std::fs::write(&target, body);
+}
+
+#[derive(Deserialize)]
+struct WorkflowBootstrapBody {
+    /// Each entry becomes one terminal. Order matters for default wiring:
+    /// when `wire_mesh` is false, terminals are wired in a star with the
+    /// FIRST entry as the hub.
+    roles: Vec<BootstrapRole>,
+    /// When true, every pair of terminals is wired (full mesh). When false
+    /// (default), star topology around roles[0]. Mesh is right when every
+    /// agent legitimately needs to message every other (small teams).
+    #[serde(default)]
+    wire_mesh: bool,
+    /// Working directory all spawned terminals share. Defaults to the
+    /// frontend's current workspace cwd at spawn time.
+    #[serde(default)]
+    cwd: Option<String>,
+}
+
+#[derive(Deserialize, Clone)]
+struct BootstrapRole {
+    /// Free-form role string (e.g. "pm", "backend", "qa"). Plumbed through
+    /// to the terminal node and used by `task next --role X` matching.
+    role: String,
+    /// Display name on the title bar. Defaults to the role label cap'd.
+    #[serde(default)]
+    name: Option<String>,
+    /// Agent kind for the spawn ("claude" / "codex" / "shell"). Default "claude".
+    #[serde(default)]
+    kind: Option<String>,
+    /// Extra system-prompt content appended to the agent's startup .md file.
+    /// Per-role customization (e.g. PM gets the orchestration prompt).
+    #[serde(default)]
+    append_system_prompt: Option<String>,
+}
+
+#[derive(Serialize)]
+struct WorkflowBootstrapResponse {
+    /// Spawned terminal ids in the same order as the request `roles`.
+    terminal_ids: Vec<String>,
+}
+
+/// POST /v1/workflow/bootstrap
+/// One-shot creator for a multi-agent workflow: spawns N terminals, wires
+/// them per the requested topology, and injects per-role system prompts.
+/// Equivalent to clicking "✨ Bootstrap workflow" in the toolbar — the UI
+/// and the CLI both go through this same path so behavior stays consistent.
+fn workflow_bootstrap(
+    mut request: tiny_http::Request,
+    topology: &WireTopology,
+    app_handle: &AppHandleSlot,
+) {
+    let Some(app) = app_handle.get() else {
+        let _ = request.respond(text(503, "frontend not ready yet; try again in a moment"));
+        return;
+    };
+
+    let mut body = String::new();
+    if request.as_reader().read_to_string(&mut body).is_err() {
+        let _ = request.respond(text(400, "unable to read body"));
+        return;
+    }
+    let parsed: WorkflowBootstrapBody = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = request.respond(text(400, &format!("invalid json: {}", e)));
+            return;
+        }
+    };
+    if parsed.roles.is_empty() {
+        let _ = request.respond(text(400, "roles[] cannot be empty"));
+        return;
+    }
+
+    if let Some(c) = parsed.cwd.as_deref().filter(|s| !s.is_empty()) {
+        write_project_claude_md(c);
+    }
+
+    // Pre-allocate ids so we can wire them up before each spawn fires (the
+    // frontend handler creates terminals async; wires created against
+    // not-yet-existing ids are fine — wireStore tolerates dangling refs
+    // until the spawn lands).
+    let ids: Vec<String> = (0..parsed.roles.len())
+        .map(|_| format!("t_{}", Uuid::new_v4().simple()))
+        .collect();
+
+    for (i, br) in parsed.roles.iter().enumerate() {
+        let new_id = &ids[i];
+        let agent_name = br
+            .name
+            .clone()
+            .unwrap_or_else(|| capitalize_role(&br.role));
+        let kind = br.kind.clone().unwrap_or_else(|| "claude".into());
+
+        // Build the prompt + command using the same machinery as /v1/spawn.
+        let command = match kind.as_str() {
+            "claude" => {
+                let prompt = build_spawn_prompt(
+                    &agent_name,
+                    Some(&br.role),
+                    br.append_system_prompt.as_deref(),
+                );
+                let dir = std::env::temp_dir().join("wodouyao");
+                let _ = std::fs::create_dir_all(&dir);
+                let file = dir.join(format!("prompt_{}.md", new_id));
+                if std::fs::write(&file, &prompt).is_ok() {
+                    let path_str = file.to_string_lossy().replace('\\', "/");
+                    Some(format!("claude --dangerously-skip-permissions \"@{}\"", path_str))
+                } else {
+                    Some("claude --dangerously-skip-permissions".into())
+                }
+            }
+            "codex" => Some("codex --dangerously-bypass-approvals-and-sandbox".into()),
+            "opencode" => Some("opencode".into()),
+            "shell" | _ => None,
+        };
+        let command = command.map(auto_patch_agent_flags);
+
+        // Wire topology — handled separately so the frontend doesn't have to
+        // figure out N-way connections from individual auto_wire_from hints.
+        let auto_wire_from = if i == 0 { None } else { Some(ids[0].clone()) };
+
+        let payload = SpawnEventPayload {
+            id: new_id.clone(),
+            name: Some(agent_name),
+            kind: Some(kind),
+            command,
+            cwd: parsed.cwd.clone(),
+            auto_wire_from,
+            team_id: None,
+            team_role: None,
+            role: Some(br.role.clone()),
+        };
+
+        if let Err(e) = app.emit("hub-spawn-request", payload) {
+            let _ = request.respond(text(500, &format!("emit failed at index {}: {}", i, e)));
+            return;
+        }
+    }
+
+    // Mesh wiring beyond the star already established by auto_wire_from.
+    // Each pair (i,j) where i<j and i!=0 (since 0 is the hub of the star)
+    // gets a wire so non-hub roles can talk directly.
+    if parsed.wire_mesh && ids.len() > 2 {
+        for i in 1..ids.len() {
+            for j in (i + 1)..ids.len() {
+                let wire = Wire {
+                    id: format!("w_{}", Uuid::new_v4().simple()),
+                    source_id: ids[i].clone(),
+                    target_id: ids[j].clone(),
+                    forward_output: true,
+                    kind: Some("io".into()),
+                    workspace_id: None,
+                };
+                topology.insert(wire);
+            }
+        }
+        emit_wires_updated(app_handle);
+    }
+
+    let body = serde_json::to_string(&WorkflowBootstrapResponse {
+        terminal_ids: ids,
+    })
+    .unwrap_or_else(|_| "{}".into());
+    let _ = request.respond(json(200, body));
+}
+
+fn capitalize_role(role: &str) -> String {
+    if role.is_empty() {
+        return String::from("Agent");
+    }
+    let mut chars = role.chars();
+    let first = chars.next().unwrap().to_uppercase().collect::<String>();
+    format!("{}{}", first, chars.as_str())
 }
 
 #[derive(Deserialize)]
@@ -704,6 +947,7 @@ fn fork(
         auto_wire_from: None, // we already inserted the wire above
         team_id: None,
         team_role: None,
+        role: None,
     };
 
     if let Err(e) = app.emit("hub-spawn-request", payload) {

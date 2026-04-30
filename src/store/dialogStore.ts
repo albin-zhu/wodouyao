@@ -6,6 +6,9 @@ interface DialogStore {
   terminalCreateDefaults: Partial<SpawnOptions> | null;
   openTerminalCreate: (defaults?: Partial<SpawnOptions>) => void;
   closeTerminalCreate: () => void;
+  bootstrapWorkflowOpen: boolean;
+  openBootstrapWorkflow: () => void;
+  closeBootstrapWorkflow: () => void;
 }
 
 export const useDialogStore = create<DialogStore>((set) => ({
@@ -15,4 +18,7 @@ export const useDialogStore = create<DialogStore>((set) => ({
     set({ terminalCreateOpen: true, terminalCreateDefaults: defaults ?? null }),
   closeTerminalCreate: () =>
     set({ terminalCreateOpen: false, terminalCreateDefaults: null }),
+  bootstrapWorkflowOpen: false,
+  openBootstrapWorkflow: () => set({ bootstrapWorkflowOpen: true }),
+  closeBootstrapWorkflow: () => set({ bootstrapWorkflowOpen: false }),
 }));

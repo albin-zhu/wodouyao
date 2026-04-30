@@ -1,7 +1,11 @@
 export type TerminalStatus = "starting" | "running" | "idle" | "error" | "terminated";
 export type ShellType = "Bash" | "Zsh" | "PowerShell" | "Pwsh" | "Cmd" | "Fish" | "Custom";
 export type TerminalTheme = "tokyonight" | "dracula" | "nord" | "monokai" | "solarized";
-export type TerminalRole = "planner" | "generator" | "evaluator" | "researcher" | "shell";
+/** Terminal role is a free-form string. Built-in roles ship in
+ *  TERMINAL_ROLES; users can extend via settings.custom_roles. The role
+ *  doubles as the key for `wodouyao task next --role X` filtering, so it
+ *  should be lowercase identifier-like (e.g. "backend", "pm", "qa"). */
+export type TerminalRole = string;
 
 export interface TerminalNode {
   id: string;

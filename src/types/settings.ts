@@ -98,4 +98,21 @@ export interface AppSettings {
    *  under canvas zoom or DPR changes (especially on WKWebView). Default
    *  is Canvas for reliability; opt in for CPU relief when zooming is rare. */
   terminal_gpu_renderer: boolean;
+  /** System-prompt content appended to terminals spawned with role=pm.
+   *  Loaded from settings on bootstrap; mirrored to ~/.wodouyao/pm-prompt.md
+   *  so users can edit either place. Empty string = use built-in default. */
+  pm_prompt: string;
+  /** User-defined roles, merged on top of BUILTIN_ROLES at runtime. Each
+   *  entry's `key` becomes the lookup id (lowercased identifier). */
+  custom_roles: CustomRole[];
+}
+
+export interface CustomRole {
+  key: string;
+  label: string;
+  color: string;
+  glyph: string;
+  hint: string;
+  /** Optional system-prompt fragment appended when this role spawns. */
+  prompt?: string;
 }

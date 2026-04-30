@@ -5,6 +5,7 @@ import { useWireStore } from "../store/wireStore";
 import { useTeamStore } from "../store/teamStore";
 import { useTerminalStore } from "../store/terminalStore";
 import { nextWorkerSlot } from "../utils/teamLayout";
+import type { TerminalRole } from "../types/terminal";
 
 interface SpawnRequestPayload {
   id: string;
@@ -15,6 +16,7 @@ interface SpawnRequestPayload {
   auto_wire_from?: string | null;
   team_id?: string | null;
   team_role?: string | null;
+  role?: string | null;
 }
 
 export function useHubSpawn() {
@@ -50,6 +52,7 @@ export function useHubSpawn() {
             command: p.command ?? undefined,
             cwd: p.cwd ?? undefined,
             position,
+            role: (p.role ?? undefined) as TerminalRole | undefined,
           });
           if (p.auto_wire_from) {
             await addWire(p.auto_wire_from, p.id);
