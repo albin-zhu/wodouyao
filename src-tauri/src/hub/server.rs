@@ -676,44 +676,44 @@ fn write_project_claude_md(cwd: &str) {
     let _ = std::fs::write(&target, body);
 }
 
-#[derive(Deserialize)]
-struct WorkflowBootstrapBody {
+#[derive(Deserialize, Clone)]
+pub struct WorkflowBootstrapBody {
     /// Each entry becomes one terminal. Order matters for default wiring:
     /// when `wire_mesh` is false, terminals are wired in a star with the
     /// FIRST entry as the hub.
-    roles: Vec<BootstrapRole>,
+    pub roles: Vec<BootstrapRole>,
     /// When true, every pair of terminals is wired (full mesh). When false
     /// (default), star topology around roles[0]. Mesh is right when every
     /// agent legitimately needs to message every other (small teams).
     #[serde(default)]
-    wire_mesh: bool,
+    pub wire_mesh: bool,
     /// Working directory all spawned terminals share. Defaults to the
     /// frontend's current workspace cwd at spawn time.
     #[serde(default)]
-    cwd: Option<String>,
+    pub cwd: Option<String>,
 }
 
 #[derive(Deserialize, Clone)]
-struct BootstrapRole {
+pub struct BootstrapRole {
     /// Free-form role string (e.g. "pm", "backend", "qa"). Plumbed through
     /// to the terminal node and used by `task next --role X` matching.
-    role: String,
+    pub role: String,
     /// Display name on the title bar. Defaults to the role label cap'd.
     #[serde(default)]
-    name: Option<String>,
+    pub name: Option<String>,
     /// Agent kind for the spawn ("claude" / "codex" / "shell"). Default "claude".
     #[serde(default)]
-    kind: Option<String>,
+    pub kind: Option<String>,
     /// Extra system-prompt content appended to the agent's startup .md file.
     /// Per-role customization (e.g. PM gets the orchestration prompt).
     #[serde(default)]
-    append_system_prompt: Option<String>,
+    pub append_system_prompt: Option<String>,
 }
 
 #[derive(Serialize)]
-struct WorkflowBootstrapResponse {
+pub struct WorkflowBootstrapResponse {
     /// Spawned terminal ids in the same order as the request `roles`.
-    terminal_ids: Vec<String>,
+    pub terminal_ids: Vec<String>,
 }
 
 /// POST /v1/workflow/bootstrap
@@ -726,11 +726,6 @@ fn workflow_bootstrap(
     topology: &WireTopology,
     app_handle: &AppHandleSlot,
 ) {
-    let Some(app) = app_handle.get() else {
-        let _ = request.respond(text(503, "frontend not ready yet; try again in a moment"));
-        return;
-    };
-
     let mut body = String::new();
     if request.as_reader().read_to_string(&mut body).is_err() {
         let _ = request.respond(text(400, "unable to read body"));
@@ -743,9 +738,31 @@ fn workflow_bootstrap(
             return;
         }
     };
+    match do_workflow_bootstrap(parsed, topology, app_handle) {
+        Ok(resp) => {
+            let body = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".into());
+            let _ = request.respond(json(200, body));
+        }
+        Err((code, msg)) => {
+            let _ = request.respond(text(code, &msg));
+        }
+    }
+}
+
+/// Pure logic for workflow bootstrap. Returns the spawned ids on success,
+/// `(http_status, message)` on failure. Shared by the HTTP route and the
+/// `bootstrap_workflow` Tauri command (UI calls it directly to skip CORS
+/// and token plumbing — same code path either way).
+pub fn do_workflow_bootstrap(
+    parsed: WorkflowBootstrapBody,
+    topology: &WireTopology,
+    app_handle: &AppHandleSlot,
+) -> Result<WorkflowBootstrapResponse, (u16, String)> {
+    let Some(app) = app_handle.get() else {
+        return Err((503, "frontend not ready yet; try again in a moment".into()));
+    };
     if parsed.roles.is_empty() {
-        let _ = request.respond(text(400, "roles[] cannot be empty"));
-        return;
+        return Err((400, "roles[] cannot be empty".into()));
     }
 
     if let Some(c) = parsed.cwd.as_deref().filter(|s| !s.is_empty()) {
@@ -768,7 +785,6 @@ fn workflow_bootstrap(
             .unwrap_or_else(|| capitalize_role(&br.role));
         let kind = br.kind.clone().unwrap_or_else(|| "claude".into());
 
-        // Build the prompt + command using the same machinery as /v1/spawn.
         let command = match kind.as_str() {
             "claude" => {
                 let prompt = build_spawn_prompt(
@@ -788,12 +804,10 @@ fn workflow_bootstrap(
             }
             "codex" => Some("codex --dangerously-bypass-approvals-and-sandbox".into()),
             "opencode" => Some("opencode".into()),
-            "shell" | _ => None,
+            _ => None,
         };
         let command = command.map(auto_patch_agent_flags);
 
-        // Wire topology — handled separately so the frontend doesn't have to
-        // figure out N-way connections from individual auto_wire_from hints.
         let auto_wire_from = if i == 0 { None } else { Some(ids[0].clone()) };
 
         let payload = SpawnEventPayload {
@@ -809,14 +823,10 @@ fn workflow_bootstrap(
         };
 
         if let Err(e) = app.emit("hub-spawn-request", payload) {
-            let _ = request.respond(text(500, &format!("emit failed at index {}: {}", i, e)));
-            return;
+            return Err((500, format!("emit failed at index {}: {}", i, e)));
         }
     }
 
-    // Mesh wiring beyond the star already established by auto_wire_from.
-    // Each pair (i,j) where i<j and i!=0 (since 0 is the hub of the star)
-    // gets a wire so non-hub roles can talk directly.
     if parsed.wire_mesh && ids.len() > 2 {
         for i in 1..ids.len() {
             for j in (i + 1)..ids.len() {
@@ -834,11 +844,7 @@ fn workflow_bootstrap(
         emit_wires_updated(app_handle);
     }
 
-    let body = serde_json::to_string(&WorkflowBootstrapResponse {
-        terminal_ids: ids,
-    })
-    .unwrap_or_else(|_| "{}".into());
-    let _ = request.respond(json(200, body));
+    Ok(WorkflowBootstrapResponse { terminal_ids: ids })
 }
 
 fn capitalize_role(role: &str) -> String {

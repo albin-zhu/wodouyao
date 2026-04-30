@@ -99,21 +99,11 @@ export default function BootstrapWorkflowDialog() {
 
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      // Hub URL is local-only; we call it via a thin wrapper that adds the auth header.
-      const endpoint = await invoke<{ url: string; token: string }>("get_hub_endpoint");
-      const resp = await fetch(`${endpoint.url}/v1/workflow/bootstrap`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${endpoint.token}`,
-        },
-        body: JSON.stringify(payload),
+      const data = await invoke<{ terminal_ids: string[] }>("bootstrap_workflow", {
+        roles: payload.roles,
+        wireMesh: payload.wire_mesh,
+        cwd: payload.cwd,
       });
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error(`HTTP ${resp.status}: ${txt}`);
-      }
-      const data = (await resp.json()) as { terminal_ids: string[] };
       toast(
         t("workflow.spawned", "Spawned {{n}} terminals", { n: data.terminal_ids.length }),
         "success",
@@ -145,14 +135,15 @@ export default function BootstrapWorkflowDialog() {
           top: "50%",
           left: "50%",
           transform: "translate(-50%, -50%)",
-          width: 460,
-          maxHeight: "80vh",
+          width: 600,
+          maxWidth: "92vw",
+          maxHeight: "85vh",
           zIndex: 9000,
           background: "var(--color-surface)",
           border: "1px solid var(--color-border)",
           borderRadius: 12,
           boxShadow: "var(--shadow-panel)",
-          padding: 20,
+          padding: 22,
           display: "flex",
           flexDirection: "column",
           gap: 14,
@@ -189,9 +180,9 @@ export default function BootstrapWorkflowDialog() {
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
-            gap: 6,
+            gap: 8,
             overflowY: "auto",
-            maxHeight: 360,
+            maxHeight: "55vh",
           }}
         >
           {orderedKeys.map((key) => {
@@ -203,9 +194,9 @@ export default function BootstrapWorkflowDialog() {
                 onClick={() => toggle(key)}
                 style={{
                   display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "8px 10px",
+                  alignItems: "flex-start",
+                  gap: 10,
+                  padding: "10px 12px",
                   borderRadius: 6,
                   border: `1px solid ${active ? meta.color : "var(--color-border)"}`,
                   background: active
@@ -213,29 +204,41 @@ export default function BootstrapWorkflowDialog() {
                     : "var(--color-bg)",
                   cursor: "pointer",
                   textAlign: "left",
+                  minHeight: 56,
                 }}
                 title={meta.hint}
               >
-                <span style={{ color: meta.color, fontSize: 14, lineHeight: 1, width: 14, textAlign: "center" }}>
+                <span
+                  style={{
+                    color: meta.color,
+                    fontSize: 14,
+                    lineHeight: 1.2,
+                    width: 16,
+                    flexShrink: 0,
+                    textAlign: "center",
+                    paddingTop: 2,
+                  }}
+                >
                   {meta.glyph}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: "var(--color-text)", fontSize: 12, fontWeight: 600 }}>
+                  <div style={{ color: "var(--color-text)", fontSize: 12, fontWeight: 600, marginBottom: 2 }}>
                     {meta.label}
                   </div>
                   <div
                     style={{
                       color: "var(--color-text-muted)",
                       fontSize: 10,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
+                      lineHeight: 1.4,
+                      wordBreak: "break-word",
                     }}
                   >
                     {meta.hint}
                   </div>
                 </div>
-                <span style={{ color: meta.color, fontSize: 11 }}>{active ? "✓" : ""}</span>
+                <span style={{ color: meta.color, fontSize: 12, flexShrink: 0, paddingTop: 2 }}>
+                  {active ? "✓" : ""}
+                </span>
               </button>
             );
           })}
