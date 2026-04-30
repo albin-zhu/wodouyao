@@ -1203,8 +1203,129 @@ cmd_task_claim() {
     esac
 }
 
+# wodouyao task doc <sub> ...
+#   list <task-id>
+#   add  <task-id> <name> [--file PATH | --content TEXT]
+#   cat  <task-id> <name>
+#   rm   <task-id> <name>
+cmd_task_doc() {
+    [ $# -gt 0 ] || die "task doc: missing subcommand (list|add|cat|rm)"
+    _sub=$1; shift
+    case $_sub in
+        list) cmd_task_doc_list "$@" ;;
+        add)  cmd_task_doc_add  "$@" ;;
+        cat)  cmd_task_doc_cat  "$@" ;;
+        rm)   cmd_task_doc_rm   "$@" ;;
+        *)    die "task doc: unknown subcommand: $_sub" ;;
+    esac
+}
+
+cmd_task_doc_list() {
+    [ $# -ge 1 ] || die "task doc list: usage <task-id>"
+    _tid=$1
+    load_endpoint
+    _body=$(curl_auth -f "$URL/v1/tasks/$_tid/docs") || die "task doc list failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_body" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    for name in d.get("docs", []):
+        print(name)
+except Exception:
+    sys.exit(0)
+'
+    else
+        printf '%s\n' "$_body"
+    fi
+}
+
+cmd_task_doc_add() {
+    [ $# -ge 2 ] || die "task doc add: usage <task-id> <name> [--file PATH | --content TEXT]"
+    _tid=$1; _name=$2; shift 2
+    _content=""
+    _file=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --file)    [ $# -ge 2 ] || die "--file requires a value"
+                       _file=$2; shift 2 ;;
+            --content) [ $# -ge 2 ] || die "--content requires a value"
+                       _content=$2; shift 2 ;;
+            -*)        die "unknown flag: $1" ;;
+            *)         die "task doc add: unexpected arg: $1" ;;
+        esac
+    done
+    if [ -n "$_file" ]; then
+        [ -f "$_file" ] || die "task doc add: file not found: $_file"
+        _content=$(cat "$_file")
+    fi
+    load_endpoint
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WD_NAME=$_name WD_CONTENT=$_content python3 -c '
+import json, os
+print(json.dumps({"name": os.environ["WD_NAME"],
+                  "content": os.environ.get("WD_CONTENT", "")}))
+')
+    else
+        _n_j=$(json_escape "$_name")
+        _c_j=$(json_escape "$_content")
+        _body="{\"name\":$_n_j,\"content\":$_c_j}"
+    fi
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/tasks/$_tid/docs") \
+        || { rm -f "$_tmp"; die "task doc add failed"; }
+    case $_code in
+        200) cat "$_tmp"; printf '\n'; rm -f "$_tmp" ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "task doc add failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_task_doc_cat() {
+    [ $# -ge 2 ] || die "task doc cat: usage <task-id> <name>"
+    _tid=$1; _name=$2
+    load_endpoint
+    _tmp=$(mktemp)
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        "$URL/v1/tasks/$_tid/docs/$_name") \
+        || { rm -f "$_tmp"; die "task doc cat failed"; }
+    case $_code in
+        200)
+            if command -v python3 >/dev/null 2>&1; then
+                python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(d.get("content", ""), end="")
+' "$_tmp"
+            else
+                cat "$_tmp"
+            fi
+            rm -f "$_tmp"
+            ;;
+        404) rm -f "$_tmp"; die "doc not found" ;;
+        *)   _err=$(cat "$_tmp"); rm -f "$_tmp"
+             die "task doc cat failed (HTTP $_code): $_err" ;;
+    esac
+}
+
+cmd_task_doc_rm() {
+    [ $# -ge 2 ] || die "task doc rm: usage <task-id> <name>"
+    _tid=$1; _name=$2
+    load_endpoint
+    _code=$(curl_auth -o /dev/null -w '%{http_code}' \
+        -X DELETE "$URL/v1/tasks/$_tid/docs/$_name") \
+        || die "task doc rm failed"
+    case $_code in
+        204) : ;;
+        404) die "doc or task not found" ;;
+        *)   die "task doc rm failed (HTTP $_code)" ;;
+    esac
+}
+
 cmd_task() {
-    [ $# -gt 0 ] || die "task: missing subcommand (list|add|next|claim|take|done|update|remove)"
+    [ $# -gt 0 ] || die "task: missing subcommand (list|add|next|claim|take|done|update|remove|doc)"
     _sub=$1; shift
     case $_sub in
         list)   cmd_task_list   "$@" ;;
@@ -1215,6 +1336,7 @@ cmd_task() {
         done)   cmd_task_done   "$@" ;;
         update) cmd_task_update "$@" ;;
         remove) cmd_task_remove "$@" ;;
+        doc)    cmd_task_doc    "$@" ;;
         *)      die "task: unknown subcommand: $_sub" ;;
     esac
 }

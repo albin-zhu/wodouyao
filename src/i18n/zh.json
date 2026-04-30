@@ -205,6 +205,7 @@
     "unowned": "未分配",
     "ownerRole": "执行者角色",
     "suggestedRole": "建议角色（未认领）",
+    "docs": "文档",
     "blockedBy": "被 {{count}} 个任务阻塞",
     "justNow": "刚刚",
     "minutesAgo": "{{count}}分钟前",

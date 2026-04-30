@@ -20,6 +20,9 @@ export interface Task {
   parent_id?: string | null;
   complexity?: number | null;
   prd_note_id?: string | null;
+  /** Filenames under $cwd/.wodouyao/tasks/<id>/docs/. Source of truth is
+   *  the on-disk file; this array mirrors it for listing. */
+  docs?: string[];
 }
 
 export interface TaskCreateInput {

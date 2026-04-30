@@ -161,6 +161,31 @@ fn handle(
                     } else {
                         let _ = request.respond(empty(404));
                     }
+                // /v1/tasks/{id}/docs — list or create
+                } else if let Some(id) = task_id.strip_suffix("/docs") {
+                    match &method {
+                        &Method::Get => tasks_docs_list_route(request, task_store, id),
+                        &Method::Post => {
+                            tasks_docs_create_route(request, task_store, id, app_handle)
+                        }
+                        _ => {
+                            let _ = request.respond(empty(404));
+                        }
+                    }
+                // /v1/tasks/{id}/docs/{name} — read or delete
+                } else if let Some(rest) = task_id.strip_suffix("")
+                    .and_then(|s| s.find("/docs/").map(|i| (&s[..i], &s[i + 6..])))
+                {
+                    let (id, name) = rest;
+                    match &method {
+                        &Method::Get => tasks_docs_read_route(request, task_store, id, name),
+                        &Method::Delete => {
+                            tasks_docs_delete_route(request, task_store, id, name, app_handle)
+                        }
+                        _ => {
+                            let _ = request.respond(empty(404));
+                        }
+                    }
                 } else {
                     match &method {
                         &Method::Patch => tasks_patch_route(request, task_store, task_id, app_handle),
@@ -1960,6 +1985,181 @@ fn tasks_delete_route(
     } else {
         let _ = request.respond(text(404, "task not found"));
     }
+}
+
+// ── Task document endpoints ────────────────────────────────────────────────
+//
+// Docs are markdown files living alongside the task in
+// `$cwd/.wodouyao/tasks/<task-id>/docs/<name>.md`. The task JSON stores
+// only the filename list — content is filesystem-native so agents can
+// `cat` / `grep` / open in their preferred editor without a special tool.
+
+/// Resolve the on-disk docs dir for a task. Returns None when the task
+/// doesn't exist or its workspace has no known cwd.
+fn task_docs_dir(task_store: &TaskStore, task_id: &str) -> Option<std::path::PathBuf> {
+    use crate::workspace::storage::{list as list_workspaces, project_paths};
+    let task = task_store.get(task_id)?;
+    let ws_id = task.workspace_id?;
+    // Walk the catalog to find this workspace's cwd.
+    let metas = list_workspaces().ok()?;
+    let _ = metas; // catalog side-effect only: triggers migration + enumeration
+    // Read the raw catalog since list() returns meta not cwd.
+    let catalog_json = std::fs::read_to_string(
+        dirs::data_dir()?
+            .join("com.wodouyao.app")
+            .join("workspaces.json"),
+    )
+    .ok()?;
+    let v: serde_json::Value = serde_json::from_str(&catalog_json).ok()?;
+    let entries = v.get("entries")?.as_array()?;
+    let cwd = entries
+        .iter()
+        .find(|e| e.get("id").and_then(|x| x.as_str()) == Some(&ws_id))
+        .and_then(|e| e.get("cwd").and_then(|x| x.as_str()))?
+        .to_string();
+    let pp = project_paths(&cwd).ok()?;
+    let dir = pp.tasks_dir.join(task_id).join("docs");
+    std::fs::create_dir_all(&dir).ok()?;
+    Some(dir)
+}
+
+/// Sanitize a user-supplied doc name. Allows identifier-ish chars + dash,
+/// dot, underscore. Rejects path traversal and empty strings. Returns the
+/// sanitized name (which may differ from the input if we stripped disallowed
+/// chars), or None if the result is unsafe.
+fn sanitize_doc_name(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed == "." || trimmed == ".." {
+        return None;
+    }
+    if trimmed.contains('/') || trimmed.contains('\\') || trimmed.contains('\0') {
+        return None;
+    }
+    // Ensure .md suffix so `cat docs/*.md` does the right thing.
+    let base: String = trimmed
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_' || *c == '.' || *c == ' ')
+        .collect();
+    let base = base.trim().to_string();
+    if base.is_empty() {
+        return None;
+    }
+    if base.to_lowercase().ends_with(".md") {
+        Some(base)
+    } else {
+        Some(format!("{}.md", base))
+    }
+}
+
+#[derive(Deserialize)]
+struct TaskDocCreateBody {
+    name: String,
+    #[serde(default)]
+    content: String,
+}
+
+/// GET /v1/tasks/{id}/docs
+fn tasks_docs_list_route(
+    request: tiny_http::Request,
+    task_store: &TaskStore,
+    task_id: &str,
+) {
+    let Some(task) = task_store.get(task_id) else {
+        let _ = request.respond(text(404, "task not found"));
+        return;
+    };
+    let body = serde_json::json!({ "docs": task.docs }).to_string();
+    let _ = request.respond(json(200, body));
+}
+
+/// POST /v1/tasks/{id}/docs   { name, content }
+fn tasks_docs_create_route(
+    mut request: tiny_http::Request,
+    task_store: &TaskStore,
+    task_id: &str,
+    app_handle: &AppHandleSlot,
+) {
+    let mut body = String::new();
+    if request.as_reader().read_to_string(&mut body).is_err() {
+        let _ = request.respond(text(400, "unable to read body"));
+        return;
+    }
+    let parsed: TaskDocCreateBody = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = request.respond(text(400, &format!("invalid json: {}", e)));
+            return;
+        }
+    };
+    let Some(name) = sanitize_doc_name(&parsed.name) else {
+        let _ = request.respond(text(400, "invalid doc name"));
+        return;
+    };
+    let Some(dir) = task_docs_dir(task_store, task_id) else {
+        let _ = request.respond(text(
+            400,
+            "task has no workspace cwd — save the workspace first",
+        ));
+        return;
+    };
+    let path = dir.join(&name);
+    if let Err(e) = std::fs::write(&path, parsed.content.as_bytes()) {
+        let _ = request.respond(text(500, &format!("write failed: {}", e)));
+        return;
+    }
+    let _ = task_store.add_doc(task_id, &name);
+    emit_tasks_updated(app_handle);
+    let body = serde_json::json!({ "name": name, "path": path.to_string_lossy() })
+        .to_string();
+    let _ = request.respond(json(200, body));
+}
+
+/// GET /v1/tasks/{id}/docs/{name}
+fn tasks_docs_read_route(
+    request: tiny_http::Request,
+    task_store: &TaskStore,
+    task_id: &str,
+    name: &str,
+) {
+    let Some(safe) = sanitize_doc_name(name) else {
+        let _ = request.respond(text(400, "invalid doc name"));
+        return;
+    };
+    let Some(dir) = task_docs_dir(task_store, task_id) else {
+        let _ = request.respond(text(404, "task or workspace not found"));
+        return;
+    };
+    match std::fs::read_to_string(dir.join(&safe)) {
+        Ok(content) => {
+            let body = serde_json::json!({ "name": safe, "content": content }).to_string();
+            let _ = request.respond(json(200, body));
+        }
+        Err(_) => {
+            let _ = request.respond(text(404, "doc not found"));
+        }
+    }
+}
+
+/// DELETE /v1/tasks/{id}/docs/{name}
+fn tasks_docs_delete_route(
+    request: tiny_http::Request,
+    task_store: &TaskStore,
+    task_id: &str,
+    name: &str,
+    app_handle: &AppHandleSlot,
+) {
+    let Some(safe) = sanitize_doc_name(name) else {
+        let _ = request.respond(text(400, "invalid doc name"));
+        return;
+    };
+    let Some(dir) = task_docs_dir(task_store, task_id) else {
+        let _ = request.respond(text(404, "task or workspace not found"));
+        return;
+    };
+    let _ = std::fs::remove_file(dir.join(&safe));
+    let _ = task_store.remove_doc(task_id, &safe);
+    emit_tasks_updated(app_handle);
+    let _ = request.respond(empty(204));
 }
 
 /// GET /v1/tasks/next?role=X&from=<term_id>&workspace=<ws>

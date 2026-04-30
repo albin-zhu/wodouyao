@@ -50,6 +50,12 @@ pub struct Task {
     /// Note id of the PRD this task came from, when source == "prd".
     #[serde(default)]
     pub prd_note_id: Option<String>,
+    /// Filenames of per-task documents. Content lives at
+    /// `$cwd/.wodouyao/tasks/<task-id>/docs/<name>.md` and is managed via
+    /// the task doc endpoints. Kept in alphabetical order so JSON diffs stay
+    /// stable.
+    #[serde(default)]
+    pub docs: Vec<String>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -171,6 +177,7 @@ impl TaskStore {
             parent_id: input.parent_id,
             complexity: input.complexity,
             prd_note_id: input.prd_note_id,
+            docs: Vec::new(),
         };
         self.inner.lock().unwrap().insert(task.id.clone(), task.clone());
         task
@@ -298,6 +305,36 @@ impl TaskStore {
             t.workspace_id = Some(ws_id.to_string());
             map.insert(t.id.clone(), t);
         }
+    }
+
+    /// Look up a task's `cwd` by walking back through its workspace's
+    /// catalog entry. Returns None when the task has no workspace_id or
+    /// the workspace isn't in the catalog. Used to resolve on-disk paths
+    /// for per-task docs.
+    pub fn get(&self, id: &str) -> Option<Task> {
+        self.inner.lock().unwrap().get(id).cloned()
+    }
+
+    /// Add a doc filename to the task's list (sorted, deduped). Does NOT
+    /// write the doc file itself — the caller owns that. Returns the
+    /// updated task, or None if the task doesn't exist.
+    pub fn add_doc(&self, id: &str, filename: &str) -> Option<Task> {
+        let mut map = self.inner.lock().unwrap();
+        let task = map.get_mut(id)?;
+        if !task.docs.iter().any(|n| n == filename) {
+            task.docs.push(filename.to_string());
+            task.docs.sort();
+        }
+        Some(task.clone())
+    }
+
+    /// Remove a doc filename from the task's list. Does NOT delete the
+    /// doc file on disk — the caller owns that.
+    pub fn remove_doc(&self, id: &str, filename: &str) -> Option<Task> {
+        let mut map = self.inner.lock().unwrap();
+        let task = map.get_mut(id)?;
+        task.docs.retain(|n| n != filename);
+        Some(task.clone())
     }
 }
 

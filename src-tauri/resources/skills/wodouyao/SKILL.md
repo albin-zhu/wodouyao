@@ -270,6 +270,26 @@ Edit fields on an existing task. Most useful for appending acceptance criteria a
 
 Delete the task entirely. Avoid unless the task was a duplicate or mistake — prefer `done` to leave the audit trail.
 
+### Task documents — `wodouyao task doc <sub>`
+
+Each task can carry any number of markdown docs (design notes, spec excerpts, PRD fragments, test plans). They live on disk at `$cwd/.wodouyao/tasks/<task-id>/docs/<name>.md` so agents can `cat`, `grep`, or open them in an editor without a special tool.
+
+- `wodouyao task doc list <task-id>` — print one filename per line
+- `wodouyao task doc add <task-id> <name> [--file PATH | --content TEXT]` — create/overwrite. `--file` reads from a path; `--content` takes inline text. Name auto-gets `.md` suffix if missing
+- `wodouyao task doc cat <task-id> <name>` — print the doc content to stdout (use this or just `cat` the file — both work)
+- `wodouyao task doc rm <task-id> <name>` — delete
+
+```sh
+# Attach your design notes to a task
+wodouyao task doc add t_abc123 design --file design.md
+
+# Later: skim everything attached
+for d in $(wodouyao task doc list t_abc123); do
+  echo "=== $d ==="
+  wodouyao task doc cat t_abc123 "$d"
+done
+```
+
 ## Working a task (recommended pattern)
 
 ```sh

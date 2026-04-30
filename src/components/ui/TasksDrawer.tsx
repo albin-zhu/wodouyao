@@ -220,6 +220,36 @@ function TaskRow({ task }: { task: Task }) {
           ))}
         </ul>
       )}
+      {expanded && (task.docs?.length ?? 0) > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ color: "var(--color-text-muted)", fontSize: 10, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            {t("tasks.docs", "Docs")}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {task.docs!.map((name) => (
+              <span
+                key={name}
+                title={`.wodouyao/tasks/${task.id}/docs/${name}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "2px 7px",
+                  borderRadius: 3,
+                  fontSize: 11,
+                  color: "var(--color-info)",
+                  background: "color-mix(in srgb, var(--color-info) 12%, transparent)",
+                  border: "1px solid color-mix(in srgb, var(--color-info) 28%, transparent)",
+                  fontFamily: "'JetBrainsMono Nerd Font Mono', monospace",
+                }}
+              >
+                <span style={{ fontSize: 9, opacity: 0.8 }}>📄</span>
+                {name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
