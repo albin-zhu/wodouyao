@@ -56,6 +56,7 @@ export function useTerminal() {
 
       const terminal = addTerminal(overrides);
 
+      const wsId = useWorkspaceStore.getState().currentWorkspace?.id;
       try {
         await createTerminal({
           id,
@@ -65,6 +66,7 @@ export function useTerminal() {
           rows: DEFAULT_ROWS,
           cwd,
           fast_start: options?.fastStart ?? false,
+          workspace_id: wsId,
         });
         toast(i18n.t("toast.terminalCreated"), "success", 2000);
       } catch (err) {

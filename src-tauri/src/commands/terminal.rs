@@ -14,6 +14,11 @@ pub struct CreateTerminalRequest {
     pub cwd: Option<String>,
     #[serde(default)]
     pub fast_start: bool,
+    /// Workspace this terminal belongs to. Plumbed through into
+    /// `WODOUYAO_WORKSPACE_ID` in the PTY env so hub-bound operations
+    /// (task add, note add, etc.) know which workspace scope to stamp.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 #[tauri::command]
@@ -55,6 +60,9 @@ pub fn create_terminal(
         state.hub.endpoint_path.to_string_lossy().into_owned(),
     ));
     env.push(("WODOUYAO_ID".to_string(), request.id.clone()));
+    if let Some(ws) = request.workspace_id.as_ref().filter(|s| !s.is_empty()) {
+        env.push(("WODOUYAO_WORKSPACE_ID".to_string(), ws.clone()));
+    }
 
     if let Ok(resource_dir) = app.path().resource_dir() {
         // Tauri copies `bundle.resources` entries preserving their relative

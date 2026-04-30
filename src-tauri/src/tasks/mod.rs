@@ -103,6 +103,10 @@ pub struct TaskPatch {
     pub role_hint: Option<Option<String>>,
     #[serde(default)]
     pub complexity: Option<Option<u8>>,
+    /// Used by the frontend hydrate self-heal to stamp orphan tasks with
+    /// the active workspace. Plain Option — unset leaves untouched.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 fn deserialize_optional_optional_string<'de, D>(
@@ -198,6 +202,9 @@ impl TaskStore {
         }
         if let Some(rh) = patch.role_hint {
             task.role_hint = rh;
+        }
+        if let Some(ws) = patch.workspace_id {
+            task.workspace_id = Some(ws);
         }
         if let Some(c) = patch.complexity {
             task.complexity = c;

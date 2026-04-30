@@ -996,6 +996,7 @@ cmd_task_add() {
                 WODOUYAO_T_DESC=$_desc \
                 WODOUYAO_T_BY=${WODOUYAO_ID:-user} \
                 WODOUYAO_T_BLOCK=$_blocked \
+                WODOUYAO_T_WS=${WODOUYAO_WORKSPACE_ID:-} \
                 python3 -c '
 import json, os
 obj = {"subject": os.environ["WODOUYAO_T_SUBJ"],
@@ -1007,6 +1008,9 @@ b = os.environ.get("WODOUYAO_T_BLOCK", "")
 blk = [x.strip() for x in b.split(",") if x.strip()]
 if blk:
     obj["blocked_by"] = blk
+ws = os.environ.get("WODOUYAO_T_WS", "")
+if ws:
+    obj["workspace_id"] = ws
 print(json.dumps(obj))
 ')
     else
@@ -1016,6 +1020,10 @@ print(json.dumps(obj))
         if [ -n "$_desc" ]; then
             _d_j=$(json_escape "$_desc")
             _body="$_body,\"description\":$_d_j"
+        fi
+        if [ -n "${WODOUYAO_WORKSPACE_ID:-}" ]; then
+            _ws_j=$(json_escape "$WODOUYAO_WORKSPACE_ID")
+            _body="$_body,\"workspace_id\":$_ws_j"
         fi
         _body="$_body}"
     fi

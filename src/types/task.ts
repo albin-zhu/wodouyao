@@ -48,4 +48,5 @@ export interface TaskPatchInput {
   note_id?: string | null;
   role_hint?: string | null;
   complexity?: number | null;
+  workspace_id?: string;
 }

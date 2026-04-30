@@ -38,7 +38,19 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     try {
       const list = await tasksList();
       const next = new Map<string, Task>();
-      for (const t of list) next.set(t.id, t);
+      const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+      // Heal orphan tasks — any task without a workspace_id gets stamped
+      // with the active one. Covers tasks created via the CLI before the
+      // WODOUYAO_WORKSPACE_ID env plumbing landed, and any hub path that
+      // forgets to set it. Stamps are persisted via the regular PATCH so
+      // the backend's filter_for_workspace can find them on save.
+      for (const t of list) {
+        if (wsId && !t.workspace_id) {
+          t.workspace_id = wsId;
+          void tasksUpdate(t.id, { workspace_id: wsId } as TaskPatchInput).catch(() => {});
+        }
+        next.set(t.id, t);
+      }
       set({ tasks: next, loaded: true });
     } catch (e) {
       console.error("taskStore.hydrate failed:", e);

@@ -48,4 +48,5 @@ export interface CreateTerminalRequest {
   rows: number;
   cwd?: string;
   fast_start?: boolean;
+  workspace_id?: string;
 }
