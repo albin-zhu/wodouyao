@@ -203,6 +203,8 @@
     "filterDone": "已完成",
     "emptyState": "暂无任务。在上方添加,或在终端中调用任务 API。",
     "unowned": "未分配",
+    "ownerRole": "执行者角色",
+    "suggestedRole": "建议角色（未认领）",
     "blockedBy": "被 {{count}} 个任务阻塞",
     "justNow": "刚刚",
     "minutesAgo": "{{count}}分钟前",

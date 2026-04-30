@@ -12,6 +12,14 @@ export interface Task {
   acceptance: string[];
   note_id?: string | null;
   workspace_id?: string | null;
+  /** Suggested terminal role (e.g. "backend", "pm"). Used by
+   *  `wodouyao task next --role X` and shown as a hint in the TasksDrawer
+   *  when no one has claimed the task yet. */
+  role_hint?: string | null;
+  source?: string | null;
+  parent_id?: string | null;
+  complexity?: number | null;
+  prd_note_id?: string | null;
 }
 
 export interface TaskCreateInput {
@@ -23,6 +31,11 @@ export interface TaskCreateInput {
   acceptance?: string[];
   note_id?: string | null;
   workspace_id?: string | null;
+  role_hint?: string | null;
+  source?: string | null;
+  parent_id?: string | null;
+  complexity?: number | null;
+  prd_note_id?: string | null;
 }
 
 export interface TaskPatchInput {
@@ -33,4 +46,6 @@ export interface TaskPatchInput {
   blocked_by?: string[];
   acceptance?: string[];
   note_id?: string | null;
+  role_hint?: string | null;
+  complexity?: number | null;
 }

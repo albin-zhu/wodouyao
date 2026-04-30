@@ -4,6 +4,7 @@ import { useTaskStore } from "../../store/taskStore";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import type { Task, TaskStatus } from "../../types/task";
+import { TERMINAL_ROLES } from "../../utils/terminalRoles";
 
 const STATUS_GLYPH: Record<TaskStatus, string> = {
   pending: "\u25B6",
@@ -47,6 +48,11 @@ function TaskRow({ task }: { task: Task }) {
   const ownerName = owner?.name ?? (task.owner_term_id ? task.owner_term_id.slice(0, 8) : t("tasks.unowned"));
   const blockers = task.blocked_by ?? [];
   const isPulsing = task.status === "in_progress";
+  // Prefer the OWNER's role (what the terminal actually registered as);
+  // fall back to the task's role_hint (what we suggested). If the owner
+  // has no role, the hint still tells the user who this task was meant for.
+  const displayRole = owner?.role ?? task.role_hint ?? undefined;
+  const roleMeta = displayRole ? TERMINAL_ROLES[displayRole] : undefined;
 
   return (
     <div
@@ -153,6 +159,36 @@ function TaskRow({ task }: { task: Task }) {
           flexWrap: "wrap",
         }}
       >
+        {displayRole && (
+          <span
+            title={
+              roleMeta?.hint ??
+              (owner
+                ? t("tasks.ownerRole", "owner role")
+                : t("tasks.suggestedRole", "suggested role"))
+            }
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              padding: "1px 6px",
+              borderRadius: 3,
+              fontSize: 9,
+              fontWeight: 600,
+              letterSpacing: 0.3,
+              textTransform: "uppercase",
+              color: roleMeta?.color ?? "var(--color-text-muted)",
+              background: `color-mix(in srgb, ${roleMeta?.color ?? "var(--color-text-muted)"} 15%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${roleMeta?.color ?? "var(--color-text-muted)"} 35%, transparent)`,
+              // A light dashed border signals "only a hint" (no owner yet),
+              // solid signals "this is the owner's actual role".
+              borderStyle: owner ? "solid" : "dashed",
+            }}
+          >
+            {roleMeta?.glyph && <span style={{ fontSize: 10, lineHeight: 1 }}>{roleMeta.glyph}</span>}
+            {roleMeta?.label ?? displayRole}
+          </span>
+        )}
         <span style={{ color: ownerColor }}>{"\u25CF"} {ownerName}</span>
         <span>{timeAgo(task.created_at, t)}</span>
         {blockers.length > 0 && (

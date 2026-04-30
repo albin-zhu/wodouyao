@@ -128,6 +128,23 @@ export const ACCENT_COLORS = [
 export const DEFAULT_COLOR = "#7aa2f7";
 export const DEFAULT_THEME: TerminalTheme = "tokyonight";
 
+/** Pick a random hex from the accent palette. Used on terminal spawn so
+ *  the left border / title badge differentiates side-by-side terminals
+ *  (otherwise every new one is the same Tokyo-night blue).
+ *  `avoid` takes a list of already-used hex values; we try to pick one not
+ *  in that list so adjacent terminals look distinct. Falls back to a true
+ *  random if every color is already used. */
+export function randomAccent(avoid?: string[]): string {
+  if (!avoid || avoid.length === 0) {
+    return ACCENT_COLORS[Math.floor(Math.random() * ACCENT_COLORS.length)].hex;
+  }
+  const pool = ACCENT_COLORS.filter((c) => !avoid.includes(c.hex));
+  if (pool.length === 0) {
+    return ACCENT_COLORS[Math.floor(Math.random() * ACCENT_COLORS.length)].hex;
+  }
+  return pool[Math.floor(Math.random() * pool.length)].hex;
+}
+
 // Light-mode counterparts. Well-known official palettes where they exist
 // (Tokyo Night Light, Solarized Light); otherwise sensible inversions.
 // Darker ANSI colors so text stays legible on the pale backgrounds.

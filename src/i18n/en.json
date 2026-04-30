@@ -210,6 +210,8 @@
     "filterDone": "done",
     "emptyState": "No tasks yet. Add one above, or from a terminal call the tasks API.",
     "unowned": "unowned",
+    "ownerRole": "owner's role",
+    "suggestedRole": "suggested role (unclaimed)",
     "blockedBy": "blocked by {{count}}",
     "justNow": "just now",
     "minutesAgo": "{{count}}m ago",

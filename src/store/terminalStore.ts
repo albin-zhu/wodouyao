@@ -7,7 +7,7 @@ import {
   DEFAULT_ROWS,
   TITLE_BAR_HEIGHT,
 } from "../utils/constants";
-import { DEFAULT_COLOR, DEFAULT_THEME } from "../utils/terminalThemes";
+import { DEFAULT_THEME, randomAccent } from "../utils/terminalThemes";
 import { generateId } from "../utils/id";
 import { useWorkspaceStore } from "./workspaceStore";
 
@@ -45,6 +45,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const id = overrides?.id ?? generateId();
     const state = get();
     const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+    // Prefer an accent color that isn't already in use on the same workspace
+    // so side-by-side terminals are visually distinct. Falls back to a true
+    // random once the palette is exhausted.
+    const usedColors = Array.from(state.terminals.values())
+      .filter((t) => (t.workspaceId ?? null) === wsId)
+      .map((t) => t.color);
     const terminal: TerminalNode = {
       id,
       name: overrides?.name ?? `Terminal ${state.terminals.size + 1}`,
@@ -58,7 +64,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       cols: overrides?.cols ?? DEFAULT_COLS,
       rows: overrides?.rows ?? DEFAULT_ROWS,
       createdAt: Date.now(),
-      color: overrides?.color ?? DEFAULT_COLOR,
+      color: overrides?.color ?? randomAccent(usedColors),
       theme: overrides?.theme ?? DEFAULT_THEME,
       cwd: overrides?.cwd,
       role: overrides?.role,
