@@ -290,6 +290,27 @@ for d in $(wodouyao task doc list t_abc123); do
 done
 ```
 
+## Session recovery (advanced)
+
+When you open a saved workspace, wodouyao rewrites each claude/codex terminal's launch command to a resume form (`claude -c` or `-r <id>`; `codex --resume`). To resume a *specific* session instead of "continue most recent", the terminal needs a `session_id` recorded.
+
+### `wodouyao terminal set-session <session-id>`
+
+Records a session id against the calling terminal (reads `WODOUYAO_ID`). Intended to be called from a Claude Code SessionStart hook:
+
+```json
+// .claude/settings.local.json
+{
+  "hooks": {
+    "SessionStart": [
+      { "type": "command", "command": "wodouyao terminal set-session \"$CLAUDE_SESSION_ID\"" }
+    ]
+  }
+}
+```
+
+Wodouyao's workflow bootstrap writes this hook into `.claude/settings.local.json` automatically (merging into any existing config, never overwriting). Once recorded, the next workspace save stamps `session_id` into the terminal layout, and reopen replays with `claude -r <id>`.
+
 ## Working a task (recommended pattern)
 
 ```sh

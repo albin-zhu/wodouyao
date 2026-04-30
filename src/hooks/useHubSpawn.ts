@@ -22,6 +22,26 @@ interface SpawnRequestPayload {
 export function useHubSpawn() {
   const { spawn } = useTerminal();
   const addWire = useWireStore((s) => s.addWire);
+  const updateTerminal = useTerminalStore((s) => s.updateTerminal);
+
+  // Mirror session_id updates from the hub into the terminal store so
+  // the next workspace save writes it into the layout and reopening can
+  // resume with `claude -r <id>`. Driven by `wodouyao terminal set-session`,
+  // typically called from a Claude Code SessionStart hook.
+  useEffect(() => {
+    const unlistenPromise = listen<{ id: string; session_id: string }>(
+      "terminal-session-updated",
+      (event) => {
+        const { id, session_id } = event.payload;
+        if (id && session_id) {
+          updateTerminal(id, { sessionId: session_id });
+        }
+      },
+    );
+    return () => {
+      unlistenPromise.then((fn) => fn()).catch(() => {});
+    };
+  }, [updateTerminal]);
 
   useEffect(() => {
     const unlistenPromise = listen<SpawnRequestPayload>(

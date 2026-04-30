@@ -1606,13 +1606,30 @@ cmd_terminal_close() {
     esac
 }
 
+cmd_terminal_set_session() {
+    [ $# -ge 1 ] || die "terminal set-session: usage <session-id>"
+    _sid=$1
+    [ -n "${WODOUYAO_ID:-}" ] || die "terminal set-session: WODOUYAO_ID is unset"
+    load_endpoint
+    _body=$(printf '{"session_id":"%s"}' "$_sid")
+    _code=$(curl_auth -o /dev/null -w '%{http_code}' \
+        -X POST -H 'Content-Type: application/json' \
+        --data-binary "$_body" "$URL/v1/terminals/$WODOUYAO_ID/session") \
+        || die "terminal set-session failed"
+    case $_code in
+        204) : ;;
+        *)   die "terminal set-session failed (HTTP $_code)" ;;
+    esac
+}
+
 cmd_terminal() {
-    [ $# -gt 0 ] || die "terminal: missing subcommand (list|close)"
+    [ $# -gt 0 ] || die "terminal: missing subcommand (list|close|set-session)"
     _sub=$1; shift
     case $_sub in
-        list)  cmd_terminal_list  "$@" ;;
-        close) cmd_terminal_close "$@" ;;
-        *)     die "terminal: unknown subcommand: $_sub" ;;
+        list)        cmd_terminal_list  "$@" ;;
+        close)       cmd_terminal_close "$@" ;;
+        set-session) cmd_terminal_set_session "$@" ;;
+        *)           die "terminal: unknown subcommand: $_sub" ;;
     esac
 }
 

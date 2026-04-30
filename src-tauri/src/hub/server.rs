@@ -203,12 +203,25 @@ fn handle(
                     }
                 }
             } else if let Some(term_id) = path.strip_prefix("/v1/terminals/") {
-                match &method {
-                    &Method::Delete => terminals_close_route(
-                        request, pty_manager, topology, identities, term_id, app_handle,
-                    ),
-                    _ => {
-                        let _ = request.respond(empty(404));
+                // /v1/terminals/{id}/session — SetSession called from a
+                // Claude hook to record its session id for resume.
+                if let Some(id) = term_id.strip_suffix("/session") {
+                    match &method {
+                        &Method::Post | &Method::Patch => {
+                            terminals_set_session_route(request, id, app_handle);
+                        }
+                        _ => {
+                            let _ = request.respond(empty(404));
+                        }
+                    }
+                } else {
+                    match &method {
+                        &Method::Delete => terminals_close_route(
+                            request, pty_manager, topology, identities, term_id, app_handle,
+                        ),
+                        _ => {
+                            let _ = request.respond(empty(404));
+                        }
                     }
                 }
             } else if let Some(note_id) = path.strip_prefix("/v1/notes/") {
@@ -610,6 +623,7 @@ fn spawn(
 
     if let Some(c) = parsed.cwd.as_deref().filter(|s| !s.is_empty()) {
         write_project_claude_md(c);
+        inject_claude_session_hook(c);
     }
 
     let payload = SpawnEventPayload {
@@ -699,6 +713,68 @@ fn write_project_claude_md(cwd: &str) {
     }
     let body = include_str!("../../resources/project_claude_md_template.md");
     let _ = std::fs::write(&target, body);
+}
+
+/// Inject a Claude Code SessionStart hook into the project's
+/// `.claude/settings.local.json` so the terminal's session id auto-records
+/// on every startup. We write to `settings.local.json` (not the shared
+/// `settings.json`) because by convention that file is gitignored and
+/// user-local, matching wodouyao's per-terminal identity.
+///
+/// Merge-aware: if the file exists we parse it, add our hook if missing,
+/// and re-serialize. Any existing hooks / other fields are preserved.
+/// Failures are silent (spawn must not block on write errors).
+fn inject_claude_session_hook(cwd: &str) {
+    use serde_json::{json, Value};
+    let dir = std::path::Path::new(cwd).join(".claude");
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let target = dir.join("settings.local.json");
+
+    let mut root: Value = if target.exists() {
+        std::fs::read_to_string(&target)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_else(|| json!({}))
+    } else {
+        json!({})
+    };
+
+    // The command we want Claude to run on SessionStart — it records the
+    // freshly-assigned session id back into the wodouyao hub so
+    // workspace-reopen can resume with `claude -r <id>`.
+    const CMD: &str = "wodouyao terminal set-session \"$CLAUDE_SESSION_ID\"";
+
+    // Ensure root.hooks.SessionStart is an array containing our command.
+    let hooks = root
+        .as_object_mut()
+        .and_then(|o| Some(o.entry("hooks").or_insert_with(|| json!({}))))
+        .and_then(|h| h.as_object_mut());
+    let Some(hooks) = hooks else { return };
+    let list = hooks
+        .entry("SessionStart")
+        .or_insert_with(|| json!([]))
+        .as_array_mut();
+    let Some(list) = list else { return };
+    let already = list.iter().any(|entry| {
+        entry
+            .get("command")
+            .and_then(|v| v.as_str())
+            .map(|s| s.contains("wodouyao terminal set-session"))
+            .unwrap_or(false)
+    });
+    if already {
+        return;
+    }
+    list.push(json!({
+        "type": "command",
+        "command": CMD,
+    }));
+
+    if let Ok(serialized) = serde_json::to_string_pretty(&root) {
+        let _ = std::fs::write(&target, serialized);
+    }
 }
 
 #[derive(Deserialize, Clone)]
@@ -792,6 +868,7 @@ pub fn do_workflow_bootstrap(
 
     if let Some(c) = parsed.cwd.as_deref().filter(|s| !s.is_empty()) {
         write_project_claude_md(c);
+        inject_claude_session_hook(c);
     }
 
     // Pre-allocate ids so we can wire them up before each spawn fires (the
@@ -2323,6 +2400,55 @@ fn terminals_list_route(
         .collect();
     let body = serde_json::to_string(&infos).unwrap_or_else(|_| "[]".into());
     let _ = request.respond(json(200, body));
+}
+
+#[derive(Deserialize)]
+struct SetSessionBody {
+    session_id: String,
+}
+
+#[derive(Serialize, Clone)]
+struct TerminalSessionUpdatedPayload {
+    id: String,
+    session_id: String,
+}
+
+/// POST /v1/terminals/{id}/session   { session_id }
+/// Record a claude / codex session id for the given terminal. Typically
+/// called from a Claude Code SessionStart hook so the id gets persisted
+/// and the terminal can be resumed with `claude -r <id>` on workspace
+/// reopen. The hub emits a `terminal-session-updated` event so the
+/// frontend store can mirror the value; the workspace save path then
+/// writes it into the layout.
+fn terminals_set_session_route(
+    mut request: tiny_http::Request,
+    term_id: &str,
+    app_handle: &AppHandleSlot,
+) {
+    let mut body = String::new();
+    if request.as_reader().read_to_string(&mut body).is_err() {
+        let _ = request.respond(text(400, "unable to read body"));
+        return;
+    }
+    let parsed: SetSessionBody = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = request.respond(text(400, &format!("invalid json: {}", e)));
+            return;
+        }
+    };
+    if parsed.session_id.trim().is_empty() {
+        let _ = request.respond(text(400, "session_id cannot be empty"));
+        return;
+    }
+    if let Some(app) = app_handle.get() {
+        let payload = TerminalSessionUpdatedPayload {
+            id: term_id.to_string(),
+            session_id: parsed.session_id,
+        };
+        let _ = app.emit("terminal-session-updated", payload);
+    }
+    let _ = request.respond(empty(204));
 }
 
 fn terminals_close_route(
