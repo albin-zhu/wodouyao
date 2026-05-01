@@ -978,12 +978,15 @@ cmd_task_add() {
     _subject=""
     _desc=""
     _blocked=""
+    _role_hint=""
     while [ $# -gt 0 ]; do
         case $1 in
             --desc)       [ $# -ge 2 ] || die "--desc requires a value"
                           _desc=$2; shift 2 ;;
             --blocked-by) [ $# -ge 2 ] || die "--blocked-by requires a value"
                           _blocked=$2; shift 2 ;;
+            --role-hint)  [ $# -ge 2 ] || die "--role-hint requires a value"
+                          _role_hint=$2; shift 2 ;;
             -*)           die "unknown flag: $1" ;;
             *)            [ -z "$_subject" ] || die "task add: too many arguments"
                           _subject=$1; shift ;;
@@ -997,6 +1000,7 @@ cmd_task_add() {
                 WODOUYAO_T_BY=${WODOUYAO_ID:-user} \
                 WODOUYAO_T_BLOCK=$_blocked \
                 WODOUYAO_T_WS=${WODOUYAO_WORKSPACE_ID:-} \
+                WODOUYAO_T_ROLE=${_role_hint} \
                 python3 -c '
 import json, os
 obj = {"subject": os.environ["WODOUYAO_T_SUBJ"],
@@ -1011,6 +1015,9 @@ if blk:
 ws = os.environ.get("WODOUYAO_T_WS", "")
 if ws:
     obj["workspace_id"] = ws
+r = os.environ.get("WODOUYAO_T_ROLE", "")
+if r:
+    obj["role_hint"] = r
 print(json.dumps(obj))
 ')
     else
@@ -1024,6 +1031,10 @@ print(json.dumps(obj))
         if [ -n "${WODOUYAO_WORKSPACE_ID:-}" ]; then
             _ws_j=$(json_escape "$WODOUYAO_WORKSPACE_ID")
             _body="$_body,\"workspace_id\":$_ws_j"
+        fi
+        if [ -n "$_role_hint" ]; then
+            _rh_j=$(json_escape "$_role_hint")
+            _body="$_body,\"role_hint\":$_rh_j"
         fi
         _body="$_body}"
     fi

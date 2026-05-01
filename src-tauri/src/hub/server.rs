@@ -759,17 +759,24 @@ fn inject_claude_session_hook(cwd: &str) {
     let Some(list) = list else { return };
     let already = list.iter().any(|entry| {
         entry
-            .get("command")
-            .and_then(|v| v.as_str())
-            .map(|s| s.contains("wodouyao terminal set-session"))
+            .get("hooks")
+            .and_then(|h| h.as_array())
+            .map(|hooks| {
+                hooks.iter().any(|hook| {
+                    hook.get("command")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.contains("wodouyao terminal set-session"))
+                        .unwrap_or(false)
+                })
+            })
             .unwrap_or(false)
     });
     if already {
         return;
     }
     list.push(json!({
-        "type": "command",
-        "command": CMD,
+        "matcher": "",
+        "hooks": [{"type": "command", "command": CMD}],
     }));
 
     if let Ok(serialized) = serde_json::to_string_pretty(&root) {
