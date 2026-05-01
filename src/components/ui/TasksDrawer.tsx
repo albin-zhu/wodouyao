@@ -159,7 +159,7 @@ function TaskRow({ task }: { task: Task }) {
           flexWrap: "wrap",
         }}
       >
-        {displayRole && (
+        {displayRole ? (
           <span
             title={
               roleMeta?.hint ??
@@ -180,15 +180,34 @@ function TaskRow({ task }: { task: Task }) {
               color: roleMeta?.color ?? "var(--color-text-muted)",
               background: `color-mix(in srgb, ${roleMeta?.color ?? "var(--color-text-muted)"} 15%, transparent)`,
               border: `1px solid color-mix(in srgb, ${roleMeta?.color ?? "var(--color-text-muted)"} 35%, transparent)`,
-              // A light dashed border signals "only a hint" (no owner yet),
-              // solid signals "this is the owner's actual role".
               borderStyle: owner ? "solid" : "dashed",
             }}
           >
             {roleMeta?.glyph && <span style={{ fontSize: 10, lineHeight: 1 }}>{roleMeta.glyph}</span>}
             {roleMeta?.label ?? displayRole}
           </span>
-        )}
+        ) : owner?.agentKind ? (
+          <span
+            title={owner.agentKind}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              padding: "1px 6px",
+              borderRadius: 3,
+              fontSize: 9,
+              fontWeight: 600,
+              letterSpacing: 0.3,
+              textTransform: "uppercase",
+              color: "var(--color-text-muted)",
+              background: "color-mix(in srgb, var(--color-text-muted) 15%, transparent)",
+              border: "1px solid color-mix(in srgb, var(--color-text-muted) 35%, transparent)",
+            }}
+          >
+            <span style={{ fontSize: 10, lineHeight: 1 }}>{">"}</span>
+            {owner.agentKind}
+          </span>
+        ) : null}
         <span style={{ color: ownerColor }}>{"\u25CF"} {ownerName}</span>
         <span>{timeAgo(task.created_at, t)}</span>
         {blockers.length > 0 && (

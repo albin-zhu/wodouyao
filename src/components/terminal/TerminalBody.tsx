@@ -327,8 +327,10 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
     if (!container) return;
 
     const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|ico|svg)$/i;
-    // Characters that cannot appear in a file path
+    // Strict: no whitespace allowed (catches most paths)
     const PATH_BREAK = /[\s"'`\[\](){}|<>]/;
+    // Lenient: spaces allowed — for macOS paths like "/Users/foo/My Image.png"
+    const PATH_BREAK_LENIENT = /["'`\[\](){}|<>]/;
 
     let controller: AbortController | null = null;
 
@@ -349,8 +351,13 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
         const relY = e.clientY - rect.top  - 4;
         if (relX < 0 || relY < 0) { setImageTooltip(null); return; }
 
-        const cellW = (container.clientWidth  - 8) / term.cols;
-        const cellH = (container.clientHeight - 8) / term.rows;
+        // Use rect dimensions (screen-space) for cell size so calculations
+        // stay correct when the canvas is zoomed via CSS transform on a
+        // parent element (clientWidth/Height ignore transforms).
+        const scaleX = container.clientWidth  > 0 ? rect.width  / container.clientWidth  : 1;
+        const scaleY = container.clientHeight > 0 ? rect.height / container.clientHeight : 1;
+        const cellW = (container.clientWidth  - 8) / term.cols * scaleX;
+        const cellH = (container.clientHeight - 8) / term.rows * scaleY;
         const col = Math.floor(relX / cellW);
         const row = Math.floor(relY / cellH);
         if (col < 0 || row < 0 || col >= term.cols || row >= term.rows) {
@@ -365,7 +372,19 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
         let s = col, end = col;
         while (s > 0 && !PATH_BREAK.test(text[s - 1])) s--;
         while (end < text.length && !PATH_BREAK.test(text[end])) end++;
-        const word = text.slice(s, end).trim();
+        let word = text.slice(s, end).trim();
+
+        // Fallback: if strict extraction missed the image extension (path has
+        // spaces), try a lenient scan — only accepted for absolute paths.
+        if (!IMAGE_EXT.test(word)) {
+          let ls = col, le = col;
+          while (ls > 0 && !PATH_BREAK_LENIENT.test(text[ls - 1])) ls--;
+          while (le < text.length && !PATH_BREAK_LENIENT.test(text[le])) le++;
+          const lenientWord = text.slice(ls, le).trim();
+          if (lenientWord && IMAGE_EXT.test(lenientWord) && /^[~/]/.test(lenientWord)) {
+            word = lenientWord;
+          }
+        }
 
         if (word && IMAGE_EXT.test(word)) {
           try {
