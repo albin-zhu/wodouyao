@@ -169,28 +169,57 @@ export function useTerminalIO(
     // commits. Symptoms: typing 全角 ？ once produces no output; user
     // presses again and one ？ finally appears.
     //
-    // We sidestep xterm entirely for IME commits: a document-level capture
+    // We sidestep xterm only for IME commits: a document-level capture
     // listener on `input` runs BEFORE xterm's textarea-level capture
     // listener (DOM capture phase walks parent → child), writes the
     // committed text straight to the PTY, clears the helper textarea, and
     // calls stopImmediatePropagation so xterm's `_inputEvent` never runs.
-    // ASCII keys never generate an `input` event (xterm's `_keyDown`
-    // cancels them with preventDefault), so this only sees IME commits,
-    // emoji-picker insertions, and mobile predictive text — all of which
-    // we want to forward verbatim.
+    //
+    // Gate: WKWebView fires `input` for Shift+letter even though xterm
+    // calls preventDefault on the key event, so unconditionally forwarding
+    // produced a doubled keystroke. We only forward when a compositionend
+    // just fired on the helper textarea — that's the IME-commit signal.
+    // ASCII keystrokes never set the flag, so xterm's own _keyDown path
+    // handles them as before.
     const helperTextarea = term.element?.querySelector<HTMLTextAreaElement>(
       "textarea.xterm-helper-textarea",
     );
+    let imeCommitPending = false;
+    let imeCommitTimer: number | null = null;
+    const armImeCommit = () => {
+      imeCommitPending = true;
+      if (imeCommitTimer !== null) window.clearTimeout(imeCommitTimer);
+      // The matching `input` event normally fires synchronously right
+      // after `compositionend`; the timeout is a safety net in case the
+      // input event never arrives (e.g., IME cancel).
+      imeCommitTimer = window.setTimeout(() => {
+        imeCommitPending = false;
+        imeCommitTimer = null;
+      }, 50);
+    };
+    const handleCompositionEnd = (ev: Event) => {
+      if (ev.target !== helperTextarea) return;
+      armImeCommit();
+    };
     const handleIMEInput = (ev: Event) => {
       if (ev.target !== helperTextarea) return;
       const ie = ev as InputEvent;
       if (ie.inputType !== "insertText" || !ie.data) return;
+      if (!imeCommitPending) return;
+      imeCommitPending = false;
+      if (imeCommitTimer !== null) {
+        window.clearTimeout(imeCommitTimer);
+        imeCommitTimer = null;
+      }
       const bytes = Array.from(new TextEncoder().encode(ie.data));
       writeTerminal(terminalId, bytes).catch(console.error);
       if (helperTextarea) helperTextarea.value = "";
       ev.stopImmediatePropagation();
     };
     document.addEventListener("input", handleIMEInput, true);
+    if (helperTextarea) {
+      helperTextarea.addEventListener("compositionend", handleCompositionEnd, true);
+    }
 
     // Defer fit() so xterm.js has time to measure cell dimensions
     requestAnimationFrame(() => {
@@ -250,6 +279,13 @@ export function useTerminalIO(
     // Cleanup — runs on unmount (and between StrictMode re-mounts)
     return () => {
       document.removeEventListener("input", handleIMEInput, true);
+      if (helperTextarea) {
+        helperTextarea.removeEventListener("compositionend", handleCompositionEnd, true);
+      }
+      if (imeCommitTimer !== null) {
+        window.clearTimeout(imeCommitTimer);
+        imeCommitTimer = null;
+      }
       readyCleanup?.();
       unlistenFns.forEach((fn) => fn());
       unregisterXterm(terminalId);
