@@ -15,9 +15,12 @@ Usage: wodouyao <subcommand> [args]
   hello [--name N] [--kind K] [--caps a,b,c]
                                      register this terminal's identity
   spawn [--name N] [--kind K] [--command C] [--cwd P] [--no-wire]
-        [--team T] [--team-role R]
+        [--team T] [--team-role R] [--role R]
                                      create a new terminal (auto-wired from caller
-                                     by default); prints the new id on stdout
+                                     by default); prints the new id on stdout.
+                                     --role tags the terminal for `task next --role X`
+                                     and bakes a role-aware system prompt into the
+                                     default claude command.
   fork --kind claude|codex [--name N] [--peer <id>]
                                      resume the caller's (or --peer's) agent
                                      session in a new terminal at $(pwd) and
@@ -27,7 +30,11 @@ Usage: wodouyao <subcommand> [args]
   send <peer> [--raw|--keys] <text>  send text (keys mode always appends Enter)
   read <peer> [--bytes N]            read recent output (default N=16384)
   watch <peer>                       stream a peer's output until Ctrl+C
-  task list                          list all global tasks
+  task list [--full|-l]              list all global tasks (--full prints
+                                     each task's description indented under
+                                     its line so it stays grep-friendly)
+  task show <task-id>                print a single task as JSON (same
+                                     format as `task next` / `task claim`)
   task add "<subject>" [--desc "..."] [--blocked-by id,id]
                                      create a task; prints new task id
   task take <task-id>                claim a task (owner + in_progress)
@@ -753,6 +760,7 @@ cmd_spawn() {
     _cwd=""
     _team=""
     _team_role=""
+    _role=""
     _wire=1
     while [ $# -gt 0 ]; do
         case $1 in
@@ -768,14 +776,18 @@ cmd_spawn() {
                          _team=$2; shift 2 ;;
             --team-role) [ $# -ge 2 ] || die "--team-role requires a value"
                          _team_role=$2; shift 2 ;;
+            --role)      [ $# -ge 2 ] || die "--role requires a value"
+                         _role=$2; shift 2 ;;
             --no-wire)   _wire=0; shift ;;
             *) die "unknown argument: $1" ;;
         esac
     done
     load_endpoint
 
-    # Default command from kind if not explicitly set
-    if [ -n "$_kind" ] && [ -z "$_command" ]; then
+    # Default command from kind if not explicitly set. Skip the inline
+    # claude prompt when --role is set — the hub builds a role-aware one
+    # via build_spawn_prompt + builtin_role_prompt.
+    if [ -n "$_kind" ] && [ -z "$_command" ] && [ -z "$_role" ]; then
         case "$_kind" in
             claude)
                 _prompt_file=$(mktemp "${TMPDIR:-/tmp}/wodouyao_prompt_XXXXXX.md")
@@ -841,6 +853,7 @@ ROLEEOF
                 WODOUYAO_SPAWN_FROM=$_from \
                 WODOUYAO_SPAWN_TEAM=$_team \
                 WODOUYAO_SPAWN_TEAM_ROLE=$_team_role \
+                WODOUYAO_SPAWN_ROLE=$_role \
                 python3 -c '
 import json, os
 obj = {}
@@ -852,6 +865,7 @@ for key, env in [
     ("auto_wire_from", "WODOUYAO_SPAWN_FROM"),
     ("team",           "WODOUYAO_SPAWN_TEAM"),
     ("team_role",      "WODOUYAO_SPAWN_TEAM_ROLE"),
+    ("role",           "WODOUYAO_SPAWN_ROLE"),
 ]:
     v = os.environ.get(env, "")
     if v:
@@ -876,6 +890,7 @@ print(json.dumps(obj))
         _append auto_wire_from "$_from"
         _append team           "$_team"
         _append team_role      "$_team_role"
+        _append role           "$_role"
         _body="$_body}"
     fi
 
@@ -952,11 +967,20 @@ cmd_fork() {
 # ── Global task commands ─────────────────────────────────────────────
 
 cmd_task_list() {
+    _full=0
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --full|-l) _full=1; shift ;;
+            -*) die "task list: unknown flag: $1" ;;
+            *)  die "task list: unexpected arg: $1" ;;
+        esac
+    done
     load_endpoint
     _body=$(curl_auth -f "$URL/v1/tasks") || die "task list failed"
     if command -v python3 >/dev/null 2>&1; then
-        printf '%s' "$_body" | python3 -c '
-import json, sys
+        printf '%s' "$_body" | WD_FULL=$_full python3 -c '
+import json, os, sys
+full = os.environ.get("WD_FULL", "0") == "1"
 try:
     tasks = json.load(sys.stdin)
 except Exception:
@@ -968,6 +992,11 @@ for t in tasks:
     if owner:
         line += "  [owner=%s]" % owner
     print(line)
+    if full:
+        desc = (t.get("description") or "").rstrip()
+        if desc:
+            for ln in desc.splitlines():
+                print("    " + ln)
 '
     else
         printf '%s\n' "$_body"
@@ -1335,11 +1364,26 @@ cmd_task_doc_rm() {
     esac
 }
 
+cmd_task_show() {
+    [ $# -ge 1 ] || die "task show: usage <task-id>"
+    _tid=$1
+    load_endpoint
+    _tmp=$(mktemp -t wd-task-show.XXXXXX) || die "mktemp failed"
+    _code=$(curl_auth -o "$_tmp" -w '%{http_code}' \
+        "$URL/v1/tasks/$_tid") || { rm -f "$_tmp"; die "task show failed"; }
+    case $_code in
+        200) cat "$_tmp"; printf '\n'; rm -f "$_tmp" ;;
+        404) rm -f "$_tmp"; die "task not found: $_tid" ;;
+        *)   _msg=$(cat "$_tmp"); rm -f "$_tmp"; die "task show failed (HTTP $_code): $_msg" ;;
+    esac
+}
+
 cmd_task() {
-    [ $# -gt 0 ] || die "task: missing subcommand (list|add|next|claim|take|done|update|remove|doc)"
+    [ $# -gt 0 ] || die "task: missing subcommand (list|show|add|next|claim|take|done|update|remove|doc)"
     _sub=$1; shift
     case $_sub in
         list)   cmd_task_list   "$@" ;;
+        show)   cmd_task_show   "$@" ;;
         add)    cmd_task_add    "$@" ;;
         next)   cmd_task_next   "$@" ;;
         claim)  cmd_task_claim  "$@" ;;

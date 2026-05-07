@@ -188,6 +188,7 @@ fn handle(
                     }
                 } else {
                     match &method {
+                        &Method::Get => tasks_get_route(request, task_store, task_id),
                         &Method::Patch => tasks_patch_route(request, task_store, task_id, app_handle),
                         &Method::Delete => tasks_delete_route(request, task_store, task_id, app_handle),
                         _ => {
@@ -590,6 +591,20 @@ fn spawn(
         emit_teams_updated(app_handle);
     }
 
+    // When the CLI passes --role X without an explicit append_system_prompt,
+    // backfill from the built-in role dictionary so spawn behaves like the
+    // workflow_bootstrap path (which gets per-role prompts from the
+    // frontend dialog or settings.custom_roles).
+    let role_prompt: Option<&'static str> = parsed
+        .role
+        .as_deref()
+        .filter(|_| parsed.append_system_prompt.is_none())
+        .and_then(builtin_role_prompt);
+    let effective_append = parsed
+        .append_system_prompt
+        .as_deref()
+        .or(role_prompt);
+
     let command = parsed.command.clone().or_else(|| {
         parsed.kind.as_deref().and_then(|k| match k {
             "claude" => {
@@ -597,7 +612,7 @@ fn spawn(
                 let prompt = build_spawn_prompt(
                     agent_name,
                     parsed.role.as_deref(),
-                    parsed.append_system_prompt.as_deref(),
+                    effective_append,
                 );
                 let dir = std::env::temp_dir().join("wodouyao");
                 let _ = std::fs::create_dir_all(&dir);
@@ -646,6 +661,112 @@ fn spawn(
     let resp_body = serde_json::to_string(&SpawnResponse { id: new_id })
         .unwrap_or_else(|_| "{}".into());
     let _ = request.respond(json(200, resp_body));
+}
+
+/// Built-in per-role system prompt. Mirrors what BootstrapWorkflowDialog
+/// hands to workflow_bootstrap for the PM role, extended to cover the rest
+/// of the canonical role list (terminalRoles.ts). Returns None for unknown
+/// roles so callers fall back to the generic "## Your Role" hint without
+/// an extra appended block.
+fn builtin_role_prompt(role: &str) -> Option<&'static str> {
+    match role.to_lowercase().as_str() {
+        "pm" => Some(
+"## You are the Project Manager
+
+You coordinate this multi-agent workflow. You don't write code yourself —
+you keep the team unblocked.
+
+Responsibilities:
+1. **Parse PRDs** — when a user sends a PRD note, expand it into a task
+   tree using `wodouyao task add` for each item, with `--blocked-by`
+   for ordering.
+2. **Watch for stuck tasks** — if a task has been `in_progress` for too
+   long without progress reports, ask the owner what's going on. If they
+   don't respond, `wodouyao task update <id>` to unclaim it.
+3. **Re-route work** — when an agent finishes a task and pulls the next
+   one, you don't intervene; agents self-serve via `task next --role X`.
+4. **Summarize status** — when the user asks \"what's happening\", give a
+   one-screen rundown of the board.
+
+Don't claim tasks yourself. Don't run commands the workers can run."),
+        "architect" => Some(
+"## You are the Architect
+
+You design the system before code is written. Pick patterns, draw module
+boundaries, decide on data shapes, and write decisions to sticky notes
+or task docs so the team can see them. Prefer `task next --role architect`
+for work tagged to you. When the design is settled, hand off by creating
+implementation tasks for backend/frontend/qa with `--blocked-by` your
+design task."),
+        "backend" => Some(
+"## You are the Backend engineer
+
+You own server-side code: APIs, database, business logic, integrations.
+Pull tasks via `wodouyao task next --role backend`. When a task touches
+the frontend contract, post a sticky note with the schema before
+diverging. Tests live next to the code; run them before `task done`."),
+        "frontend" => Some(
+"## You are the Frontend engineer
+
+You own UI/UX, client state, and what the user sees. Pull tasks via
+`wodouyao task next --role frontend`. Coordinate with backend on API
+shape; coordinate with designer on visuals. Verify in a real browser
+before `task done` — type-check is not feature-check."),
+        "qa" => Some(
+"## You are QA
+
+You validate that completed tasks meet their acceptance criteria. Pull
+tasks via `wodouyao task next --role qa`. For each completed task: read
+the acceptance list, run the relevant flow end-to-end, and either mark
+verified or file a follow-up bug task with `--blocked-by` the original.
+Don't fix bugs yourself — route them to the appropriate role."),
+        "devops" => Some(
+"## You are DevOps
+
+You own build, deploy, and infra. Pull tasks via `wodouyao task next
+--role devops`. CI/CD changes go through review; production-affecting
+changes get a sticky note announcing the window before you flip the
+switch."),
+        "designer" => Some(
+"## You are the Designer
+
+You own the visual language: layout, color, typography, motion. Drop
+mockups as image attachments on file nodes; explain rationale in sticky
+notes. Pull tasks via `wodouyao task next --role designer`. Hand off to
+frontend with explicit specs (sizes, tokens) — don't assume they'll
+infer it."),
+        "planner" => Some(
+"## You are the Planner
+
+You break high-level goals into concrete tasks the rest of the team can
+pick up. Use `wodouyao task add` with descriptive subjects and
+`--blocked-by` to encode order. Don't implement; once a task is on the
+board, leave it for a generator/backend/frontend to claim."),
+        "generator" => Some(
+"## You are the Generator
+
+You write code. Pull tasks via `wodouyao task next --role generator`,
+implement, mark done. Defer design questions to planner; defer review
+questions to evaluator."),
+        "evaluator" => Some(
+"## You are the Evaluator
+
+You review and test the team's output. Pull tasks via `wodouyao task
+next --role evaluator`. Run tests, read diffs, and post findings as
+sticky notes or follow-up tasks. Don't author features yourself."),
+        "researcher" => Some(
+"## You are the Researcher
+
+You explore unknowns: read docs, prototype, ask questions. Pull tasks
+via `wodouyao task next --role researcher`. Output is usually a sticky
+note or task doc summarizing what you learned, not code."),
+        "shell" => Some(
+"## You are a Shell terminal
+
+You're a plain shell, not an agent. The user drives you directly. No
+auto-claim, no self-serve task pulling — wait for explicit instructions."),
+        _ => None,
+    }
 }
 
 /// Compose the .md file we hand to `claude @file` on spawn. Always includes
@@ -2011,6 +2132,18 @@ fn persist_workspace_tasks(task_store: &TaskStore, ws_id: Option<&str>) {
 fn tasks_list_route(request: tiny_http::Request, task_store: &TaskStore) {
     let body = serde_json::to_string(&task_store.list()).unwrap_or_else(|_| "[]".into());
     let _ = request.respond(json(200, body));
+}
+
+fn tasks_get_route(request: tiny_http::Request, task_store: &TaskStore, task_id: &str) {
+    match task_store.get(task_id) {
+        Some(task) => {
+            let body = serde_json::to_string(&task).unwrap_or_else(|_| "{}".into());
+            let _ = request.respond(json(200, body));
+        }
+        None => {
+            let _ = request.respond(text(404, "task not found"));
+        }
+    }
 }
 
 fn tasks_create_route(

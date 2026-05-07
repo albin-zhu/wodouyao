@@ -220,9 +220,19 @@ Wodouyao keeps a task board scoped to the current workspace. Every terminal on t
 
 Lifecycle: `pending` (no owner) → `in_progress` (claimed) → `completed`.
 
-### `wodouyao task list`
+### `wodouyao task list [--full|-l]`
 
-Print every task in the current workspace. Columns: `id  status  subject  [owner=<term-id>]`. Cheap to run repeatedly.
+Print every task in the current workspace. Columns: `id  status  subject  [owner=<term-id>]`. Cheap to run repeatedly. Pass `--full` (or `-l`) to also print each task's full `description` indented under its line — the output stays line-oriented so `grep` still works.
+
+### `wodouyao task show <task-id>`
+
+Print one task as JSON (same shape as `task next` / `task claim`). Use this whenever you need to re-read a task you already own — claim only prints the JSON once, and `task list` (without `--full`) shows just the subject. After `wodouyao task claim <id>`, the canonical recipe is "now `wodouyao task show <id>` and read the description before starting work".
+
+```sh
+wodouyao task show t_abc123 | python3 -c 'import json,sys; t=json.load(sys.stdin); print(t["description"])'
+```
+
+Exit codes: `0` — printed; non-zero with `task not found` — id is wrong or the task was deleted.
 
 ### `wodouyao task add <subject> [--desc D] [--blocked-by id1,id2]`
 
@@ -246,6 +256,14 @@ wodouyao task claim "$tid"  # atomically take ownership
 ### `wodouyao task claim <task-id>`
 
 Atomic ownership grab. Sets `owner_term_id` to the caller and flips status to `in_progress`. Requires `WODOUYAO_ID` (always set in canvas terminals).
+
+**The full task JSON is printed to stdout on success — capture it and read the `description` and `acceptance` fields carefully before starting work.** `task list` only shows the subject (one-line title); the actual instructions live in `description`. If you didn't capture the claim output, run `wodouyao task show <task-id>` to re-fetch the JSON at any time.
+
+```sh
+task_json=$(wodouyao task claim "$tid") || { echo "lost it"; exit 1; }
+echo "$task_json" | python3 -c 'import json,sys; t=json.load(sys.stdin); print(t["subject"]); print("---"); print(t["description"])'
+# now do the actual work, guided by description + acceptance
+```
 
 Exit codes:
 - `0` — claim succeeded, task JSON printed
@@ -318,22 +336,43 @@ Wodouyao's workflow bootstrap writes this hook into `.claude/settings.local.json
 
 ## Working a task (recommended pattern)
 
+There are two entry points depending on how work reaches you. Both end at the same place: **you must read the `description` field of the task JSON before starting** — `task list` and the `subject` line are not enough.
+
+### Path A — pulling from the backlog
+
 ```sh
 # 1. Find work that fits this terminal's role
 task_json=$(wodouyao task next --role "$MY_ROLE") || exit 0  # exit 3 = nothing to do
 tid=$(echo "$task_json" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
 
 # 2. Claim atomically — bail if someone beat you to it
-wodouyao task claim "$tid" || { echo "lost the race; trying again"; continue; }
+wodouyao task claim "$tid" >/dev/null || { echo "lost the race; trying again"; continue; }
 
-# 3. Do the work
-# ... (edit files, run tests, whatever the task says)
+# 3. Read what the task actually wants — DON'T skim, this is the brief.
+#    `task show` is re-runnable, so this step works even if the claim output
+#    scrolled past or you're resuming on a task you claimed earlier.
+wodouyao task show "$tid" | python3 -c 'import json,sys; t=json.load(sys.stdin); print("SUBJECT:", t["subject"]); print(); print("DESCRIPTION:"); print(t["description"]); print(); print("ACCEPTANCE:", t.get("acceptance",[]))'
 
-# 4. Mark done
+# 4. Do the work
+# ... (edit files, run tests, whatever the description says)
+
+# 5. Mark done
 wodouyao task done "$tid"
 ```
 
 **Always claim before doing the work** — `next` only queries; multiple agents calling `next` simultaneously will all see the same task.
+
+### Path B — assigned by PM via `wodouyao send`
+
+When a PM tells you "claim t_abc123 and work on it", you skip the `next` step and go straight to `claim`, then `task show` to read the brief:
+
+```sh
+wodouyao task claim "t_abc123" >/dev/null || { echo "claim failed"; exit 1; }
+wodouyao task show "t_abc123" | python3 -c 'import json,sys; t=json.load(sys.stdin); print(t["description"])'
+# ... do the work, then `task done t_abc123`
+```
+
+`task show` is idempotent and re-runnable, so re-reading the description any time during the work is fine — it stays the source of truth even after the original `claim` output has scrolled past. If you're a PM creating tasks for others, **put complete instructions and acceptance criteria in `--desc` at create time**; workers will read them via `task show` after claiming, so anything missing from the description has to be re-sent by hand over `wodouyao send`.
 
 ## Workflow bootstrap (multi-agent setup)
 
