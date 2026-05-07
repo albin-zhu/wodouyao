@@ -7,6 +7,11 @@ import {
   type TaskBoardIpc,
 } from "../services/tauriCommands";
 import { useWorkspaceStore } from "./workspaceStore";
+import { getNextZ, seed as seedZ } from "../utils/zIndex";
+import { getViewportCenteredPosition } from "../utils/viewport";
+
+const DEFAULT_BOARD_WIDTH = 320;
+const DEFAULT_BOARD_HEIGHT = 400;
 
 export interface TaskBoard {
   id: string;
@@ -44,12 +49,13 @@ export const useTaskBoardStore = create<TaskBoardStore>((set, get) => ({
   addBoard: (opts = {}) => {
     const id = generateId("tb");
     const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+    const size = { width: DEFAULT_BOARD_WIDTH, height: DEFAULT_BOARD_HEIGHT };
     const board: TaskBoard = {
       id,
       label: "Tasks",
-      position: opts.position ?? { x: 300, y: 200 },
-      size: { width: 320, height: 400 },
-      zIndex: Date.now(),
+      position: opts.position ?? getViewportCenteredPosition(size, get().boards.size),
+      size,
+      zIndex: getNextZ(),
       workspaceId: wsId,
     };
     set((state) => {
@@ -98,17 +104,20 @@ export const useTaskBoardStore = create<TaskBoardStore>((set, get) => ({
       const board = state.boards.get(id);
       if (!board) return state;
       const next = new Map(state.boards);
-      next.set(id, { ...board, zIndex: Date.now() });
+      next.set(id, { ...board, zIndex: getNextZ() });
       return { boards: next };
     });
   },
 
   syncFromRust: (ipc) => {
     const next = new Map<string, TaskBoard>();
+    let maxZ = 0;
     for (const b of ipc) {
       const node = fromIpc(b);
       next.set(node.id, node);
+      if (node.zIndex > maxZ) maxZ = node.zIndex;
     }
+    seedZ(maxZ);
     set({ boards: next });
   },
 

@@ -9,6 +9,8 @@ import {
 } from "../services/tauriCommands";
 import { useWorkspaceStore } from "./workspaceStore";
 import { toast } from "./toastStore";
+import { getNextZ, seed as seedZ } from "../utils/zIndex";
+import { getViewportCenteredPosition } from "../utils/viewport";
 
 const DEFAULT_NOTE_WIDTH = 240;
 const DEFAULT_NOTE_HEIGHT = 160;
@@ -51,21 +53,22 @@ export const useNoteStore = create<NoteStore>((set, get) => ({
       overrides?.workspaceId ??
       useWorkspaceStore.getState().currentWorkspace?.id ??
       null;
+    const size = overrides?.size ?? { width: DEFAULT_NOTE_WIDTH, height: DEFAULT_NOTE_HEIGHT };
     const note: NoteNode = {
       id,
       text: overrides?.text ?? "",
       color: overrides?.color ?? DEFAULT_NOTE_COLOR,
       position:
         overrides?.position ??
-        { x: 200 + state.notes.size * 20, y: 200 + state.notes.size * 20 },
-      size: overrides?.size ?? { width: DEFAULT_NOTE_WIDTH, height: DEFAULT_NOTE_HEIGHT },
-      zIndex: state.nextZIndex,
+        getViewportCenteredPosition(size, state.notes.size),
+      size,
+      zIndex: getNextZ(),
       createdAt: Date.now(),
       workspaceId: wsId,
     };
     const newMap = new Map(state.notes);
     newMap.set(id, note);
-    set({ notes: newMap, nextZIndex: state.nextZIndex + 1 });
+    set({ notes: newMap });
 
     notesCreate({
       text: note.text || undefined,
@@ -117,8 +120,8 @@ export const useNoteStore = create<NoteStore>((set, get) => ({
       const note = state.notes.get(id);
       if (!note) return state;
       const newMap = new Map(state.notes);
-      newMap.set(id, { ...note, zIndex: state.nextZIndex });
-      return { notes: newMap, nextZIndex: state.nextZIndex + 1 };
+      newMap.set(id, { ...note, zIndex: getNextZ() });
+      return { notes: newMap };
     }),
 
   getNotes: () => Array.from(get().notes.values()),
@@ -138,6 +141,7 @@ export const useNoteStore = create<NoteStore>((set, get) => ({
       newMap.set(node.id, node);
       if (node.zIndex > maxZ) maxZ = node.zIndex;
     }
-    set({ notes: newMap, nextZIndex: maxZ + 1 });
+    seedZ(maxZ);
+    set({ notes: newMap });
   },
 }));

@@ -8,6 +8,8 @@ import {
   type FileNodeIpc,
 } from "../services/tauriCommands";
 import { useWorkspaceStore } from "./workspaceStore";
+import { getNextZ, seed as seedZ } from "../utils/zIndex";
+import { getViewportCenteredPosition } from "../utils/viewport";
 
 const DEFAULT_FILE_WIDTH = 280;
 const DEFAULT_FILE_HEIGHT = 220;
@@ -54,6 +56,7 @@ export const useFileNodeStore = create<FileNodeStore>((set, get) => ({
     const id = input.id ?? generateId("f");
     const state = get();
     const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
+    const size = input.size ?? { width: DEFAULT_FILE_WIDTH, height: DEFAULT_FILE_HEIGHT };
     const node: FileNode = {
       id,
       path: input.path,
@@ -61,15 +64,15 @@ export const useFileNodeStore = create<FileNodeStore>((set, get) => ({
       kind: input.kind,
       position:
         input.position ??
-        { x: 250 + state.fileNodes.size * 20, y: 250 + state.fileNodes.size * 20 },
-      size: input.size ?? { width: DEFAULT_FILE_WIDTH, height: DEFAULT_FILE_HEIGHT },
-      zIndex: state.nextZIndex,
+        getViewportCenteredPosition(size, state.fileNodes.size),
+      size,
+      zIndex: getNextZ(),
       createdAt: Date.now(),
       workspaceId: wsId,
     };
     const newMap = new Map(state.fileNodes);
     newMap.set(id, node);
-    set({ fileNodes: newMap, nextZIndex: state.nextZIndex + 1 });
+    set({ fileNodes: newMap });
 
     fileNodesCreate({
       id: node.id,
@@ -114,8 +117,8 @@ export const useFileNodeStore = create<FileNodeStore>((set, get) => ({
       const node = state.fileNodes.get(id);
       if (!node) return state;
       const newMap = new Map(state.fileNodes);
-      newMap.set(id, { ...node, zIndex: state.nextZIndex });
-      return { fileNodes: newMap, nextZIndex: state.nextZIndex + 1 };
+      newMap.set(id, { ...node, zIndex: getNextZ() });
+      return { fileNodes: newMap };
     }),
 
   getFileNodes: () => Array.from(get().fileNodes.values()),
@@ -135,6 +138,7 @@ export const useFileNodeStore = create<FileNodeStore>((set, get) => ({
       newMap.set(node.id, node);
       if (node.zIndex > maxZ) maxZ = node.zIndex;
     }
-    set({ fileNodes: newMap, nextZIndex: maxZ + 1 });
+    seedZ(maxZ);
+    set({ fileNodes: newMap });
   },
 }));
