@@ -357,6 +357,52 @@ pub fn list() -> Result<Vec<WorkspaceMeta>, String> {
     Ok(metas)
 }
 
+/// Hub-level persistence hook for task mutations. Reads workspace.json,
+/// swaps just the `tasks` field with the in-memory slice, writes back
+/// atomically (tmp + rename). Lets `wodouyao task add/done/take/...`
+/// survive `kill -9` without waiting on the frontend's 3-second debounced
+/// full save. No-op for workspaces that aren't on disk yet.
+pub fn persist_tasks_for_workspace(ws_id: &str, tasks: &[Task]) -> Result<(), String> {
+    let cat = read_catalog();
+    let Some(entry) = cat.entries.iter().find(|e| e.id == ws_id) else {
+        return Ok(());
+    };
+    let paths = project_paths(&entry.cwd)?;
+    if !paths.workspace_json.exists() {
+        return Ok(());
+    }
+    let json = fs::read_to_string(&paths.workspace_json)
+        .map_err(|e| format!("Failed to read workspace: {}", e))?;
+    let mut v: serde_json::Value = serde_json::from_str(&json)
+        .map_err(|e| format!("Failed to parse workspace: {}", e))?;
+    let arr = serde_json::to_value(tasks).map_err(|e| e.to_string())?;
+    if let Some(obj) = v.as_object_mut() {
+        obj.insert("tasks".to_string(), arr);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        obj.insert("updated_at".to_string(), serde_json::json!(now));
+    }
+    let out = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
+    let tmp = paths.workspace_json.with_extension("json.tmp");
+    fs::write(&tmp, out).map_err(|e| format!("Failed to write tasks tmp: {}", e))?;
+    fs::rename(&tmp, &paths.workspace_json)
+        .map_err(|e| format!("Failed to rename tasks tmp: {}", e))
+}
+
+/// Last-active workspace id from settings.json, used as a fallback
+/// when a hub task mutation doesn't carry a workspace_id (e.g. CLI
+/// `task add` without WODOUYAO_WORKSPACE_ID set).
+pub fn current_workspace_id() -> Option<String> {
+    let path = app_data_dir().ok()?.join("settings.json");
+    let json = fs::read_to_string(path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&json).ok()?;
+    v.get("last_workspace_id")
+        .and_then(|x| x.as_str())
+        .map(|s| s.to_string())
+}
+
 pub fn delete(id: &str) -> Result<(), String> {
     let cat = read_catalog();
     if let Some(entry) = cat.entries.iter().find(|e| e.id == id).cloned() {

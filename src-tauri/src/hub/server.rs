@@ -1997,6 +1997,17 @@ fn emit_tasks_updated(app_handle: &AppHandleSlot) {
     }
 }
 
+/// Atomically write the affected workspace's `tasks` slice to disk.
+/// Called after every task mutation so `wodouyao task ...` survives
+/// `kill -9` without waiting on the frontend's debounced full save.
+fn persist_workspace_tasks(task_store: &TaskStore, ws_id: Option<&str>) {
+    let Some(ws_id) = ws_id else { return };
+    let tasks = task_store.filter_for_workspace(ws_id);
+    if let Err(e) = crate::workspace::storage::persist_tasks_for_workspace(ws_id, &tasks) {
+        eprintln!("[hub] persist tasks for workspace {} failed: {}", ws_id, e);
+    }
+}
+
 fn tasks_list_route(request: tiny_http::Request, task_store: &TaskStore) {
     let body = serde_json::to_string(&task_store.list()).unwrap_or_else(|_| "[]".into());
     let _ = request.respond(json(200, body));
@@ -2023,7 +2034,16 @@ fn tasks_create_route(
         let _ = request.respond(text(400, "subject is required"));
         return;
     }
+    // Stamp orphan tasks with the active workspace so they actually land
+    // in workspace.json. Without this, CLI `task add` (which has no idea
+    // which workspace is active) creates tasks that the persistence layer
+    // can't route to disk.
+    let mut parsed = parsed;
+    if parsed.workspace_id.is_none() {
+        parsed.workspace_id = crate::workspace::storage::current_workspace_id();
+    }
     let task = task_store.create(parsed);
+    persist_workspace_tasks(task_store, task.workspace_id.as_deref());
     emit_tasks_updated(app_handle);
     let body = serde_json::to_string(&task).unwrap_or_else(|_| "{}".into());
     let _ = request.respond(json(200, body));
@@ -2053,6 +2073,7 @@ fn tasks_patch_route(
     };
     match task_store.update(task_id, patch) {
         Some(task) => {
+            persist_workspace_tasks(task_store, task.workspace_id.as_deref());
             emit_tasks_updated(app_handle);
             let body = serde_json::to_string(&task).unwrap_or_else(|_| "{}".into());
             let _ = request.respond(json(200, body));
@@ -2069,8 +2090,12 @@ fn tasks_delete_route(
     task_id: &str,
     app_handle: &AppHandleSlot,
 ) {
+    // Capture workspace_id before removal so we know which workspace.json
+    // to rewrite.
+    let ws_id = task_store.get(task_id).and_then(|t| t.workspace_id);
     let removed = task_store.remove(task_id);
     if removed {
+        persist_workspace_tasks(task_store, ws_id.as_deref());
         emit_tasks_updated(app_handle);
         let _ = request.respond(empty(204));
     } else {
@@ -2198,7 +2223,8 @@ fn tasks_docs_create_route(
         let _ = request.respond(text(500, &format!("write failed: {}", e)));
         return;
     }
-    let _ = task_store.add_doc(task_id, &name);
+    let updated = task_store.add_doc(task_id, &name);
+    persist_workspace_tasks(task_store, updated.and_then(|t| t.workspace_id).as_deref());
     emit_tasks_updated(app_handle);
     let body = serde_json::json!({ "name": name, "path": path.to_string_lossy() })
         .to_string();
@@ -2248,7 +2274,8 @@ fn tasks_docs_delete_route(
         return;
     };
     let _ = std::fs::remove_file(dir.join(&safe));
-    let _ = task_store.remove_doc(task_id, &safe);
+    let updated = task_store.remove_doc(task_id, &safe);
+    persist_workspace_tasks(task_store, updated.and_then(|t| t.workspace_id).as_deref());
     emit_tasks_updated(app_handle);
     let _ = request.respond(empty(204));
 }
@@ -2298,6 +2325,7 @@ fn tasks_claim_route(
     };
     match task_store.try_claim(task_id, &from) {
         ClaimResult::Ok(t) => {
+            persist_workspace_tasks(task_store, t.workspace_id.as_deref());
             emit_tasks_updated(app_handle);
             let body = serde_json::to_string(&t).unwrap_or_else(|_| "{}".into());
             let _ = request.respond(json(200, body));
