@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "wodouyao terminal set-session \"$CLAUDE_SESSION_ID\""
+            "command": "wodouyao terminal set-session -"
           }
         ]
       }

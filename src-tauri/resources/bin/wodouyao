@@ -1618,9 +1618,20 @@ cmd_terminal_close() {
 }
 
 cmd_terminal_set_session() {
-    [ $# -ge 1 ] || die "terminal set-session: usage <session-id>"
+    [ $# -ge 1 ] || die "terminal set-session: usage <session-id> | -"
     _sid=$1
     [ -n "${WODOUYAO_ID:-}" ] || die "terminal set-session: WODOUYAO_ID is unset"
+    # When invoked from a Claude Code SessionStart hook the session id
+    # arrives as JSON on stdin: {"session_id":"...","transcript_path":"...",...}
+    # Pass `-` as the argument and we extract it without needing python.
+    if [ "$_sid" = "-" ]; then
+        _stdin=$(cat)
+        # Greedy match for the first "session_id":"..." occurrence. Good
+        # enough for Claude Code's hook payload (single-line JSON, no
+        # nested session_id keys).
+        _sid=$(printf '%s' "$_stdin" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+        [ -n "$_sid" ] || die "terminal set-session: could not parse session_id from stdin"
+    fi
     load_endpoint
     _body=$(printf '{"session_id":"%s"}' "$_sid")
     _code=$(curl_auth -o /dev/null -w '%{http_code}' \

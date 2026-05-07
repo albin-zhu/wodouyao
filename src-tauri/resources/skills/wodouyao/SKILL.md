@@ -294,16 +294,21 @@ done
 
 When you open a saved workspace, wodouyao rewrites each claude/codex terminal's launch command to a resume form (`claude -c` or `-r <id>`; `codex --resume`). To resume a *specific* session instead of "continue most recent", the terminal needs a `session_id` recorded.
 
-### `wodouyao terminal set-session <session-id>`
+### `wodouyao terminal set-session <session-id> | -`
 
-Records a session id against the calling terminal (reads `WODOUYAO_ID`). Intended to be called from a Claude Code SessionStart hook:
+Records a session id against the calling terminal (reads `WODOUYAO_ID`). Pass `-` to read JSON from stdin and extract `session_id` — this is the form Claude Code's SessionStart hook uses, since the hook payload arrives on stdin as `{"session_id":"...","transcript_path":"...",...}` (there is no `$CLAUDE_SESSION_ID` env var).
 
 ```json
 // .claude/settings.local.json
 {
   "hooks": {
     "SessionStart": [
-      { "type": "command", "command": "wodouyao terminal set-session \"$CLAUDE_SESSION_ID\"" }
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "wodouyao terminal set-session -" }
+        ]
+      }
     ]
   }
 }

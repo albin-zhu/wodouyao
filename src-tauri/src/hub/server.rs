@@ -744,7 +744,13 @@ fn inject_claude_session_hook(cwd: &str) {
     // The command we want Claude to run on SessionStart — it records the
     // freshly-assigned session id back into the wodouyao hub so
     // workspace-reopen can resume with `claude -r <id>`.
-    const CMD: &str = "wodouyao terminal set-session \"$CLAUDE_SESSION_ID\"";
+    //
+    // Claude Code passes hook data via stdin as JSON: {"session_id":"..."}
+    // There is no $CLAUDE_SESSION_ID env var — we must read stdin.
+    // Claude Code delivers the hook payload as JSON on stdin (not via env
+    // var). `set-session -` reads stdin, extracts session_id, then POSTs.
+    const CMD: &str = "wodouyao terminal set-session -";
+
 
     // Ensure root.hooks.SessionStart is an array containing our command.
     let hooks = root
@@ -757,8 +763,11 @@ fn inject_claude_session_hook(cwd: &str) {
         .or_insert_with(|| json!([]))
         .as_array_mut();
     let Some(list) = list else { return };
-    let already = list.iter().any(|entry| {
-        entry
+    // Strip any pre-existing wodouyao set-session hook entries first so
+    // older buggy command strings (e.g. "$CLAUDE_SESSION_ID" form) get
+    // upgraded on next spawn rather than living forever in users' configs.
+    list.retain(|entry| {
+        let has_ours = entry
             .get("hooks")
             .and_then(|h| h.as_array())
             .map(|hooks| {
@@ -769,11 +778,9 @@ fn inject_claude_session_hook(cwd: &str) {
                         .unwrap_or(false)
                 })
             })
-            .unwrap_or(false)
+            .unwrap_or(false);
+        !has_ours
     });
-    if already {
-        return;
-    }
     list.push(json!({
         "matcher": "",
         "hooks": [{"type": "command", "command": CMD}],
