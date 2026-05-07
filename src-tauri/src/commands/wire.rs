@@ -1,8 +1,16 @@
 use tauri::State;
 use uuid::Uuid;
 
-use crate::hub::Wire;
+use crate::hub::{Wire, WireTopology};
 use crate::state::AppState;
+
+fn persist_workspace_wires(topology: &WireTopology, ws_id: Option<&str>) {
+    let Some(ws_id) = ws_id else { return };
+    let wires = topology.filter_for_workspace(ws_id);
+    if let Err(e) = crate::workspace::storage::persist_wires_for_workspace(ws_id, &wires) {
+        eprintln!("[ipc] persist wires for workspace {} failed: {}", ws_id, e);
+    }
+}
 
 #[tauri::command]
 pub fn wire_list(state: State<'_, AppState>) -> Vec<Wire> {
@@ -17,6 +25,7 @@ pub fn wire_create(
     kind: Option<String>,
     workspace_id: Option<String>,
 ) -> Wire {
+    let workspace_id = workspace_id.or_else(crate::workspace::storage::current_workspace_id);
     let wire = Wire {
         id: Uuid::new_v4().to_string(),
         source_id,
@@ -25,12 +34,24 @@ pub fn wire_create(
         kind,
         workspace_id,
     };
-    state.topology.insert(wire)
+    let inserted = state.topology.insert(wire);
+    persist_workspace_wires(&state.topology, inserted.workspace_id.as_deref());
+    inserted
 }
 
 #[tauri::command]
 pub fn wire_remove(state: State<'_, AppState>, id: String) -> bool {
-    state.topology.remove(&id)
+    let ws_id = state
+        .topology
+        .list()
+        .into_iter()
+        .find(|w| w.id == id)
+        .and_then(|w| w.workspace_id);
+    let removed = state.topology.remove(&id);
+    if removed {
+        persist_workspace_wires(&state.topology, ws_id.as_deref());
+    }
+    removed
 }
 
 #[tauri::command]

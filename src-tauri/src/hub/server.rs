@@ -1065,6 +1065,7 @@ pub fn do_workflow_bootstrap(
     }
 
     if parsed.wire_mesh && ids.len() > 2 {
+        let ws_id = crate::workspace::storage::current_workspace_id();
         for i in 1..ids.len() {
             for j in (i + 1)..ids.len() {
                 let wire = Wire {
@@ -1073,11 +1074,12 @@ pub fn do_workflow_bootstrap(
                     target_id: ids[j].clone(),
                     forward_output: true,
                     kind: Some("io".into()),
-                    workspace_id: None,
+                    workspace_id: ws_id.clone(),
                 };
                 topology.insert(wire);
             }
         }
+        persist_workspace_wires(topology, ws_id.as_deref());
         emit_wires_updated(app_handle);
     }
 
@@ -1170,15 +1172,17 @@ fn fork(
 
     // Auto-wire the new fork back to its source terminal so the caller
     // can immediately drive `/fork "<name>"` via `wodouyao send`.
+    let workspace_id = crate::workspace::storage::current_workspace_id();
     let wire = super::topology::Wire {
         id: format!("w_{}", Uuid::new_v4().simple()),
         source_id: parsed.from.clone(),
         target_id: new_id.clone(),
         forward_output: true,
         kind: Some("io".to_string()),
-        workspace_id: None,
+        workspace_id: workspace_id.clone(),
     };
     topology.insert(wire);
+    persist_workspace_wires(topology, workspace_id.as_deref());
     let _ = app.emit("wires-updated", ());
 
     let payload = SpawnEventPayload {
@@ -2129,6 +2133,22 @@ fn persist_workspace_tasks(task_store: &TaskStore, ws_id: Option<&str>) {
     }
 }
 
+fn persist_workspace_notes(note_store: &NoteStore, ws_id: Option<&str>) {
+    let Some(ws_id) = ws_id else { return };
+    let notes = note_store.filter_for_workspace(ws_id);
+    if let Err(e) = crate::workspace::storage::persist_notes_for_workspace(ws_id, &notes) {
+        eprintln!("[hub] persist notes for workspace {} failed: {}", ws_id, e);
+    }
+}
+
+fn persist_workspace_wires(topology: &WireTopology, ws_id: Option<&str>) {
+    let Some(ws_id) = ws_id else { return };
+    let wires = topology.filter_for_workspace(ws_id);
+    if let Err(e) = crate::workspace::storage::persist_wires_for_workspace(ws_id, &wires) {
+        eprintln!("[hub] persist wires for workspace {} failed: {}", ws_id, e);
+    }
+}
+
 fn tasks_list_route(request: tiny_http::Request, task_store: &TaskStore) {
     let body = serde_json::to_string(&task_store.list()).unwrap_or_else(|_| "[]".into());
     let _ = request.respond(json(200, body));
@@ -2492,6 +2512,8 @@ struct WireCreateBody {
     target_id: String,
     #[serde(default)]
     kind: Option<String>,
+    #[serde(default)]
+    workspace_id: Option<String>,
 }
 
 fn wires_create_route(
@@ -2511,15 +2533,21 @@ fn wires_create_route(
             return;
         }
     };
+    // Stamp orphan wires with the active workspace so persistence has a
+    // home on disk — same fallback path tasks_create_route uses.
+    let workspace_id = parsed
+        .workspace_id
+        .or_else(crate::workspace::storage::current_workspace_id);
     let wire = super::topology::Wire {
         id: format!("w_{}", Uuid::new_v4().simple()),
         source_id: parsed.source_id,
         target_id: parsed.target_id,
         forward_output: true,
         kind: parsed.kind,
-        workspace_id: None,
+        workspace_id,
     };
     let created = topology.insert(wire);
+    persist_workspace_wires(topology, created.workspace_id.as_deref());
     emit_wires_updated(app_handle);
     let body = serde_json::to_string(&created).unwrap_or_else(|_| "{}".into());
     let _ = request.respond(json(200, body));
@@ -2531,7 +2559,13 @@ fn wires_delete_route(
     wire_id: &str,
     app_handle: &AppHandleSlot,
 ) {
+    let ws_id = topology
+        .list()
+        .into_iter()
+        .find(|w| w.id == wire_id)
+        .and_then(|w| w.workspace_id);
     if topology.remove(wire_id) {
+        persist_workspace_wires(topology, ws_id.as_deref());
         emit_wires_updated(app_handle);
         let _ = request.respond(empty(204));
     } else {
@@ -2673,7 +2707,7 @@ fn notes_create_route(
         let _ = request.respond(text(400, "unable to read body"));
         return;
     }
-    let parsed: NoteCreate = if body.trim().is_empty() {
+    let mut parsed: NoteCreate = if body.trim().is_empty() {
         NoteCreate::default()
     } else {
         match serde_json::from_str(&body) {
@@ -2684,7 +2718,11 @@ fn notes_create_route(
             }
         }
     };
+    if parsed.workspace_id.is_none() {
+        parsed.workspace_id = crate::workspace::storage::current_workspace_id();
+    }
     let note = note_store.create(parsed);
+    persist_workspace_notes(note_store, note.workspace_id.as_deref());
     emit_notes_updated(app_handle);
     let body = serde_json::to_string(&note).unwrap_or_else(|_| "{}".into());
     let _ = request.respond(json(200, body));
@@ -2714,6 +2752,7 @@ fn notes_patch_route(
     };
     match note_store.update(note_id, patch) {
         Some(note) => {
+            persist_workspace_notes(note_store, note.workspace_id.as_deref());
             emit_notes_updated(app_handle);
             let body = serde_json::to_string(&note).unwrap_or_else(|_| "{}".into());
             let _ = request.respond(json(200, body));
@@ -2730,7 +2769,9 @@ fn notes_delete_route(
     note_id: &str,
     app_handle: &AppHandleSlot,
 ) {
+    let ws_id = note_store.get(note_id).and_then(|n| n.workspace_id);
     if note_store.remove(note_id) {
+        persist_workspace_notes(note_store, ws_id.as_deref());
         emit_notes_updated(app_handle);
         let _ = request.respond(empty(204));
     } else {

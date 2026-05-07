@@ -2,7 +2,7 @@ use tauri::State;
 
 use crate::state::AppState;
 use crate::workspace::storage;
-use storage::{Workspace, WorkspaceMeta};
+use storage::{TerminalNodeLayout, Workspace, WorkspaceMeta};
 
 #[tauri::command]
 pub fn save_workspace(
@@ -62,4 +62,21 @@ pub fn list_workspaces() -> Result<Vec<WorkspaceMeta>, String> {
 #[tauri::command]
 pub fn delete_workspace(id: String) -> Result<(), String> {
     storage::delete(&id)
+}
+
+/// Partial save: write just the `terminals` slice for a workspace.
+/// The frontend owns terminal layout (positions, sizes, fold/theme/role
+/// state); a debounced effect calls this on every layout mutation so a
+/// drag/resize/rename survives `kill -9` without waiting on the slower
+/// full-workspace save. Stamps every layout's workspace_id so the on-
+/// disk slice is internally consistent.
+#[tauri::command]
+pub fn save_workspace_terminals(
+    id: String,
+    mut terminals: Vec<TerminalNodeLayout>,
+) -> Result<(), String> {
+    for t in terminals.iter_mut() {
+        t.workspace_id = Some(id.clone());
+    }
+    storage::persist_terminals_for_workspace(&id, &terminals)
 }

@@ -17,7 +17,11 @@ import type {
   WorkspaceTaskBoardLayout,
 } from "../types/workspace";
 import type { TerminalNode, ShellType } from "../types/terminal";
-import { createTerminal, saveWorkspace } from "../services/tauriCommands";
+import {
+  createTerminal,
+  saveWorkspace,
+  saveWorkspaceTerminals,
+} from "../services/tauriCommands";
 import { generateId } from "../utils/id";
 import { DEFAULT_COLS, DEFAULT_ROWS } from "../utils/constants";
 
@@ -71,6 +75,9 @@ export function useWorkspace() {
   const wiresMap = useWireStore((s) => s.wires);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const terminalSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const initRef = useRef(false);
 
   // Build workspace from current state. Filters by the active workspace
@@ -374,7 +381,7 @@ export function useWorkspace() {
     [buildWorkspace, applyWorkspace]
   );
 
-  // Auto-save: debounce 3s on terminal/canvas changes
+  // Auto-save: debounce 3s on terminal/canvas changes (full workspace save).
   useEffect(() => {
     if (!currentWorkspace) return;
 
@@ -392,6 +399,34 @@ export function useWorkspace() {
       }
     };
   }, [terminals, panX, panY, zoom, currentWorkspaceCwd, currentWorkspace, buildWorkspace, saveCurrentWorkspace]);
+
+  // Fast terminal-layout autosave: 250ms debounce. Drag/resize fires this
+  // burst many times — coalesce into a single partial write so the on-disk
+  // `terminals` slice is at most ~250ms behind reality, not 3s. Survives
+  // kill -9 within that window without paying the full-workspace cost on
+  // every drag tick.
+  useEffect(() => {
+    if (!currentWorkspace) return;
+
+    if (terminalSaveTimerRef.current) {
+      clearTimeout(terminalSaveTimerRef.current);
+    }
+
+    terminalSaveTimerRef.current = setTimeout(() => {
+      const wsId = useWorkspaceStore.getState().currentWorkspace?.id;
+      if (!wsId) return;
+      const ws = buildWorkspace();
+      void saveWorkspaceTerminals(wsId, ws.terminals).catch((e) =>
+        console.warn("[workspace] terminal autosave failed:", e),
+      );
+    }, 250);
+
+    return () => {
+      if (terminalSaveTimerRef.current) {
+        clearTimeout(terminalSaveTimerRef.current);
+      }
+    };
+  }, [terminals, currentWorkspace, buildWorkspace]);
 
   // Startup: load last workspace
   useEffect(() => {

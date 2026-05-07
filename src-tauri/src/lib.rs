@@ -228,6 +228,7 @@ pub fn run() {
             commands::workspace::load_workspace,
             commands::workspace::list_workspaces,
             commands::workspace::delete_workspace,
+            commands::workspace::save_workspace_terminals,
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::agents::detect_cli_agents,

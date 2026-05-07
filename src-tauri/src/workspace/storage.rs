@@ -357,12 +357,16 @@ pub fn list() -> Result<Vec<WorkspaceMeta>, String> {
     Ok(metas)
 }
 
-/// Hub-level persistence hook for task mutations. Reads workspace.json,
-/// swaps just the `tasks` field with the in-memory slice, writes back
-/// atomically (tmp + rename). Lets `wodouyao task add/done/take/...`
-/// survive `kill -9` without waiting on the frontend's 3-second debounced
-/// full save. No-op for workspaces that aren't on disk yet.
-pub fn persist_tasks_for_workspace(ws_id: &str, tasks: &[Task]) -> Result<(), String> {
+/// Generic read-modify-write of a single top-level field in workspace.json.
+/// Reads the file, replaces just the named field, writes back atomically
+/// (tmp + rename). Lets per-entity hub/IPC mutations survive `kill -9`
+/// without waiting on the frontend's debounced full save. No-op for
+/// workspaces that aren't in the catalog or on disk yet.
+fn persist_field_for_workspace<T: serde::Serialize>(
+    ws_id: &str,
+    field: &str,
+    value: &T,
+) -> Result<(), String> {
     let cat = read_catalog();
     let Some(entry) = cat.entries.iter().find(|e| e.id == ws_id) else {
         return Ok(());
@@ -375,9 +379,9 @@ pub fn persist_tasks_for_workspace(ws_id: &str, tasks: &[Task]) -> Result<(), St
         .map_err(|e| format!("Failed to read workspace: {}", e))?;
     let mut v: serde_json::Value = serde_json::from_str(&json)
         .map_err(|e| format!("Failed to parse workspace: {}", e))?;
-    let arr = serde_json::to_value(tasks).map_err(|e| e.to_string())?;
+    let new_val = serde_json::to_value(value).map_err(|e| e.to_string())?;
     if let Some(obj) = v.as_object_mut() {
-        obj.insert("tasks".to_string(), arr);
+        obj.insert(field.to_string(), new_val);
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
@@ -386,9 +390,51 @@ pub fn persist_tasks_for_workspace(ws_id: &str, tasks: &[Task]) -> Result<(), St
     }
     let out = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
     let tmp = paths.workspace_json.with_extension("json.tmp");
-    fs::write(&tmp, out).map_err(|e| format!("Failed to write tasks tmp: {}", e))?;
+    fs::write(&tmp, out).map_err(|e| format!("Failed to write {} tmp: {}", field, e))?;
     fs::rename(&tmp, &paths.workspace_json)
-        .map_err(|e| format!("Failed to rename tasks tmp: {}", e))
+        .map_err(|e| format!("Failed to rename {} tmp: {}", field, e))
+}
+
+/// Hub-level persistence hook for task mutations. Reads workspace.json,
+/// swaps just the `tasks` field with the in-memory slice, writes back
+/// atomically (tmp + rename). Lets `wodouyao task add/done/take/...`
+/// survive `kill -9` without waiting on the frontend's 3-second debounced
+/// full save. No-op for workspaces that aren't on disk yet.
+pub fn persist_tasks_for_workspace(ws_id: &str, tasks: &[Task]) -> Result<(), String> {
+    persist_field_for_workspace(ws_id, "tasks", &tasks)
+}
+
+pub fn persist_notes_for_workspace(ws_id: &str, notes: &[Note]) -> Result<(), String> {
+    persist_field_for_workspace(ws_id, "notes", &notes)
+}
+
+pub fn persist_file_nodes_for_workspace(
+    ws_id: &str,
+    nodes: &[FileNode],
+) -> Result<(), String> {
+    persist_field_for_workspace(ws_id, "file_nodes", &nodes)
+}
+
+pub fn persist_task_boards_for_workspace(
+    ws_id: &str,
+    boards: &[TaskBoard],
+) -> Result<(), String> {
+    persist_field_for_workspace(ws_id, "task_boards", &boards)
+}
+
+pub fn persist_wires_for_workspace(ws_id: &str, wires: &[Wire]) -> Result<(), String> {
+    persist_field_for_workspace(ws_id, "wires", &wires)
+}
+
+/// Persist just the `terminals` slice for a workspace. The frontend owns
+/// the canonical terminal layout (positions, sizes, fold/theme/role state)
+/// and calls this from a debounced effect on every layout mutation so
+/// drag/resize/rename survive `kill -9` between full-workspace saves.
+pub fn persist_terminals_for_workspace(
+    ws_id: &str,
+    terminals: &[TerminalNodeLayout],
+) -> Result<(), String> {
+    persist_field_for_workspace(ws_id, "terminals", &terminals)
 }
 
 /// Last-active workspace id from settings.json, used as a fallback

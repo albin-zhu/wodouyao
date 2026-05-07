@@ -49,6 +49,16 @@ export async function deleteWorkspace(id: string): Promise<void> {
   return invoke<void>("delete_workspace", { id });
 }
 
+/** Partial save for terminal layouts only — fast, debounced path so
+ *  drag/resize/rename of a terminal node survives `kill -9` without
+ *  waiting on the slower full-workspace autosave. */
+export async function saveWorkspaceTerminals(
+  id: string,
+  terminals: Workspace["terminals"],
+): Promise<void> {
+  return invoke<void>("save_workspace_terminals", { id, terminals });
+}
+
 export async function getSettings(): Promise<AppSettings> {
   return invoke<AppSettings>("get_settings");
 }

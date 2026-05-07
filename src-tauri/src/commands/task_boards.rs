@@ -1,7 +1,19 @@
 use tauri::State;
 
 use crate::state::AppState;
-use crate::task_boards::{TaskBoard, TaskBoardCreate, TaskBoardPatch};
+use crate::task_boards::{TaskBoard, TaskBoardCreate, TaskBoardPatch, TaskBoardStore};
+
+fn persist_workspace_task_boards(store: &TaskBoardStore, ws_id: Option<&str>) {
+    let Some(ws_id) = ws_id else { return };
+    let boards = store.filter_for_workspace(ws_id);
+    if let Err(e) = crate::workspace::storage::persist_task_boards_for_workspace(ws_id, &boards)
+    {
+        eprintln!(
+            "[ipc] persist task_boards for workspace {} failed: {}",
+            ws_id, e
+        );
+    }
+}
 
 #[tauri::command]
 pub fn task_boards_list(state: State<'_, AppState>) -> Vec<TaskBoard> {
@@ -10,7 +22,13 @@ pub fn task_boards_list(state: State<'_, AppState>) -> Vec<TaskBoard> {
 
 #[tauri::command]
 pub fn task_boards_create(state: State<'_, AppState>, input: TaskBoardCreate) -> TaskBoard {
-    state.task_boards.create(input)
+    let mut input = input;
+    if input.workspace_id.is_none() {
+        input.workspace_id = crate::workspace::storage::current_workspace_id();
+    }
+    let board = state.task_boards.create(input);
+    persist_workspace_task_boards(&state.task_boards, board.workspace_id.as_deref());
+    board
 }
 
 #[tauri::command]
@@ -19,12 +37,19 @@ pub fn task_boards_update(
     id: String,
     patch: TaskBoardPatch,
 ) -> Option<TaskBoard> {
-    state.task_boards.update(&id, patch)
+    let updated = state.task_boards.update(&id, patch)?;
+    persist_workspace_task_boards(&state.task_boards, updated.workspace_id.as_deref());
+    Some(updated)
 }
 
 #[tauri::command]
 pub fn task_boards_remove(state: State<'_, AppState>, id: String) -> bool {
-    state.task_boards.remove(&id)
+    let ws_id = state.task_boards.get(&id).and_then(|b| b.workspace_id);
+    let removed = state.task_boards.remove(&id);
+    if removed {
+        persist_workspace_task_boards(&state.task_boards, ws_id.as_deref());
+    }
+    removed
 }
 
 #[tauri::command]
