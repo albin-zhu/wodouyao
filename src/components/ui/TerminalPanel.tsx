@@ -1,23 +1,111 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import { useTerminalStore } from "../../store/terminalStore";
+import { useNoteStore } from "../../store/noteStore";
+import { useFileNodeStore } from "../../store/fileNodeStore";
+import { useTaskBoardStore } from "../../store/taskBoardStore";
 import { useCanvasStore } from "../../store/canvasStore";
 import { useWireStore } from "../../store/wireStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import { useTerminal } from "../../hooks/useTerminal";
 import { readTerminalBuffer } from "../../services/terminalRegistry";
 
+type NodeKind = "terminal" | "note" | "file" | "board";
+
+interface UnifiedNode {
+  id: string;
+  kind: NodeKind;
+  label: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  workspaceId?: string | null;
+  // Terminal-specific (only set for kind === "terminal"):
+  status?: string;
+  color?: string;
+  shellType?: string;
+  initialCommand?: string;
+}
+
+const KIND_GLYPH: Record<NodeKind, string> = {
+  terminal: "■", // ■
+  note: "✎",     // ✎
+  file: "▤",     // ▤
+  board: "☰",    // ☰
+};
+const KIND_LABEL: Record<NodeKind, string> = {
+  terminal: "term",
+  note: "note",
+  file: "file",
+  board: "board",
+};
+
 export default function TerminalPanel() {
   const [open, setOpen] = useState(true);
   const [filter, setFilter] = useState("");
   const terminalsMap = useTerminalStore((s) => s.terminals);
+  const notesMap = useNoteStore((s) => s.notes);
+  const fileNodesMap = useFileNodeStore((s) => s.fileNodes);
+  const boardsMap = useTaskBoardStore((s) => s.boards);
   const bringToFront = useTerminalStore((s) => s.bringToFront);
   const zenMode = useCanvasStore((s) => s.zenMode);
   const currentWsId = useWorkspaceStore((s) => s.currentWorkspace?.id ?? null);
-  const terminals = useMemo(() => {
-    const all = Array.from(terminalsMap.values());
-    if (currentWsId === null) return all;
-    return all.filter((t) => (t.workspaceId ?? currentWsId) === currentWsId);
-  }, [terminalsMap, currentWsId]);
+
+  const nodes = useMemo<UnifiedNode[]>(() => {
+    const out: UnifiedNode[] = [];
+    const inWs = (wsId: string | null | undefined) =>
+      currentWsId === null || (wsId ?? currentWsId) === currentWsId;
+
+    for (const t of terminalsMap.values()) {
+      if (!inWs(t.workspaceId)) continue;
+      out.push({
+        id: t.id,
+        kind: "terminal",
+        label: t.name,
+        position: t.position,
+        size: t.size,
+        workspaceId: t.workspaceId,
+        status: t.status,
+        color: t.color,
+        shellType: t.shellType,
+        initialCommand: t.initialCommand,
+      });
+    }
+    for (const n of notesMap.values()) {
+      if (!inWs(n.workspaceId)) continue;
+      const firstLine = (n.text ?? "").split("\n")[0]?.trim() ?? "";
+      out.push({
+        id: n.id,
+        kind: "note",
+        label: firstLine || "(empty note)",
+        position: n.position,
+        size: n.size,
+        workspaceId: n.workspaceId,
+      });
+    }
+    for (const f of fileNodesMap.values()) {
+      if (!inWs(f.workspaceId)) continue;
+      out.push({
+        id: f.id,
+        kind: "file",
+        label: f.name || "(file)",
+        position: f.position,
+        size: f.size,
+        workspaceId: f.workspaceId,
+      });
+    }
+    for (const b of boardsMap.values()) {
+      if (!inWs(b.workspaceId)) continue;
+      out.push({
+        id: b.id,
+        kind: "board",
+        label: "Task board",
+        position: b.position,
+        size: b.size,
+        workspaceId: b.workspaceId,
+      });
+    }
+    return out;
+  }, [terminalsMap, notesMap, fileNodesMap, boardsMap, currentWsId]);
+
   const { setPan } = useCanvasStore();
   const zoom = useCanvasStore((s) => s.zoom);
   const wiresMap = useWireStore((s) => s.wires);
@@ -61,35 +149,34 @@ export default function TerminalPanel() {
     [pos]
   );
 
-  const focusTerminal = useCallback(
-    (id: string) => {
-      const t = terminalsMap.get(id);
-      if (!t) return;
+  const focusNode = useCallback(
+    (n: UnifiedNode) => {
       const centerX =
-        window.innerWidth / 2 -
-        (t.position.x + t.size.width / 2) * zoom;
+        window.innerWidth / 2 - (n.position.x + n.size.width / 2) * zoom;
       const centerY =
         (window.innerHeight - 40) / 2 -
-        (t.position.y + t.size.height / 2) * zoom;
+        (n.position.y + n.size.height / 2) * zoom;
       setPan(centerX, centerY);
-      bringToFront(id);
+      if (n.kind === "terminal") bringToFront(n.id);
     },
-    [terminalsMap, zoom, setPan, bringToFront]
+    [zoom, setPan, bringToFront]
   );
 
-  const getWireCount = (terminalId: string) => {
+  const getWireCount = (id: string) => {
     return Array.from(wiresMap.values()).filter(
-      (w) => w.sourceId === terminalId || w.targetId === terminalId
+      (w) => w.sourceId === id || w.targetId === id
     ).length;
   };
 
   const filtered = filter
-    ? terminals.filter((t) =>
-        t.name.toLowerCase().includes(filter.toLowerCase())
+    ? nodes.filter(
+        (n) =>
+          n.label.toLowerCase().includes(filter.toLowerCase()) ||
+          n.kind.includes(filter.toLowerCase())
       )
-    : terminals;
+    : nodes;
 
-  const statusColor = (status: string) => {
+  const statusColor = (status?: string) => {
     switch (status) {
       case "running":
         return "var(--color-success)";
@@ -106,16 +193,15 @@ export default function TerminalPanel() {
   const posStyle: React.CSSProperties =
     pos.y < 0
       ? { left: pos.x, bottom: 60 }
-      : { left: pos.x, top: pos.y + 40 }; // 40 = toolbar height
+      : { left: pos.x, top: pos.y + 40 };
 
-  // Hide entirely in zen mode — the panel is part of the chrome.
   if (zenMode) return null;
 
   if (!open) {
     return (
       <button
         onClick={() => setOpen(true)}
-        title="Terminal Panel"
+        title="Nodes"
         style={{
           position: "fixed",
           ...posStyle,
@@ -131,7 +217,7 @@ export default function TerminalPanel() {
           boxShadow: "var(--shadow-panel)",
         }}
       >
-        {"\u2630"} {terminals.length}
+        {"☰"} {nodes.length}
       </button>
     );
   }
@@ -143,8 +229,8 @@ export default function TerminalPanel() {
         position: "fixed",
         ...posStyle,
         zIndex: 50,
-        width: 220,
-        maxHeight: 320,
+        width: 240,
+        maxHeight: 360,
         background: "var(--color-surface)",
         border: "1px solid var(--color-border)",
         borderRadius: 8,
@@ -167,7 +253,7 @@ export default function TerminalPanel() {
         }}
       >
         <span style={{ color: "var(--color-text)", fontSize: 12, fontWeight: 600 }}>
-          Terminals ({terminals.length})
+          Nodes ({nodes.length})
         </span>
         <button
           onClick={() => setOpen(false)}
@@ -180,17 +266,17 @@ export default function TerminalPanel() {
             padding: "0 4px",
           }}
         >
-          {"\u2212"}
+          {"−"}
         </button>
       </div>
 
       {/* Search */}
-      {terminals.length > 3 && (
+      {nodes.length > 3 && (
         <div style={{ padding: "6px 10px" }}>
           <input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter..."
+            placeholder="Filter (name or kind)…"
             style={{
               width: "100%",
               background: "var(--color-bg)",
@@ -205,19 +291,19 @@ export default function TerminalPanel() {
         </div>
       )}
 
-      {/* Terminal list */}
+      {/* Node list */}
       <div style={{ flex: 1, overflowY: "auto" }}>
         {filtered.length === 0 && (
           <div style={{ padding: "12px 10px", color: "var(--color-text-muted)", fontSize: 11 }}>
-            No terminals
+            No nodes
           </div>
         )}
-        {filtered.map((t) => {
-          const wireCount = getWireCount(t.id);
+        {filtered.map((n) => {
+          const wireCount = getWireCount(n.id);
           return (
             <div
-              key={t.id}
-              onClick={() => focusTerminal(t.id)}
+              key={`${n.kind}-${n.id}`}
+              onClick={() => focusNode(n)}
               style={{
                 padding: "6px 10px",
                 cursor: "pointer",
@@ -229,11 +315,26 @@ export default function TerminalPanel() {
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
                 <span
+                  title={KIND_LABEL[n.kind]}
+                  style={{
+                    width: 14,
+                    color: "var(--color-text-muted)",
+                    fontSize: 11,
+                    flexShrink: 0,
+                    textAlign: "center",
+                  }}
+                >
+                  {KIND_GLYPH[n.kind]}
+                </span>
+                <span
                   style={{
                     width: 6,
                     height: 6,
                     borderRadius: "50%",
-                    background: t.color ?? statusColor(t.status),
+                    background:
+                      n.kind === "terminal"
+                        ? n.color ?? statusColor(n.status)
+                        : "var(--color-text-muted)",
                     flexShrink: 0,
                   }}
                 />
@@ -246,7 +347,7 @@ export default function TerminalPanel() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {t.name}
+                  {n.label}
                 </span>
                 {wireCount > 0 && (
                   <span
@@ -260,42 +361,46 @@ export default function TerminalPanel() {
                   </span>
                 )}
               </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const content = readTerminalBuffer(t.id);
-                  navigator.clipboard.writeText(content).catch(console.error);
-                }}
-                title="Copy terminal buffer"
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "var(--color-text-muted)",
-                  cursor: "pointer",
-                  fontSize: 11,
-                  padding: "0 4px",
-                  flexShrink: 0,
-                }}
-              >
-                {"\u2398"}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  kill(t.id);
-                }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "var(--color-text-muted)",
-                  cursor: "pointer",
-                  fontSize: 11,
-                  padding: "0 4px",
-                  flexShrink: 0,
-                }}
-              >
-                {"\u2715"}
-              </button>
+              {n.kind === "terminal" && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const content = readTerminalBuffer(n.id);
+                      navigator.clipboard.writeText(content).catch(console.error);
+                    }}
+                    title="Copy terminal buffer"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--color-text-muted)",
+                      cursor: "pointer",
+                      fontSize: 11,
+                      padding: "0 4px",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {"⎘"}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      kill(n.id);
+                    }}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--color-text-muted)",
+                      cursor: "pointer",
+                      fontSize: 11,
+                      padding: "0 4px",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {"✕"}
+                  </button>
+                </>
+              )}
             </div>
           );
         })}
