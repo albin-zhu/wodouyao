@@ -9,6 +9,7 @@ import {
 } from "../utils/constants";
 import { DEFAULT_THEME, randomAccent } from "../utils/terminalThemes";
 import { generateId } from "../utils/id";
+import { getNextZ, seed as seedZ } from "../utils/zIndex";
 import { useWorkspaceStore } from "./workspaceStore";
 
 /** ms of silence after last PTY output before a terminal is considered idle. */
@@ -16,7 +17,6 @@ const ACTIVE_WINDOW_MS = 1200;
 
 interface TerminalStore {
   terminals: Map<string, TerminalNode>;
-  nextZIndex: number;
 
   addTerminal: (overrides?: Partial<TerminalNode>) => TerminalNode;
   removeTerminal: (id: string) => void;
@@ -39,7 +39,6 @@ interface TerminalStore {
 
 export const useTerminalStore = create<TerminalStore>((set, get) => ({
   terminals: new Map(),
-  nextZIndex: 1,
 
   addTerminal: (overrides) => {
     const id = overrides?.id ?? generateId();
@@ -51,6 +50,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const usedColors = Array.from(state.terminals.values())
       .filter((t) => (t.workspaceId ?? null) === wsId)
       .map((t) => t.color);
+    // Honor a caller-supplied zIndex (workspace load restores stack order
+    // from disk). Otherwise allocate a fresh top-of-stack value.
+    const z = overrides?.zIndex ?? getNextZ();
+    if (overrides?.zIndex !== undefined) {
+      seedZ(overrides.zIndex);
+    }
     const terminal: TerminalNode = {
       id,
       name: overrides?.name ?? `Terminal ${state.terminals.size + 1}`,
@@ -59,7 +64,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       position: overrides?.position ?? { x: 100 + state.terminals.size * 30, y: 100 + state.terminals.size * 30 },
       size: overrides?.size ?? { width: DEFAULT_TERMINAL_WIDTH, height: DEFAULT_TERMINAL_HEIGHT },
       isFolded: false,
-      zIndex: state.nextZIndex,
+      zIndex: z,
       status: "starting",
       cols: overrides?.cols ?? DEFAULT_COLS,
       rows: overrides?.rows ?? DEFAULT_ROWS,
@@ -75,14 +80,14 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       // Ensure id/workspaceId are not overwritten by spread when not provided
     };
     terminal.id = id;
-    terminal.zIndex = state.nextZIndex;
+    terminal.zIndex = z;
     if (overrides?.workspaceId === undefined) {
       terminal.workspaceId = wsId;
     }
 
     const newMap = new Map(state.terminals);
     newMap.set(id, terminal);
-    set({ terminals: newMap, nextZIndex: state.nextZIndex + 1 });
+    set({ terminals: newMap });
     return terminal;
   },
 
@@ -151,8 +156,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       const term = state.terminals.get(id);
       if (!term) return state;
       const newMap = new Map(state.terminals);
-      newMap.set(id, { ...term, zIndex: state.nextZIndex });
-      return { terminals: newMap, nextZIndex: state.nextZIndex + 1 };
+      newMap.set(id, { ...term, zIndex: getNextZ() });
+      return { terminals: newMap };
     }),
 
   setStatus: (id, status) =>
@@ -221,5 +226,5 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     return all.filter((t) => (t.workspaceId ?? wsId) === wsId);
   },
 
-  clearAll: () => set({ terminals: new Map(), nextZIndex: 1 }),
+  clearAll: () => set({ terminals: new Map() }),
 }));

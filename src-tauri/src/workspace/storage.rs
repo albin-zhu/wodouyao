@@ -57,6 +57,12 @@ pub struct TerminalNodeLayout {
     /// agent's "continue most recent" flag is used when reopening.
     #[serde(default)]
     pub session_id: Option<String>,
+    /// Stack order against every other node on the canvas (terminals,
+    /// notes, files, task_boards share one monotonic counter — see
+    /// `src/utils/zIndex.ts`). Defaults to 0 for legacy layouts; the
+    /// frontend re-seeds the allocator on load.
+    #[serde(default)]
+    pub z_index: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

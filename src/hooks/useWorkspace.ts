@@ -23,6 +23,7 @@ import {
   saveWorkspaceTerminals,
 } from "../services/tauriCommands";
 import { generateId } from "../utils/id";
+import { seed as seedZ } from "../utils/zIndex";
 import { DEFAULT_COLS, DEFAULT_ROWS } from "../utils/constants";
 
 /** Rewrite a terminal's spawn command so opening a saved workspace picks
@@ -105,6 +106,7 @@ export function useWorkspace() {
       role: t.role,
       agent_kind: t.agentKind,
       session_id: t.sessionId,
+      z_index: t.zIndex,
     }));
 
     const wireLayouts: WorkspaceWireLayout[] = Array.from(wiresMap.values())
@@ -226,6 +228,14 @@ export function useWorkspace() {
       useWorkspaceStore.getState().setWorkspaceCwd(ws.cwd ?? null);
 
       // 4) Terminal reconcile — spawn only what's missing, stamp the rest.
+      // Re-seed the global z allocator from any persisted layout so newly-
+      // brought-to-front nodes win against legacy values.
+      let maxTermZ = 0;
+      for (const layout of ws.terminals) {
+        const z = layout.z_index ?? 0;
+        if (z > maxTermZ) maxTermZ = z;
+      }
+      seedZ(maxTermZ);
       const liveTerminals = useTerminalStore.getState().terminals;
       for (const layout of ws.terminals) {
         const existing = liveTerminals.get(layout.id);
@@ -233,6 +243,7 @@ export function useWorkspace() {
           // Terminal is alive (probably from a prior workspace); just
           // update its layout metadata and re-tag it for this workspace.
           useTerminalStore.getState().updateTerminal(layout.id, {
+            ...(layout.z_index !== undefined ? { zIndex: layout.z_index } : {}),
             name: layout.name,
             position: { x: layout.position.x, y: layout.position.y },
             size: { width: layout.size.width, height: layout.size.height },
@@ -271,6 +282,7 @@ export function useWorkspace() {
           agentKind: layout.agent_kind,
           sessionId: layout.session_id,
           workspaceId: incomingId,
+          ...(layout.z_index !== undefined ? { zIndex: layout.z_index } : {}),
         };
         addTerminal(overrides);
         try {
@@ -314,7 +326,8 @@ export function useWorkspace() {
         noteMap.set(node.id, node);
         if (node.zIndex > maxNoteZ) maxNoteZ = node.zIndex;
       }
-      useNoteStore.setState({ notes: noteMap, nextZIndex: maxNoteZ + 1 });
+      seedZ(maxNoteZ);
+      useNoteStore.setState({ notes: noteMap });
 
       const fileMap = new Map<string, import("../types/fileNode").FileNode>();
       let maxFileZ = 0;
@@ -338,9 +351,11 @@ export function useWorkspace() {
         fileMap.set(node.id, node);
         if (node.zIndex > maxFileZ) maxFileZ = node.zIndex;
       }
-      useFileNodeStore.setState({ fileNodes: fileMap, nextZIndex: maxFileZ + 1 });
+      seedZ(maxFileZ);
+      useFileNodeStore.setState({ fileNodes: fileMap });
 
       const boardMap = new Map<string, import("../store/taskBoardStore").TaskBoard>();
+      let maxBoardZ = 0;
       for (const b of useTaskBoardStore.getState().boards.values()) {
         if (b.workspaceId && b.workspaceId !== incomingId) {
           boardMap.set(b.id, b);
@@ -355,7 +370,9 @@ export function useWorkspace() {
           zIndex: b.z_index,
           workspaceId: incomingId,
         });
+        if (b.z_index > maxBoardZ) maxBoardZ = b.z_index;
       }
+      seedZ(maxBoardZ);
       useTaskBoardStore.setState({ boards: boardMap });
     },
     [addTerminal, setPan, buildWorkspace]

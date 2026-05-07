@@ -14,8 +14,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 import { fileInspect } from "../../services/tauriCommands";
 import type { FileKind } from "../../types/fileNode";
 import BackgroundLayer from "./BackgroundLayer";
-import ResourceLayer from "./ResourceLayer";
-import TerminalLayer from "../terminal/TerminalLayer";
+import NodeLayer from "./NodeLayer";
 import WireLayer from "./WireLayer";
 import CanvasControls from "./CanvasControls";
 
@@ -289,8 +288,7 @@ export default function InfiniteCanvas() {
     >
       <BackgroundLayer />
       {!anyMaximized && <WireLayer />}
-      <TerminalLayer />
-      {!anyMaximized && <ResourceLayer />}
+      <NodeLayer />
       {!anyMaximized && !zenMode && <CanvasControls />}
     </div>
   );

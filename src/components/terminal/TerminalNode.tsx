@@ -11,12 +11,9 @@ import type { TerminalNode as TerminalNodeType } from "../../types/terminal";
 
 interface TerminalNodeProps {
   terminal: TerminalNodeType;
-  panX: number;
-  panY: number;
-  zoom: number;
 }
 
-function TerminalNodeImpl({ terminal, panX, panY, zoom }: TerminalNodeProps) {
+function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
   const updateTerminal = useTerminalStore((s) => s.updateTerminal);
   const bringToFront = useTerminalStore((s) => s.bringToFront);
   const mode = useCanvasInteractionStore((s) => s.mode);
@@ -60,7 +57,7 @@ function TerminalNodeImpl({ terminal, panX, panY, zoom }: TerminalNodeProps) {
       const onMouseMove = (ev: MouseEvent) => {
         if (!dragStartRef.current) return;
         const zoom = parseFloat(
-          document.getElementById("terminal-layer")?.style.getPropertyValue("--zoom") ?? "1"
+          document.getElementById("node-layer")?.style.getPropertyValue("--zoom") ?? "1"
         );
         const dx = (ev.clientX - dragStartRef.current.x) / zoom;
         const dy = (ev.clientY - dragStartRef.current.y) / zoom;
@@ -131,7 +128,7 @@ function TerminalNodeImpl({ terminal, panX, panY, zoom }: TerminalNodeProps) {
           if (!latest) return;
           const zoom = parseFloat(
             document
-              .getElementById("terminal-layer")
+              .getElementById("node-layer")
               ?.style.getPropertyValue("--zoom") ?? "1"
           );
           const dx = (latest.clientX - start.mouseX) / zoom;
@@ -237,17 +234,13 @@ function TerminalNodeImpl({ terminal, panX, panY, zoom }: TerminalNodeProps) {
       }}
       style={{
         position: "absolute",
-        // Screen position: convert world coords using current pan/zoom.
-        left: Math.round(terminal.position.x * zoom + panX),
-        top: Math.round(terminal.position.y * zoom + panY),
-        // Content stays in world-coordinate space; CSS scale zooms visually.
-        // This keeps xterm's internal layout stable (no PTY resize on zoom),
-        // and each terminal gets its own GPU compositing layer so WebGL
-        // rendering is isolated from sibling transforms.
+        // World-space: NodeLayer applies the pan/zoom transform once for
+        // every node type, which is what lets terminals share a stacking
+        // context (and z-order) with notes/files/boards.
+        left: terminal.position.x,
+        top: terminal.position.y,
         width: terminal.size.width,
         height: terminal.isFolded ? 36 : terminal.size.height,
-        transformOrigin: "0 0",
-        transform: `scale(${zoom})`,
         zIndex: terminal.zIndex,
         display: "flex",
         flexDirection: "column",

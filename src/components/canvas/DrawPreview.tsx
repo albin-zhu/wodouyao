@@ -1,33 +1,28 @@
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
-import { useCanvasStore } from "../../store/canvasStore";
 
 export default function DrawPreview() {
   const drawRect = useCanvasInteractionStore((s) => s.drawRect);
-  const { panX, panY, zoom } = useCanvasStore();
 
   if (!drawRect) return null;
 
-  // drawRect is stored in world coordinates; convert to screen for rendering
-  // since TerminalLayer no longer applies a CSS transform.
+  // World coords — NodeLayer applies the pan/zoom transform once for
+  // every child, so we use the rectangle's world-space dimensions
+  // directly. Border width is divided by --zoom so it stays visually
+  // ~2px regardless of zoom level.
   const wx = Math.min(drawRect.startX, drawRect.endX);
   const wy = Math.min(drawRect.startY, drawRect.endY);
   const ww = Math.abs(drawRect.endX - drawRect.startX);
   const wh = Math.abs(drawRect.endY - drawRect.startY);
 
-  const x = wx * zoom + panX;
-  const y = wy * zoom + panY;
-  const w = ww * zoom;
-  const h = wh * zoom;
-
   return (
     <div
       style={{
         position: "absolute",
-        left: x,
-        top: y,
-        width: w,
-        height: h,
-        border: "2px dashed var(--color-accent)",
+        left: wx,
+        top: wy,
+        width: ww,
+        height: wh,
+        border: "calc(2px / var(--zoom, 1)) dashed var(--color-accent)",
         background: "color-mix(in srgb, var(--color-accent) 8%, transparent)",
         borderRadius: 8,
         pointerEvents: "none",
@@ -37,10 +32,10 @@ export default function DrawPreview() {
       <span
         style={{
           position: "absolute",
-          bottom: -20,
+          bottom: "calc(-20px / var(--zoom, 1))",
           right: 0,
           color: "var(--color-accent)",
-          fontSize: 11,
+          fontSize: "calc(11px / var(--zoom, 1))",
           fontFamily: "monospace",
           whiteSpace: "nowrap",
         }}

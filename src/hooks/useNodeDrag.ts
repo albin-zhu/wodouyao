@@ -12,7 +12,7 @@ export interface NodeDragOptions {
 
 function getCanvasZoom(): number {
   const v = document
-    .getElementById("terminal-layer")
+    .getElementById("node-layer")
     ?.style.getPropertyValue("--zoom");
   const z = parseFloat(v ?? "1");
   return Number.isFinite(z) && z > 0 ? z : 1;
