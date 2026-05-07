@@ -443,6 +443,40 @@ pub fn persist_terminals_for_workspace(
     persist_field_for_workspace(ws_id, "terminals", &terminals)
 }
 
+/// Upsert a single terminal layout into workspace.json's `terminals`
+/// array (replace if id matches, otherwise append). Used by hub
+/// /v1/spawn /v1/fork /v1/workflow/bootstrap to write a placeholder
+/// entry on the synchronous path — without this, a `kill -9` in the
+/// 250ms gap before the frontend's debounced save would lose the
+/// terminal entirely. Position/size/color land at sensible defaults
+/// here; the frontend's full-layout save shortly after refines them.
+pub fn upsert_terminal_in_workspace(
+    ws_id: &str,
+    layout: TerminalNodeLayout,
+) -> Result<(), String> {
+    let cat = read_catalog();
+    let Some(entry) = cat.entries.iter().find(|e| e.id == ws_id) else {
+        return Ok(());
+    };
+    let paths = project_paths(&entry.cwd)?;
+    if !paths.workspace_json.exists() {
+        return Ok(());
+    }
+    let json = fs::read_to_string(&paths.workspace_json)
+        .map_err(|e| format!("Failed to read workspace: {}", e))?;
+    let mut existing: Vec<TerminalNodeLayout> = {
+        let v: serde_json::Value = serde_json::from_str(&json)
+            .map_err(|e| format!("Failed to parse workspace: {}", e))?;
+        v.get("terminals")
+            .cloned()
+            .and_then(|t| serde_json::from_value(t).ok())
+            .unwrap_or_default()
+    };
+    existing.retain(|t| t.id != layout.id);
+    existing.push(layout);
+    persist_field_for_workspace(ws_id, "terminals", &existing)
+}
+
 /// Last-active workspace id from settings.json, used as a fallback
 /// when a hub task mutation doesn't carry a workspace_id (e.g. CLI
 /// `task add` without WODOUYAO_WORKSPACE_ID set).

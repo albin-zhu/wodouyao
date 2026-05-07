@@ -498,6 +498,63 @@ struct SpawnBody {
     /// Used by workflow bootstrap to inject role-specific instructions.
     #[serde(default)]
     append_system_prompt: Option<String>,
+    /// Workspace this spawn belongs to. Falls back to the hub's
+    /// current_workspace_id() when absent so persistence has a home on disk.
+    #[serde(default)]
+    workspace_id: Option<String>,
+}
+
+/// Build a TerminalNodeLayout stub from the bits the hub already knows
+/// at spawn time (id, name, command, cwd, role, agent_kind). Position
+/// and size land at sensible defaults; the frontend will replace them
+/// with the user's actual layout via `save_workspace_terminals` once
+/// the spawn event has been processed (~250ms later). The stub is what
+/// makes a `kill -9` immediately after `wodouyao spawn` survive.
+fn make_terminal_stub(
+    id: &str,
+    name: Option<&str>,
+    kind: Option<&str>,
+    command: Option<&str>,
+    cwd: Option<&str>,
+    role: Option<&str>,
+    workspace_id: Option<&str>,
+) -> crate::workspace::storage::TerminalNodeLayout {
+    use crate::workspace::storage::{Dimensions, Position, TerminalNodeLayout};
+    TerminalNodeLayout {
+        id: id.to_string(),
+        name: name.map(|s| s.to_string()).unwrap_or_else(|| "Terminal".into()),
+        shell_type: "Bash".into(),
+        initial_command: command.map(|s| s.to_string()),
+        position: Position { x: 100.0, y: 100.0 },
+        size: Dimensions { width: 600.0, height: 400.0 },
+        is_folded: false,
+        color: None,
+        theme: None,
+        cwd: cwd.map(|s| s.to_string()),
+        role: role.map(|s| s.to_string()),
+        workspace_id: workspace_id.map(|s| s.to_string()),
+        agent_kind: kind.map(|s| s.to_string()),
+        session_id: None,
+        z_index: 0,
+    }
+}
+
+/// Write a stub terminal layout to workspace.json so the new spawn
+/// survives `kill -9` before the frontend's debounced save kicks in.
+fn persist_spawn_terminal_stub(
+    ws_id: Option<&str>,
+    id: &str,
+    name: Option<&str>,
+    kind: Option<&str>,
+    command: Option<&str>,
+    cwd: Option<&str>,
+    role: Option<&str>,
+) {
+    let Some(ws) = ws_id else { return };
+    let layout = make_terminal_stub(id, name, kind, command, cwd, role, Some(ws));
+    if let Err(e) = crate::workspace::storage::upsert_terminal_in_workspace(ws, layout) {
+        eprintln!("[hub] persist spawn terminal stub for {} failed: {}", ws, e);
+    }
 }
 
 #[derive(Serialize, Clone)]
@@ -545,6 +602,7 @@ fn spawn(
             team_role: None,
             role: None,
             append_system_prompt: None,
+            workspace_id: None,
         }
     } else {
         match serde_json::from_str(&body) {
@@ -640,6 +698,27 @@ fn spawn(
         write_project_claude_md(c);
         inject_claude_session_hook(c);
     }
+
+    // Stamp orphan spawns with the active workspace so the persistence
+    // helpers below have a home on disk.
+    let workspace_id = parsed
+        .workspace_id
+        .clone()
+        .or_else(crate::workspace::storage::current_workspace_id);
+
+    // Write a placeholder layout BEFORE emitting the spawn event so a
+    // `kill -9` between event emit and the frontend's debounced terminal
+    // save (~250ms) doesn't lose this terminal. The frontend's full
+    // layout overwrites the stub on its next save.
+    persist_spawn_terminal_stub(
+        workspace_id.as_deref(),
+        &new_id,
+        parsed.name.as_deref(),
+        parsed.kind.as_deref(),
+        command.as_deref(),
+        parsed.cwd.as_deref(),
+        parsed.role.as_deref(),
+    );
 
     let payload = SpawnEventPayload {
         id: new_id.clone(),
@@ -1014,6 +1093,7 @@ pub fn do_workflow_bootstrap(
         .map(|_| format!("t_{}", Uuid::new_v4().simple()))
         .collect();
 
+    let bootstrap_ws_id = crate::workspace::storage::current_workspace_id();
     for (i, br) in parsed.roles.iter().enumerate() {
         let new_id = &ids[i];
         let agent_name = br
@@ -1047,6 +1127,16 @@ pub fn do_workflow_bootstrap(
 
         let auto_wire_from = if i == 0 { None } else { Some(ids[0].clone()) };
 
+        persist_spawn_terminal_stub(
+            bootstrap_ws_id.as_deref(),
+            new_id,
+            Some(&agent_name),
+            Some(&kind),
+            command.as_deref(),
+            parsed.cwd.as_deref(),
+            Some(&br.role),
+        );
+
         let payload = SpawnEventPayload {
             id: new_id.clone(),
             name: Some(agent_name),
@@ -1065,7 +1155,7 @@ pub fn do_workflow_bootstrap(
     }
 
     if parsed.wire_mesh && ids.len() > 2 {
-        let ws_id = crate::workspace::storage::current_workspace_id();
+        let ws_id = bootstrap_ws_id.clone();
         for i in 1..ids.len() {
             for j in (i + 1)..ids.len() {
                 let wire = Wire {
@@ -1173,6 +1263,15 @@ fn fork(
     // Auto-wire the new fork back to its source terminal so the caller
     // can immediately drive `/fork "<name>"` via `wodouyao send`.
     let workspace_id = crate::workspace::storage::current_workspace_id();
+    persist_spawn_terminal_stub(
+        workspace_id.as_deref(),
+        &new_id,
+        Some(&display_name),
+        Some(&agent_kind),
+        Some(&resume_command),
+        parsed.cwd.as_deref(),
+        None,
+    );
     let wire = super::topology::Wire {
         id: format!("w_{}", Uuid::new_v4().simple()),
         source_id: parsed.from.clone(),
