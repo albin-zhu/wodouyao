@@ -365,3 +365,29 @@ export async function taskBoardsRemove(id: string): Promise<boolean> {
 export async function taskBoardsReplaceAll(boards: TaskBoardIpc[]): Promise<void> {
   return invoke<void>("task_boards_replace_all", { boards });
 }
+
+export async function getHubEndpoint(): Promise<{ url: string; token: string }> {
+  return invoke<{ url: string; token: string }>("get_hub_endpoint");
+}
+
+/**
+ * Send a message to a terminal via the hub /v1/send endpoint.
+ * Silently ignores 403 (no wire) so callers don't need to handle missing wires.
+ */
+export async function hubSend(from: string, to: string, text: string): Promise<void> {
+  let endpoint: { url: string; token: string };
+  try {
+    endpoint = await getHubEndpoint();
+  } catch {
+    return;
+  }
+  try {
+    await fetch(`${endpoint.url}/v1/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${endpoint.token}` },
+      body: JSON.stringify({ from, to, text, mode: "keys" }),
+    });
+  } catch {
+    // no wire or network error — assign already happened, notification is best-effort
+  }
+}

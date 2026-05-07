@@ -3,6 +3,7 @@ import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
 import { useTeamStore } from "../../store/teamStore";
 import { useTaskStore } from "../../store/taskStore";
+import { hubSend } from "../../services/tauriCommands";
 import { showTerminalContextMenu } from "./TerminalContextMenu";
 import TerminalTitleBar from "./TerminalTitleBar";
 import TerminalBody from "./TerminalBody";
@@ -23,7 +24,10 @@ function TerminalNodeImpl({ terminal, panX, panY, zoom }: TerminalNodeProps) {
   const setWireStart = useCanvasInteractionStore((s) => s.setWireStart);
   const team = useTeamStore((s) => s.getTeamForTerminal(terminal.id));
   const updateTask = useTaskStore((s) => s.updateTask);
+  const tasksMap = useTaskStore((s) => s.tasks);
   const [taskDropOver, setTaskDropOver] = useState(false);
+  const [assignedLabel, setAssignedLabel] = useState<string | null>(null);
+  const assignedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragStartRef = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
   const [hovered, setHovered] = useState(false);
 
@@ -214,7 +218,20 @@ function TerminalNodeImpl({ terminal, panX, panY, zoom }: TerminalNodeProps) {
         const taskId = e.dataTransfer.getData("application/x-wd-task");
         if (taskId) {
           e.preventDefault();
+          const task = tasksMap.get(taskId);
+          const sourceId = e.dataTransfer.getData("application/x-wd-task-source");
           updateTask(taskId, { owner_term_id: terminal.id, status: "in_progress" });
+          // Show brief assign toast
+          if (assignedTimerRef.current) clearTimeout(assignedTimerRef.current);
+          setAssignedLabel(task?.subject ?? taskId);
+          assignedTimerRef.current = setTimeout(() => setAssignedLabel(null), 2200);
+          // Notify the terminal via hub send (best-effort, silent on no-wire)
+          if (sourceId) {
+            const msg = task
+              ? `📋 Task assigned: ${task.subject}`
+              : `📋 Task assigned: ${taskId}`;
+            hubSend(sourceId, terminal.id, msg).catch(() => {});
+          }
         }
         setTaskDropOver(false);
       }}
@@ -249,6 +266,31 @@ function TerminalNodeImpl({ terminal, panX, panY, zoom }: TerminalNodeProps) {
       <div onMouseDown={handleDragStart}>
         <TerminalTitleBar terminal={terminal} />
       </div>
+      {assignedLabel && (
+        <div
+          style={{
+            position: "absolute",
+            top: 36,
+            left: 0,
+            right: 0,
+            zIndex: 10,
+            background: "color-mix(in srgb, var(--color-accent) 18%, var(--color-surface))",
+            borderBottom: "1px solid color-mix(in srgb, var(--color-accent) 35%, transparent)",
+            padding: "5px 10px",
+            fontSize: 11,
+            color: "var(--color-accent)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            pointerEvents: "none",
+          }}
+        >
+          <span style={{ opacity: 0.7 }}>{"✓"}</span>
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <strong>Assigned:</strong> {assignedLabel}
+          </span>
+        </div>
+      )}
       {!terminal.isFolded && <TerminalBody terminalId={terminal.id} />}
       {!terminal.isFolded && mode !== "wire" && (
         <>

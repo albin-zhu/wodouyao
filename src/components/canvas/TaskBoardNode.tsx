@@ -4,6 +4,7 @@ import { useTaskStore } from "../../store/taskStore";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
 import { useNodeDrag } from "../../hooks/useNodeDrag";
+import { TERMINAL_ROLES } from "../../utils/terminalRoles";
 import type { Task, TaskStatus } from "../../types/task";
 
 interface Props {
@@ -11,15 +12,9 @@ interface Props {
 }
 
 const STATUS_GLYPH: Record<TaskStatus, string> = {
-  pending: "\u25B7",
+  pending: "\u25B6",
   in_progress: "\u25D0",
   completed: "\u2713",
-};
-
-const STATUS_COLOR: Record<TaskStatus, string> = {
-  pending: "var(--color-text-muted)",
-  in_progress: "var(--color-accent)",
-  completed: "var(--color-success)",
 };
 
 const STATUS_ORDER: Record<TaskStatus, number> = {
@@ -34,119 +29,224 @@ const NEXT: Record<TaskStatus, TaskStatus> = {
   completed: "pending",
 };
 
-function TaskRow({ task }: { task: Task }) {
+function timeAgo(ms: number): string {
+  const diff = Math.max(0, Date.now() - ms);
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function TaskRow({ task, sourceId }: { task: Task; sourceId?: string }) {
   const updateTask = useTaskStore((s) => s.updateTask);
   const removeTask = useTaskStore((s) => s.removeTask);
   const terminals = useTerminalStore((s) => s.terminals);
   const [hovered, setHovered] = useState(false);
-  const owner = task.owner_term_id ? terminals.get(task.owner_term_id) : null;
+  const [expanded, setExpanded] = useState(false);
+
+  const owner = task.owner_term_id ? terminals.get(task.owner_term_id) : undefined;
+  const ownerColor = owner?.color ?? "var(--color-border-strong)";
+  const ownerName = owner?.name ?? (task.owner_term_id ? task.owner_term_id.slice(0, 8) : "unowned");
+  const blockers = task.blocked_by ?? [];
+  const isPulsing = task.status === "in_progress";
+  const displayRole = owner?.role ?? task.role_hint ?? undefined;
+  const roleMeta = displayRole ? TERMINAL_ROLES[displayRole] : undefined;
 
   return (
     <div
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("application/x-wd-task", task.id);
+        if (sourceId) e.dataTransfer.setData("application/x-wd-task-source", sourceId);
         e.dataTransfer.effectAllowed = "move";
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={() => setExpanded((v) => !v)}
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "4px 8px",
-        borderRadius: 4,
-        cursor: "grab",
-        background: hovered ? "var(--color-surface-alt)" : "transparent",
-        transition: "background 0.1s",
         position: "relative",
+        background: "var(--color-bg)",
+        border: "1px solid var(--color-border)",
+        borderRadius: 6,
+        marginBottom: 5,
+        padding: "7px 8px 7px 13px",
+        cursor: "grab",
+        animation: isPulsing ? "wd-pulse 1.4s ease-in-out infinite" : undefined,
       }}
     >
-      {owner && (
-        <span
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 2,
-            bottom: 2,
-            width: 2,
-            borderRadius: 1,
-            background: owner.color,
-          }}
-        />
-      )}
-      <button
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          updateTask(task.id, { status: NEXT[task.status] });
-        }}
+      {/* Left owner color bar */}
+      <div
         style={{
-          width: 16,
-          height: 16,
-          borderRadius: 3,
-          border: "none",
-          background: "transparent",
-          color: STATUS_COLOR[task.status],
-          cursor: "pointer",
-          fontSize: 11,
-          lineHeight: 1,
-          padding: 0,
-          flexShrink: 0,
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
+          background: ownerColor,
+          borderTopLeftRadius: 6,
+          borderBottomLeftRadius: 6,
         }}
-      >
-        {STATUS_GLYPH[task.status]}
-      </button>
-      <span
-        style={{
-          flex: 1,
-          fontSize: 12,
-          color: task.status === "completed" ? "var(--color-text-muted)" : "var(--color-text)",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          textDecoration: task.status === "completed" ? "line-through" : "none",
-        }}
-      >
-        {task.subject}
-      </span>
-      {owner && (
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: owner.color,
-            flexShrink: 0,
-          }}
-          title={owner.name}
-        />
-      )}
-      {hovered && (
+      />
+      {/* Main row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
         <button
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
-            removeTask(task.id);
+            updateTask(task.id, { status: NEXT[task.status] });
           }}
           style={{
-            background: "none",
+            width: 17,
+            height: 17,
+            borderRadius: 4,
             border: "none",
-            color: "var(--color-danger)",
+            background: "transparent",
+            color:
+              task.status === "completed"
+                ? "var(--color-success)"
+                : task.status === "in_progress"
+                ? "var(--color-accent)"
+                : "var(--color-text-muted)",
             cursor: "pointer",
-            fontSize: 10,
-            padding: "0 2px",
+            fontSize: 11,
             lineHeight: 1,
+            padding: 0,
+            flexShrink: 0,
           }}
         >
-          {"\u2715"}
+          {STATUS_GLYPH[task.status]}
         </button>
+        <span
+          style={{
+            flex: 1,
+            fontSize: 12,
+            color: task.status === "completed" ? "var(--color-text-muted)" : "var(--color-text)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: expanded ? "normal" : "nowrap",
+            textDecoration: task.status === "completed" ? "line-through" : "none",
+          }}
+        >
+          {task.subject}
+        </span>
+        {hovered && (
+          <button
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              removeTask(task.id);
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--color-danger)",
+              cursor: "pointer",
+              fontSize: 11,
+              padding: "0 3px",
+            }}
+          >
+            {"\u2715"}
+          </button>
+        )}
+      </div>
+      {/* Meta row */}
+      <div
+        style={{
+          marginTop: 4,
+          color: "var(--color-text-muted)",
+          fontSize: 10,
+          display: "flex",
+          gap: 7,
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        {displayRole ? (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              padding: "1px 5px",
+              borderRadius: 3,
+              fontSize: 9,
+              fontWeight: 600,
+              letterSpacing: 0.3,
+              textTransform: "uppercase",
+              color: roleMeta?.color ?? "var(--color-text-muted)",
+              background: `color-mix(in srgb, ${roleMeta?.color ?? "var(--color-text-muted)"} 15%, transparent)`,
+              border: `1px ${owner ? "solid" : "dashed"} color-mix(in srgb, ${roleMeta?.color ?? "var(--color-text-muted)"} 35%, transparent)`,
+            }}
+          >
+            {roleMeta?.glyph && <span style={{ fontSize: 10, lineHeight: 1 }}>{roleMeta.glyph}</span>}
+            {roleMeta?.label ?? displayRole}
+          </span>
+        ) : owner?.agentKind ? (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              padding: "1px 5px",
+              borderRadius: 3,
+              fontSize: 9,
+              fontWeight: 600,
+              letterSpacing: 0.3,
+              textTransform: "uppercase",
+              color: "var(--color-text-muted)",
+              background: "color-mix(in srgb, var(--color-text-muted) 15%, transparent)",
+              border: "1px solid color-mix(in srgb, var(--color-text-muted) 35%, transparent)",
+            }}
+          >
+            <span style={{ fontSize: 10, lineHeight: 1 }}>{">"}</span>
+            {owner.agentKind}
+          </span>
+        ) : null}
+        <span style={{ color: ownerColor }}>{"\u25CF"} {ownerName}</span>
+        <span>{timeAgo(task.created_at)}</span>
+        {blockers.length > 0 && (
+          <span style={{ color: "var(--color-warning)" }}>blocked by {blockers.length}</span>
+        )}
+        {(task.acceptance?.length ?? 0) > 0 && (
+          <span style={{ color: "var(--color-info)" }}>{"\u2713"} {task.acceptance.length}</span>
+        )}
+      </div>
+      {/* Expanded description */}
+      {expanded && task.description && (
+        <div
+          style={{
+            marginTop: 7,
+            color: "var(--color-text-dim)",
+            fontSize: 11,
+            whiteSpace: "pre-wrap",
+            lineHeight: 1.5,
+          }}
+        >
+          {task.description}
+        </div>
+      )}
+      {expanded && task.acceptance && task.acceptance.length > 0 && (
+        <ul style={{ margin: "6px 0 0 16px", padding: 0, color: "var(--color-text-dim)", fontSize: 11 }}>
+          {task.acceptance.map((a, i) => <li key={i}>{a}</li>)}
+        </ul>
       )}
     </div>
   );
 }
 
 function TaskBoardNodeImpl({ board }: Props) {
+  // Inject pulse keyframes once (same as TasksDrawer)
+  useEffect(() => {
+    if (document.getElementById("wd-task-keyframes")) return;
+    const style = document.createElement("style");
+    style.id = "wd-task-keyframes";
+    style.textContent =
+      "@keyframes wd-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(122,162,247,0.3); } 50% { box-shadow: 0 0 0 4px rgba(122,162,247,0.08); } }";
+    document.head.appendChild(style);
+  }, []);
+
   const updateBoard = useTaskBoardStore((s) => s.updateBoard);
   const removeBoard = useTaskBoardStore((s) => s.removeBoard);
   const bringToFront = useTaskBoardStore((s) => s.bringToFront);
@@ -155,7 +255,9 @@ function TaskBoardNodeImpl({ board }: Props) {
   const setWireStart = useCanvasInteractionStore((s) => s.setWireStart);
   const tasksMap = useTaskStore((s) => s.tasks);
   const createTask = useTaskStore((s) => s.createTask);
+  const updateTask = useTaskStore((s) => s.updateTask);
   const [hovered, setHovered] = useState(false);
+  const [dropOver, setDropOver] = useState(false);
   const [quickAdd, setQuickAdd] = useState("");
   const [editing, setEditing] = useState(false);
   const [labelDraft, setLabelDraft] = useState(board.label);
@@ -221,6 +323,25 @@ function TaskBoardNodeImpl({ board }: Props) {
       onMouseDown={() => bringToFront(board.id)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("application/x-wd-task")) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          setDropOver(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        // Only clear if leaving the board node itself, not a child
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropOver(false);
+      }}
+      onDrop={(e) => {
+        const taskId = e.dataTransfer.getData("application/x-wd-task");
+        if (taskId) {
+          e.preventDefault();
+          updateTask(taskId, { owner_term_id: null, status: "pending" });
+        }
+        setDropOver(false);
+      }}
       style={{
         position: "absolute",
         left: board.position.x,
@@ -232,7 +353,9 @@ function TaskBoardNodeImpl({ board }: Props) {
         flexDirection: "column",
         borderRadius: 10,
         background: "var(--color-bg-alt)",
-        border: "1px solid color-mix(in srgb, var(--color-accent) 27%, transparent)",
+        border: dropOver
+          ? "1px dashed var(--color-warning)"
+          : "1px solid color-mix(in srgb, var(--color-accent) 27%, transparent)",
         boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
         pointerEvents: "auto",
         overflow: "hidden",
@@ -378,7 +501,7 @@ function TaskBoardNodeImpl({ board }: Props) {
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "4px 4px",
+          padding: "6px 8px",
         }}
         onWheel={(e) => e.stopPropagation()}
       >
@@ -387,7 +510,7 @@ function TaskBoardNodeImpl({ board }: Props) {
             No tasks
           </div>
         ) : (
-          tasks.map((t) => <TaskRow key={t.id} task={t} />)
+          tasks.map((t) => <TaskRow key={t.id} task={t} sourceId={board.id} />)
         )}
       </div>
 
