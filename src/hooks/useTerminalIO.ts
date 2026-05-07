@@ -161,41 +161,36 @@ export function useTerminalIO(
 
     term.focus();
 
-    // CJK IME dedup. WKWebView (and Chromium on some IMEs) fires an extra
-    // keydown for the committed character right after compositionend, so
-    // a 全角 "？" / "！" / "”" lands twice in xterm.onData. We watch the
-    // helper textarea's composition events and drop any keydown that
-    // arrives within a 30ms window of compositionend with the same char.
-    // This is purely a safeguard — if a future xterm.js release fixes the
-    // root cause this just becomes a no-op.
+    // CJK IME path on macOS WKWebView. xterm's built-in handling drops or
+    // duplicates committed CJK characters because the order of events is
+    // (input → keydown) instead of (keydown → input), and xterm's
+    // `_inputEvent` filter `(!ev.composed || !_keyDownSeen)` plus
+    // `_keyPressHandled` end up gating the wrong half of consecutive
+    // commits. Symptoms: typing 全角 ？ once produces no output; user
+    // presses again and one ？ finally appears.
+    //
+    // We sidestep xterm entirely for IME commits: a document-level capture
+    // listener on `input` runs BEFORE xterm's textarea-level capture
+    // listener (DOM capture phase walks parent → child), writes the
+    // committed text straight to the PTY, clears the helper textarea, and
+    // calls stopImmediatePropagation so xterm's `_inputEvent` never runs.
+    // ASCII keys never generate an `input` event (xterm's `_keyDown`
+    // cancels them with preventDefault), so this only sees IME commits,
+    // emoji-picker insertions, and mobile predictive text — all of which
+    // we want to forward verbatim.
     const helperTextarea = term.element?.querySelector<HTMLTextAreaElement>(
       "textarea.xterm-helper-textarea",
     );
-    let imeJustEndedAt = 0;
-    let lastComposed = "";
-    if (helperTextarea) {
-      helperTextarea.addEventListener("compositionend", (ev) => {
-        imeJustEndedAt = performance.now();
-        lastComposed = (ev as CompositionEvent).data ?? "";
-      });
-    }
-    term.attachCustomKeyEventHandler((ev) => {
-      if (ev.type !== "keydown") return true;
-      // Browsers report 229 while composition is in progress; xterm
-      // already ignores those, but the duplicate that arrives AFTER
-      // compositionend has a real keyCode and ev.isComposing === false,
-      // which is exactly what slips through. Match it by timing + char.
-      if (
-        ev.key &&
-        ev.key === lastComposed &&
-        performance.now() - imeJustEndedAt < 30
-      ) {
-        // Consume it: don't pass to xterm's default handler.
-        lastComposed = "";
-        return false;
-      }
-      return true;
-    });
+    const handleIMEInput = (ev: Event) => {
+      if (ev.target !== helperTextarea) return;
+      const ie = ev as InputEvent;
+      if (ie.inputType !== "insertText" || !ie.data) return;
+      const bytes = Array.from(new TextEncoder().encode(ie.data));
+      writeTerminal(terminalId, bytes).catch(console.error);
+      if (helperTextarea) helperTextarea.value = "";
+      ev.stopImmediatePropagation();
+    };
+    document.addEventListener("input", handleIMEInput, true);
 
     // Defer fit() so xterm.js has time to measure cell dimensions
     requestAnimationFrame(() => {
@@ -254,6 +249,7 @@ export function useTerminalIO(
 
     // Cleanup — runs on unmount (and between StrictMode re-mounts)
     return () => {
+      document.removeEventListener("input", handleIMEInput, true);
       readyCleanup?.();
       unlistenFns.forEach((fn) => fn());
       unregisterXterm(terminalId);
