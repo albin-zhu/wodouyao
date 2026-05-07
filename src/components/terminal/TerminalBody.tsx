@@ -27,7 +27,7 @@ interface BlockOverlayProps {
   termRef: React.RefObject<Terminal | null>;
   blocksRef: React.MutableRefObject<TerminalBlock[]>;
   blockVersion: number;
-  bg: string;
+  solidBg: string;
   onToggleCollapse: (id: string) => void;
 }
 
@@ -36,7 +36,7 @@ function BlockOverlay({
   termRef,
   blocksRef,
   blockVersion: _blockVersion,
-  bg,
+  solidBg,
   onToggleCollapse,
 }: BlockOverlayProps) {
   const container = containerRef.current;
@@ -112,7 +112,8 @@ function BlockOverlay({
             >
               {block.collapsed ? "▶" : "▼"}
             </div>
-            {/* Collapse overlay — covers output rows */}
+            {/* Collapse overlay — covers output rows with a fully opaque bg so
+                xterm canvas doesn't bleed through when terminal_opacity < 1 */}
             {block.collapsed && outputHeight > 0 && (
               <div
                 style={{
@@ -121,7 +122,7 @@ function BlockOverlay({
                   left: 0,
                   right: 0,
                   height: outputHeight,
-                  background: bg,
+                  background: solidBg,
                   pointerEvents: "auto",
                   zIndex: 10,
                   display: "flex",
@@ -178,6 +179,9 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
   const opacity = useSettingsStore((s) => s.settings?.terminal_opacity ?? 1);
   const rawBg = getXtermThemeMap()[themeName]?.background ?? "var(--color-bg-alt)";
   const bg = opacity < 1 ? hexToRgba(rawBg, opacity) : rawBg;
+  // Collapse overlay must always be fully opaque so the xterm canvas doesn't
+  // bleed through when terminal_opacity < 1.
+  const solidBg = rawBg;
   const [pendingPaste, setPendingPaste] = useState<string | null>(null);
 
   interface ImageTooltip { x: number; y: number; src: string; filename: string }
@@ -445,7 +449,7 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
         termRef={termRef}
         blocksRef={blocksRef}
         blockVersion={blockVersion}
-        bg={bg}
+        solidBg={solidBg}
         onToggleCollapse={(id) =>
           toggleCollapse(id, () => setBlockVersion((v) => v + 1))
         }

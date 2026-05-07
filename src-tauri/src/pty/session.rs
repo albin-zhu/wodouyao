@@ -253,10 +253,38 @@ printf '\033]133;A\007'
         // Drop the slave side - we only need the master
         drop(pair.slave);
 
-        let writer = pair
+        let mut writer = pair
             .master
             .take_writer()
             .map_err(|e| format!("Failed to get PTY writer: {}", e))?;
+
+        // Pre-inject a DA1 (Primary Device Attributes) response into the PTY
+        // *before* the reader thread starts forwarding shell output. Fish shell
+        // sends \033[c immediately on startup and waits up to 10 s for the
+        // terminal to reply with \033[?…c. In our architecture the reply has to
+        // travel: fish → PTY master → Tauri event → JS → xterm.js → onData →
+        // writeTerminal → PTY → fish — but the JS listener is registered
+        // asynchronously, so it often isn't ready in time and fish stalls.
+        //
+        // Writing the response directly into the PTY master here means fish
+        // reads it from the slave side the moment it queries, eliminating the
+        // 10-second startup penalty.
+        //
+        // We only do this for fish — other shells don't issue DA1 at startup so
+        // preloading an unsolicited response could confuse their parsers.
+        //
+        // \033[?62;22c = VT220 with ANSI color — a safe, widely-accepted
+        // response that satisfies fish without enabling any obscure features.
+        {
+            let basename = std::path::Path::new(shell_path)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("");
+            if basename == "fish" {
+                let _ = writer.write_all(b"\x1b[?62;22c");
+                let _ = writer.flush();
+            }
+        }
 
         let mut reader = pair
             .master
