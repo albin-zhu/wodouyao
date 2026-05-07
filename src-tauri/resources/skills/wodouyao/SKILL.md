@@ -36,7 +36,7 @@ Print the caller's current identity as JSON. Use to confirm registration stuck, 
 
 List wired peer ids, one per line. Empty output = no wires. Order reflects topology insertion, not alphabetical.
 
-### `wodouyao spawn [--name N] [--kind K] [--command C] [--cwd P] [--no-wire]`
+### `wodouyao spawn [--name N] [--kind K] [--command C] [--cwd P] [--role R] [--no-wire]`
 
 Create a new terminal on the canvas and print its id to stdout. Default behaviour auto-creates a wire from the caller to the new terminal so the caller can immediately `send`/`read` it.
 
@@ -44,6 +44,7 @@ Create a new terminal on the canvas and print its id to stdout. Default behaviou
 - `--kind` — agent family; purely metadata, does not affect the shell
 - `--command` — initial command to run in the new terminal (e.g. `codex`, `claude`, `npm test`)
 - `--cwd` — working directory; falls back to the current workspace default
+- `--role` — tag the terminal with a role (e.g. `pm`, `architect`, `backend`, `frontend`, `qa`, `devops`, `designer`, `planner`, `generator`, `evaluator`, `researcher`, `shell`). The role is plumbed through to the canvas so `wodouyao task next --role X` matches it, and for `--kind claude` the hub bakes a role-specific system prompt into the default startup `.md` (e.g. `--role qa` gets the QA validator prompt). Custom roles work too — they fall back to the generic "## Your Role" hint without an extra prompt block.
 - `--no-wire` — skip the auto-wire (terminal appears isolated; caller has to wire manually via UI)
 
 Common pattern for "open a new codex":
@@ -51,6 +52,13 @@ Common pattern for "open a new codex":
 ```sh
 new_id=$(wodouyao spawn --name "Codex" --kind codex --command codex)
 # new_id is now wired to the caller; ready for send/read
+```
+
+Role-tagged claude worker:
+
+```sh
+new_id=$(wodouyao spawn --name "QA bot" --kind claude --role qa)
+# Inside the new terminal, `wodouyao task next --role qa` will pick its work.
 ```
 
 Failure: exit 1 with "frontend not ready yet" if the app just booted and the renderer hasn't attached — retry after a moment.
