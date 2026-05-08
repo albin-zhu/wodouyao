@@ -38,6 +38,9 @@ export interface TerminalNode {
   lastExitCode?: number;
   /** Saved position/size to restore from a maximize. Present = currently maximized. */
   prevBounds?: { position: { x: number; y: number }; size: { width: number; height: number } };
+  /** Height the terminal had when unfolded. Stored so folding (which sets
+   *  height to TITLE_BAR_HEIGHT) doesn't lose the user's custom height. */
+  unfoldedHeight?: number;
   /** Workspace this terminal belongs to. null = legacy / not yet stamped. */
   workspaceId?: string | null;
 }

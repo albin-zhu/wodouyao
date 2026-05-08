@@ -28,6 +28,7 @@ export function useForkWorkspace() {
         position: t.position,
         size: t.size,
         is_folded: t.isFolded,
+        unfolded_height: t.unfoldedHeight,
         color: t.color,
         theme: t.theme,
         cwd: t.cwd,

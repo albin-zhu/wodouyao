@@ -115,6 +115,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       newMap.set(id, {
         ...term,
         isFolded: true,
+        unfoldedHeight: term.unfoldedHeight ?? term.size.height,
         size: { ...term.size, height: TITLE_BAR_HEIGHT },
       });
       return { terminals: newMap };
@@ -128,7 +129,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       newMap.set(id, {
         ...term,
         isFolded: false,
-        size: { ...term.size, height: DEFAULT_TERMINAL_HEIGHT },
+        size: { ...term.size, height: term.unfoldedHeight ?? DEFAULT_TERMINAL_HEIGHT },
       });
       return { terminals: newMap };
     }),
@@ -137,7 +138,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set((state) => {
       const newMap = new Map<string, TerminalNode>();
       state.terminals.forEach((term, id) => {
-        newMap.set(id, { ...term, isFolded: true, size: { ...term.size, height: TITLE_BAR_HEIGHT } });
+        newMap.set(id, {
+          ...term,
+          isFolded: true,
+          unfoldedHeight: term.unfoldedHeight ?? term.size.height,
+          size: { ...term.size, height: TITLE_BAR_HEIGHT },
+        });
       });
       return { terminals: newMap };
     }),
@@ -146,7 +152,11 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set((state) => {
       const newMap = new Map<string, TerminalNode>();
       state.terminals.forEach((term, id) => {
-        newMap.set(id, { ...term, isFolded: false, size: { ...term.size, height: DEFAULT_TERMINAL_HEIGHT } });
+        newMap.set(id, {
+          ...term,
+          isFolded: false,
+          size: { ...term.size, height: term.unfoldedHeight ?? DEFAULT_TERMINAL_HEIGHT },
+        });
       });
       return { terminals: newMap };
     }),

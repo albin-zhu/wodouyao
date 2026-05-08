@@ -221,8 +221,11 @@ export function useTerminalIO(
       helperTextarea.addEventListener("compositionend", handleCompositionEnd, true);
     }
 
-    // Defer fit() so xterm.js has time to measure cell dimensions
+    // Defer fit() so xterm.js has time to measure cell dimensions.
+    // Skip if the container is hidden (display:none) — fit() would measure
+    // 0 cols/rows and send a damaging resize to the backend PTY.
     requestAnimationFrame(() => {
+      if (container.offsetParent === null) return;
       try {
         fitAddon.fit();
         updateTerminal(terminalId, { cols: term.cols, rows: term.rows });

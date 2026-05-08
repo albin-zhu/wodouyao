@@ -284,7 +284,16 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
           </span>
         </div>
       )}
-      {!terminal.isFolded && <TerminalBody terminalId={terminal.id} />}
+      {/* TerminalBody stays mounted when folded so xterm survives — just
+          hide it with visibility:collapse (zero-height) so it doesn't render. */}
+      <div style={{
+        flex: 1,
+        overflow: "hidden",
+        visibility: terminal.isFolded ? "collapse" : "visible",
+        display: terminal.isFolded ? "none" : "flex",
+      }}>
+        <TerminalBody terminalId={terminal.id} />
+      </div>
       {!terminal.isFolded && mode !== "wire" && (
         <>
           {/* Bottom-right corner is the only resize handle — edges/other

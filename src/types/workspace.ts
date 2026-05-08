@@ -58,6 +58,8 @@ export interface WorkspaceTerminalLayout {
   /** Stack order against every other node on the canvas. Shared monotonic
    *  counter across terminals/notes/files/boards — see utils/zIndex. */
   z_index?: number;
+  /** Height when unfolded. Stored so folding/unfolding doesn't lose user's custom size. */
+  unfolded_height?: number;
 }
 
 export interface WorkspaceWireLayout {
