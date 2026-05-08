@@ -1,6 +1,6 @@
 ---
 name: wodouyao
-description: "Collaborate with peer terminals inside a Wodouyao canvas via the `wodouyao` CLI. Use when the user wants to discover connected peers, spawn a new terminal on the canvas (e.g. 'open a new codex'), send commands to a peer, read a peer's output, register identity, fork the current agent session, change the canvas background, work with the shared task board (list/claim/complete tasks, find next task to do, work the backlog), or bootstrap a multi-agent workflow (PM + backend + frontend in one shot). Trigger phrases: connected peers, the other terminal, send to X, tell terminal Y to run, read what X is doing, delegate to a terminal, who am I on this canvas, open a new terminal, spawn a codex, create a worker terminal, fork this session, change background, task list, next task, claim task, mark task done, what should I work on, set up the workflow, bootstrap workflow, open a team, spin up a team, 开一个新的, 建一个新的, 换背景, 任务列表, 下一个任务, 认领任务, 完成任务, 我该干什么, 建一个团队, 起一套工作流, 一键搭团队."
+description: "Collaborate with peer terminals inside a Wodouyao canvas via the `wodouyao` CLI. Use when the user wants to discover connected peers, spawn a new terminal on the canvas (e.g. 'open a new codex'), send commands to a peer, read a peer's output, register identity, fork the current agent session, change the canvas background, work with the shared task board (list/claim/complete tasks, find next task to do, work the backlog), manage canvas wires and sticky notes, list or close terminals, or bootstrap a multi-agent workflow (PM + backend + frontend in one shot). Trigger phrases: connected peers, the other terminal, send to X, tell terminal Y to run, read what X is doing, delegate to a terminal, who am I on this canvas, open a new terminal, spawn a codex, create a worker terminal, fork this session, change background, task list, next task, claim task, mark task done, what should I work on, set up the workflow, bootstrap workflow, open a team, spin up a team, wires, connections, sticky notes, list terminals, close terminal, wire list, wire add, note add, 开一个新的, 建一个新的, 换背景, 任务列表, 下一个任务, 认领任务, 完成任务, 我该干什么, 建一个团队, 起一套工作流, 一键搭团队, 连线, 便签, 终端列表."
 ---
 
 # Wodouyao peer communication
@@ -36,7 +36,7 @@ Print the caller's current identity as JSON. Use to confirm registration stuck, 
 
 List wired peer ids, one per line. Empty output = no wires. Order reflects topology insertion, not alphabetical.
 
-### `wodouyao spawn [--name N] [--kind K] [--command C] [--cwd P] [--role R] [--no-wire]`
+### `wodouyao spawn [--name N] [--kind K] [--command C] [--cwd P] [--role R] [--no-wire] [--team T] [--team-role R]`
 
 Create a new terminal on the canvas and print its id to stdout. Default behaviour auto-creates a wire from the caller to the new terminal so the caller can immediately `send`/`read` it.
 
@@ -46,6 +46,8 @@ Create a new terminal on the canvas and print its id to stdout. Default behaviou
 - `--cwd` — working directory; falls back to the current workspace default
 - `--role` — tag the terminal with a role (e.g. `pm`, `architect`, `backend`, `frontend`, `qa`, `devops`, `designer`, `planner`, `generator`, `evaluator`, `researcher`, `shell`). The role is plumbed through to the canvas so `wodouyao task next --role X` matches it, and for `--kind claude` the hub bakes a role-specific system prompt into the default startup `.md` (e.g. `--role qa` gets the QA validator prompt). Custom roles work too — they fall back to the generic "## Your Role" hint without an extra prompt block.
 - `--no-wire` — skip the auto-wire (terminal appears isolated; caller has to wire manually via UI)
+- `--team` — add the new terminal to a team (name or id). See "Team mode" below.
+- `--team-role` — role within the team (`worker`, `lead`, `observer`). Must be used with `--team`.
 
 Common pattern for "open a new codex":
 
@@ -278,7 +280,7 @@ Exit codes:
 - `5` — already claimed by someone else (the current task is printed to stderr)
 - `404` — id not found
 
-If `claim` returns 5, the task is gone — call `task next` again for the next candidate.
+If `claim` returns 5, someone else grabbed it — call `task next` again for the next candidate.
 
 ### `wodouyao task take <task-id>`
 
@@ -315,6 +317,30 @@ for d in $(wodouyao task doc list t_abc123); do
   wodouyao task doc cat t_abc123 "$d"
 done
 ```
+
+## Wires (canvas connections)
+
+Wires define which terminals can talk to each other. The wire graph acts as an ACL — `send`, `read`, and `watch` only work between wired peers.
+
+- `wodouyao wire list` — one line per wire: `<wire-id>  <source> -> <target>`. Empty output = no wires.
+- `wodouyao wire add <source-id> <target-id> [--kind K]` — create a wire from source to target. `--kind` defaults to `io`; other values are for visual grouping.
+- `wodouyao wire remove <wire-id>` — delete a wire.
+
+> The UI also supports drawing/removing wires by dragging. CLI `wire` commands are useful for scripts and automation.
+
+## Notes (sticky notes on canvas)
+
+Sticky notes render on the canvas alongside terminal nodes — useful for leaving context, TODOs, or session markers.
+
+- `wodouyao note list` — one line per note: `<id>  <color>  <text-preview>`.
+- `wodouyao note add "<text>" [--color C]` — create a note. Supported colors: `yellow`, `blue`, `green`, `pink`, `purple` (default `yellow`).
+- `wodouyao note update <note-id> "<text>"` — replace note text.
+- `wodouyao note remove <note-id>` — delete a note.
+
+## Terminal management
+
+- `wodouyao terminal list` — list all live terminals on the canvas: `<id>  [name]  [kind]`.
+- `wodouyao terminal close <terminal-id>` — destroy a terminal and its PTY session.
 
 ## Session recovery (advanced)
 
