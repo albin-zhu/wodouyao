@@ -1,319 +1,190 @@
 # Wodouyao
 
-[English](./README.md) · [中文](./README_zh.md)
+> A cross-platform **infinite canvas terminal multiplexer** built with Tauri 2 + React 19 + TypeScript. Place PTY-backed terminals on a zoomable canvas, connect them with wires, and observe — or orchestrate — multi-agent workflows.
 
-> An infinite-canvas terminal orchestrator where **carbon** (you) and **silicon** (agents) stare at the same world.
+Wodouyao (我都要) is **not a harness** — it is an observation and orchestration panel for existing agent harnesses (Claude Code, Codex, etc.).
 
-Built on **Tauri 2** (Rust) + **React 19** + **TypeScript**.
-
-![Wodouyao canvas screenshot](assets/screen-snapshot.png)
-
----
-
-## 🧬 Two Lenses
-
-Wodouyao is not a harness — it is a **stage shared between two species**:
-
-- 🧍 **Carbon-side** — you lean against the glass: activity dots, colored wires, drag tasks onto terminals, `Ctrl+K` summons the palette.
-- 🤖 **Silicon-side** — agents reach through the hub HTTP API: discover peers, inject keystrokes, read output, join teams.
-
-Same terminal node, two ways to open it:
-
-| Scene | 🧍 Carbon sees | 🤖 Silicon sees |
-|---|---|---|
-| A new terminal appears on the canvas | A window with a status dot and drag handles | A new entry in `/v1/peers` JSON |
-| You draw a wire | A bezier curve with a tooltip | An ACL peer was granted |
-| You press Enter | Your local PTY runs the line | Every `io` peer receives `\r` |
-
----
-
-## ✨ Features
-
-### 🖼 Canvas & Terminals
-
-- Infinite zoomable canvas. Real PTY terminals, resizable from any edge or corner, rAF-throttled for smoothness.
-- WebGL renderer (Canvas fallback) + JetBrainsMono → SF Mono → Menlo font stack.
-- 5 xterm themes (Tokyo Night, Dracula, Nord, Monokai, Solarized) + 8 accent colors.
-
-### 🪢 Wires & IO
-
-- Typed wires: `io` (terminal↔terminal), `note`, `file`, `board` (task boards), `team`.
-- `io` wires mirror every keystroke (Enter, Ctrl-*, arrows) to the peer PTY — true input fan-out.
-- Drop a wire on empty canvas to auto-spawn an agent terminal (configurable command).
-
-### 🛰 Silicon Protocol (Hub)
-
-- Embedded `tiny_http` hub on an ephemeral loopback port, Bearer-authenticated.
-- Endpoints: `/v1/peers`, `/v1/whoami`, `/v1/send`, `/v1/read`, `/v1/watch`, `/v1/spawn`, `/v1/teams/*`, `/v1/tasks/*`.
-- Ships a POSIX `wodouyao` CLI and Claude Code / Codex skills that auto-install.
-- tmux-style key-literal parser (`Enter`, `C-c`, `C-Left`, `Escape`, …).
-
-### 🎭 Orchestration Panel
-
-- Role tags (planner / generator / evaluator / researcher / shell) with color glyphs.
-- Activity dots (working / idle / starting / exited / error) with pulse animation.
-- Task panel with drag-to-assign; task boards themselves can be wired.
-- Teams with star topology (lead = wire source) and palette-based auras.
-
-### 💾 Workspaces & Settings
-
-- Save / load / switch full canvas layouts (terminals + wires + tasks + notes + teams).
-- Fork a workspace as a parallel experiment branch.
-- Backgrounds: image / video / URL / particle preset (matrix / starfield / wave / dust).
-- Language switch (zh / en), shell picker, font size, default create behavior, wire-to-empty config.
-
----
-
-## 🚧 Optimization Backlog
-
-### 🧍 What carbon wants
-
-1. **Onboarding tour** — an interactive first-run tour demonstrating spawn → wire → team.
-2. **Undo stack** — `⌘Z` to restore an accidentally deleted terminal or wire.
-3. **Keyboard-first** — arrow-navigate between terminals, `⌘/` toggle palette, Tab cycle focus.
-4. **Toast feedback** — visible confirmations for auto-save, workspace switch, hub install outcomes.
-5. **A11y** — aria-labels, high-contrast theme, screen-reader-friendly wire summaries.
-6. **Light theme** — a light theme for daylight users (dark is hardcoded today).
-7. **Custom themes & fonts** — let users import their own xterm themes and font families.
-8. **Trackpad polish** — pinch-zoom and two-finger pan refinement.
-9. **User handbook** — a handbook aimed at non-developers using it as a tool.
-10. **Surface errors** — surface Rust-side errors outside of the DevTools console.
-
-### 🤖 What silicon wants
-
-1. **Per-terminal scope token** — replace the single global bearer with per-terminal scoped tokens honoring the peer ACL.
-2. **Heartbeat** — a `POST /v1/heartbeat` so disconnected agents are flagged stale.
-3. **Idempotency** — accept `Idempotency-Key` on `/v1/send` to survive retries.
-4. **Atomic batch** — a batch endpoint for spawn + wire + send to avoid intermediate states.
-5. **Rate limit** — 429 + `Retry-After` to prevent a burst from blowing up the PTY.
-6. **Richer peer metadata** — include role / shell / cwd / status / cols×rows in `/v1/peers`.
-7. **Resumable watch** — `since=<offset>` so disconnects don't drop output.
-8. **OpenAPI schema** — publish OpenAPI so clients can be generated.
-9. **Identity persistence** — persist agent identities across restarts.
-10. **Structured errors** — normalize error bodies to `{code, message, hint}`.
-11. **Metrics endpoint** — `/v1/metrics` for self and peer observability.
-12. **Media-type versioning** — `Accept: application/vnd.wodouyao.v1+json` for breaking changes.
-13. **Frontend tests + CI** — add Vitest and GitHub Actions; only Rust integration tests exist today.
-14. **Structured logs** — replace `println!`/`eprintln!` with structured `tracing` JSON.
-15. **Causality tracing** — propagate span IDs across mirrored input so cross-terminal causality is traceable.
-
----
-
-## 🏛 Architecture
-
-```mermaid
-graph TB
-    subgraph Frontend["Frontend (React 19 + TypeScript)"]
-        App[App.tsx]
-        Canvas[InfiniteCanvas]
-        TL[TerminalLayer]
-        WL[WireLayer]
-        RL[ResourceLayer]
-        BG[BackgroundLayer]
-        Toolbar[Toolbar]
-        CP[CommandPalette]
-        TD[TasksDrawer]
-        SD[SettingsDrawer]
-
-        App --> Canvas
-        App --> Toolbar
-        App --> CP
-        App --> TD
-        App --> SD
-        Canvas --> BG
-        Canvas --> WL
-        Canvas --> RL
-        Canvas --> TL
-    end
-
-    subgraph Stores["State (Zustand)"]
-        TS[terminalStore]
-        CS[canvasStore]
-        WS[wireStore]
-        WKS[workspaceStore]
-        TKS[taskStore]
-        NS[noteStore]
-        FNS[fileNodeStore]
-        SS[settingsStore]
-    end
-
-    subgraph Backend["Backend (Rust / Tauri 2)"]
-        PTY[PTY Manager<br/>portable-pty]
-        Hub[Hub Server<br/>tiny_http]
-        WkStore[Workspace Storage<br/>JSON files]
-        TaskStore[Task Store]
-        Settings[Settings Store]
-    end
-
-    TL -->|IPC| PTY
-    Hub -->|HTTP| TL
-    WKS -->|IPC| WkStore
-    TKS -->|IPC| TaskStore
-    SS -->|IPC| Settings
-```
-
-### Rendering Layers (bottom → top)
-
-```mermaid
-graph LR
-    L1["1. BackgroundLayer<br/>(image / video / particles)"] --> L2["2. WireLayer<br/>(SVG bezier)"]
-    L2 --> L3["3. ResourceLayer<br/>(notes + files + boards)"]
-    L3 --> L4["4. TerminalLayer<br/>(PTY nodes)"]
-    L4 --> L5["5. CanvasControls"]
-
-    style L1 fill:#1a1b26,color:#565f89
-    style L2 fill:#1a1b26,color:#7aa2f7
-    style L3 fill:#1a1b26,color:#e0af68
-    style L4 fill:#1a1b26,color:#c0caf5
-    style L5 fill:#1a1b26,color:#9ece6a
-```
-
-### Data Flow
-
-```mermaid
-flowchart LR
-    User -->|keyboard/mouse| Canvas
-    Canvas -->|pan/zoom| canvasStore
-    Canvas -->|spawn| terminalStore
-    Canvas -->|connect| wireStore
-    Canvas -->|drop files| fileNodeStore
-
-    terminalStore -->|IPC spawn| PTY["Rust PTY"]
-    PTY -->|terminal-output-id| terminalIO["useTerminalIO"]
-    terminalIO -->|xterm.write| TerminalBody
-
-    Hub["Hub Server :ephemeral"] -->|HTTP| AgentCLI["Agent CLI<br/>(claude / codex)"]
-    AgentCLI -->|peers/send/read| Hub
-```
-
-### Terminal Activity State Machine
-
-```mermaid
-stateDiagram-v2
-    [*] --> starting : spawn()
-    starting --> working : first output
-    working --> working : output within 1.2s
-    working --> idle : no output ≥1.2s
-    idle --> working : new output
-    working --> exited : exit code 0
-    working --> error : exit code ≠ 0
-    idle --> exited : exit code 0
-    idle --> error : exit code ≠ 0
-```
-
----
-
-## 🧰 Getting Started
+## Quick Start
 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) >= 18
 - [Rust](https://rustup.rs/) (stable)
 - [Tauri CLI](https://v2.tauri.app/start/prerequisites/) v2
-- Platform toolchain: Visual Studio Build Tools (Windows), Xcode (macOS).
+- Platform toolchain: Visual Studio Build Tools (Windows), Xcode (macOS)
 
-### Commands
+### Development
 
 ```bash
-# Install JS deps
 npm install
+npm run tauri dev          # hot-reload frontend + Rust backend
+```
 
-# Dev mode (hot-reload frontend + Rust backend)
-npm run tauri dev
+### Production build
 
-# Production build
+```bash
 npm run tauri build
-
-# TypeScript check only
-npx tsc --noEmit
 ```
 
----
+### Other commands
 
-## 📁 Project Structure
-
-```
-src/                              # React frontend
-  components/
-    canvas/                       # InfiniteCanvas, WireLayer, BackgroundLayer, ResourceLayer
-                                  # NoteNode, FileNode, TaskBoardNode, CanvasControls
-    terminal/                     # TerminalNode, TerminalBody, TerminalTitleBar
-                                  # TerminalStatusBadge, TerminalContextMenu
-    ui/                           # Toolbar, SettingsDrawer, TasksDrawer, TeamsDrawer
-                                  # WorkspaceSwitcher, TerminalCreateDialog, RolePicker
-    command-palette/              # CommandPalette (Ctrl+K)
-  hooks/                          # useCanvas, useTerminal, useTerminalIO, useKeyboard
-                                  # useWorkspace, useForkWorkspace, useNewTerminal
-                                  # useNodeDrag, useTasksSync, useTeamsSync
-                                  # useTerminalActivity, useHubSpawn
-  store/                          # Zustand stores (terminal, canvas, wire, workspace,
-                                  # settings, task, team, note, fileNode, taskBoard, ...)
-  services/                       # Tauri IPC wrappers, terminal registry
-  types/                          # TypeScript types
-  utils/                          # Themes, roles, constants, geometry, ID gen
-  i18n/                           # en.json / zh.json + index.ts
-
-src-tauri/                        # Rust backend
-  src/
-    pty/                          # PTY session management (portable-pty)
-    commands/                     # Tauri IPC commands (terminal, workspace, settings,
-                                  # agents, wire, team, tasks, file_preview)
-    hub/                          # Hub HTTP server, topology, identity, teams, keys
-    workspace/                    # Workspace JSON persistence
-    settings/                     # App settings persistence
-    tasks/, notes/                # Resource stores
-    integrations/                 # Agent CLI detection + skill installer
-  resources/bin/wodouyao          # Shipped POSIX CLI
-  resources/skills/wodouyao/      # Shipped Claude Code / Codex skill
-  tests/hub_integration.rs        # Rust integration tests
-```
-
----
-
-## ⌨️ Shortcuts
-
-| Key | Action |
+| Command | Description |
 |---|---|
-| `Ctrl+K` | Command palette |
-| `F11` | Toggle fullscreen |
-| `Ctrl+scroll` | Zoom canvas |
-| Middle-click drag | Pan canvas |
-| `Shift+click` "+ Terminal" | Skip the create dialog |
+| `npm run dev` | Frontend only (no Tauri shell) |
+| `npm run build` | Frontend build only |
+| `npm run preview` | Preview production build |
+| `npx tsc --noEmit` | TypeScript check (no emit) |
 
-## 🧭 Canvas Modes
+## Features
 
-| Mode | Behavior |
-|---|---|
-| **Select** | Drag canvas to pan; drag terminal title to move it. |
-| **Draw** | Drag a rectangle to spawn a terminal. |
-| **Wire** | Click the source anchor, drag to a target node. |
+### Canvas & Terminals
 
-## 🎨 Role Tags
+- Infinite zoomable canvas with real PTY terminals
+- Resizable from any edge or corner, rAF-throttled for smoothness
+- WebGL renderer (Canvas fallback) + JetBrainsMono → SF Mono → Menlo font stack
+- 5 xterm themes (Tokyo Night, Dracula, Nord, Monokai, Solarized) + 8 accent colors
 
-| Role | Color | Glyph | Purpose |
-|---|---|---|---|
-| planner | `#bb9af7` | ◆ | Designs plans |
-| generator | `#9ece6a` | ▲ | Writes code |
-| evaluator | `#f7768e` | ◐ | Runs tests, reviews |
-| researcher | `#7dcfff` | ? | Explores, asks questions |
-| shell | `#565f89` | > | Plain shell (default) |
+### Wires & IO
 
-## 🧱 Tech Stack
+- Typed wires: `io` (terminal↔terminal), `note`, `file`, `board` (task boards), `team`
+- `io` wires mirror every keystroke (Enter, Ctrl-*, arrows) to the peer PTY
+- Drop a wire on empty canvas to auto-spawn an agent terminal (configurable)
 
-| Layer | Tech |
+### Hub (Silicon Protocol)
+
+- Embedded HTTP server on loopback port 19790, Bearer-authenticated
+- Endpoints: `/v1/peers`, `/v1/whoami`, `/v1/send`, `/v1/read`, `/v1/watch`, `/v1/spawn`, `/v1/teams/*`, `/v1/tasks/*`
+- Ships a POSIX `wodouyao` CLI and Claude Code / Codex skills
+
+### Orchestration
+
+- 12 role tags (pm, architect, backend, frontend, qa, devops, designer, planner, generator, evaluator, researcher, shell) with color glyphs
+- Activity dots (working / idle / starting / exited / error) with pulse animation
+- Task panel with drag-to-assign; task boards can be wired
+- Teams with star topology (lead = wire source)
+
+### Workspaces & Settings
+
+- Save / load / switch full canvas layouts
+- Fork a workspace as a parallel experiment branch
+- Backgrounds: image / video / URL / particle presets
+- Language switch (zh / en), shell picker, font size, custom roles
+
+## Architecture
+
+### Tech Stack
+
+| Layer | Technology |
 |---|---|
 | Desktop runtime | Tauri 2 |
 | Backend | Rust, portable-pty, tiny_http, tokio |
-| Frontend | React 19, TypeScript, Vite |
+| Frontend | React 19, TypeScript, Vite 6 |
 | Terminal emulator | xterm.js 5.5 + WebGL renderer (Canvas fallback) |
+| Canvas rendering | Konva (background), SVG (wires), DOM (nodes) |
 | State management | Zustand 5 |
 | i18n | react-i18next (en / zh) |
 
----
+### Rendering Layers
 
-## 🙏 Acknowledgments
+```
+5. CanvasControls          (zoom buttons, top-right overlay)
+4. TerminalLayer           (DOM — PTY terminal nodes, CSS transform pan/zoom)
+3. ResourceLayer           (DOM — sticky notes, file nodes, task boards)
+2. WireLayer               (SVG — bezier curves between nodes)
+1. BackgroundLayer         (Konva — grid dots, images, particles)
+```
 
-Wodouyao (我都要) is inspired by [TheMaestri.app](https://www.themaestri.app) — a polished, production-grade macOS terminal orchestrator. If you're on a Mac, do check it out. This project is an independent, open-source, cross-platform exploration of related ideas. Respect and gratitude to the original team.
+### State Management (Zustand)
+
+| Store | Purpose |
+|---|---|
+| `terminalStore` | Terminal nodes Map, CRUD, z-index, status, role, activity |
+| `canvasStore` | panX, panY, zoom, grid settings |
+| `canvasInteractionStore` | Mode (select/draw/wire), draw rect, wire drag |
+| `wireStore` | Wire connections Map (typed: io/note/file/team) |
+| `workspaceStore` | Workspace CRUD, current workspace, CWD |
+| `settingsStore` | App settings, quick commands, wire-to-empty spawn |
+| `taskStore` | Task CRUD, drawer state, workspace-scoped |
+| `teamStore` | Team management, drawer state |
+| `noteStore` | Sticky notes on canvas |
+| `fileNodeStore` | File/folder nodes on canvas |
+| `taskBoardStore` | Task board nodes |
+| `toastStore` | Toast notifications |
+| `dialogStore` | Modal dialog open/close |
+| `commandStore` | Command palette state |
+
+### Backend (Rust)
+
+```
+src-tauri/src/
+  pty/            # portable-pty sessions, shell detection, resize
+  commands/       # Tauri IPC commands (terminal, workspace, settings, wire, team, tasks, file_preview)
+  hub/            # HTTP server (topology, identity, teams, endpoints) on port 19790
+  workspace/      # JSON file persistence in app data dir
+  settings/       # App settings JSON persistence
+  tasks/          # Task store with CRUD
+  notes/          # Sticky note persistence
+  file_nodes/     # File node persistence
+  task_boards/    # Task board persistence
+  state/          # Application state management
+  integrations/   # Agent CLI detection (claude, codex) + skill installer
+```
+
+### Project Structure
+
+```
+src/
+  components/
+    canvas/            # InfiniteCanvas, WireLayer, BackgroundLayer, ResourceLayer
+    terminal/          # TerminalNode, TerminalBody, TerminalTitleBar, status badge, context menu
+    ui/                # Toolbar, Settings/Tasks/Teams drawers, workspace switcher, dialogs
+    command-palette/   # Ctrl+K command palette
+  hooks/               # useCanvas, useTerminal, useTerminalIO, useNodeDrag, useHubSpawn, ...
+  store/               # Zustand stores (one file per domain)
+  services/            # Tauri IPC wrappers, terminal registry
+  types/               # TypeScript types (one file per domain)
+  utils/               # Themes, roles, constants, geometry, ID generation
+  i18n/                # en.json / zh.json
+  styles/              # Global CSS
+
+src-tauri/
+  src/                 # Rust backend (see above)
+  resources/bin/       # Shipped POSIX CLI (wodouyao)
+  resources/skills/    # Claude Code / Codex skills
+```
+
+## Extending Wodouyao
+
+### Adding a new terminal role
+
+Edit `src/utils/terminalRoles.ts` — add an entry to `BUILTIN_ROLES` and a position in `ROLE_ORDER`:
+
+```ts
+// In BUILTIN_ROLES:
+myrole: { label: "myrole", color: "var(--color-accent)", glyph: "★", hint: "does something" },
+
+// In ROLE_ORDER (insert at desired position):
+"myrole",
+```
+
+Users can also add custom roles via `settings.custom_roles` without code changes — see `resolveRoles()` in the same file.
+
+### Adding a new skill
+
+Skills live in `src-tauri/resources/skills/`. Each skill is a directory with a `SKILL.md` (description and trigger phrases) and any supporting scripts or resources. The Tauri installer copies skills to `~/.claude/plugins/wodouyao/` on first run. See existing skills for the expected format.
+
+### Adding a background effect
+
+Background presets (matrix, starfield, wave, dust) are configured in `src/components/canvas/BackgroundLayer.tsx`. Add a preset function that draws to the Konva canvas, then register it in the preset selector in the settings drawer.
+
+## Contributing
+
+1. **Fork** the repository and create a feature branch
+2. **Make your changes**. Run `npx tsc --noEmit` to verify type correctness
+3. **Test locally** with `npm run tauri dev`
+4. **Open a pull request** with a clear title and description
+
+Please keep commits focused and write descriptive commit messages following [Conventional Commits](https://www.conventionalcommits.org/).
 
 ## License
 
