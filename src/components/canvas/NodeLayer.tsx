@@ -45,10 +45,16 @@ export default function NodeLayer() {
   const inWs = <T extends { workspaceId?: string | null }>(item: T) =>
     wsId === null || (item.workspaceId ?? wsId) === wsId;
 
+  // Always render all terminals in the NodeLayer so that React keeps the
+  // xterm instances mounted across workspace switches. Terminals that do not
+  // belong to the active workspace are hidden with display: none — this
+  // preserves the DOM node and xterm state while removing them from layout
+  // and hit-testing.
   const items: RenderItem[] = useMemo(() => {
     const out: RenderItem[] = [];
     for (const t of terminalsMap.values()) {
-      if (!inWs(t)) continue;
+      // Do NOT skip non-active-workspace terminals — they must stay mounted
+      // for xterm保活 (see workspace-switch fix).
       out.push({ kind: "terminal", id: t.id, zIndex: t.zIndex });
     }
     if (maximizedTerminalId === null) {
@@ -95,11 +101,23 @@ export default function NodeLayer() {
         if (it.kind === "terminal") {
           const t = terminalsMap.get(it.id);
           if (!t) return null;
-          const hide = maximizedTerminalId !== null && t.id !== maximizedTerminalId;
+          const hiddenByMaximize =
+            maximizedTerminalId !== null && t.id !== maximizedTerminalId;
+          const hiddenByWorkspace =
+            wsId !== null && (t.workspaceId ?? wsId) !== wsId;
+          const hidden = hiddenByMaximize || hiddenByWorkspace;
           return (
             <div
               key={`t:${t.id}`}
-              style={hide ? { visibility: "hidden", pointerEvents: "none" } : undefined}
+              style={
+                hidden
+                  ? {
+                      display: "none",
+                      visibility: "hidden",
+                      pointerEvents: "none",
+                    }
+                  : undefined
+              }
             >
               <TerminalNode terminal={t} />
             </div>
