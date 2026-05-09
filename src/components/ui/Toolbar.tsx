@@ -5,6 +5,7 @@ import { useCanvasStore } from "../../store/canvasStore";
 import { useTeamStore } from "../../store/teamStore";
 import { useNoteStore } from "../../store/noteStore";
 import { useTaskStore } from "../../store/taskStore";
+import { useSkillStore } from "../../store/skillStore";
 import { useTaskBoardStore } from "../../store/taskBoardStore";
 import { useDialogStore } from "../../store/dialogStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
@@ -119,6 +120,7 @@ export default function Toolbar() {
   const addNote = useNoteStore((s) => s.addNote);
   const addBoard = useTaskBoardStore((s) => s.addBoard);
   const openTasksDrawer = useTaskStore((s) => s.openDrawer);
+  const openSkillsDrawer = useSkillStore((s) => s.openDrawer);
   const openBootstrap = useDialogStore((s) => s.openBootstrapWorkflow);
   const tasksMap = useTaskStore((s) => s.tasks);
   const tasksActiveCount = Array.from(tasksMap.values()).filter((t) => t.status !== "completed").length;
@@ -375,6 +377,14 @@ export default function Toolbar() {
           onClick={openTasksDrawer}
           badge={tasksActiveCount > 0 ? tasksActiveCount : undefined}
         />
+
+        {/* Skills */}
+        <IconBtn
+          title="Skills"
+          onClick={openSkillsDrawer}
+        >
+          <span style={{ fontSize: 13, lineHeight: 1 }}>⚡</span>
+        </IconBtn>
 
         {/* Settings */}
         <IconBtn

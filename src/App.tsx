@@ -5,6 +5,7 @@ import CommandPalette from "./components/command-palette/CommandPalette";
 import SettingsDrawer from "./components/ui/SettingsDrawer";
 import TeamsDrawer from "./components/ui/TeamsDrawer";
 import TasksDrawer from "./components/ui/TasksDrawer";
+import SkillsDrawer from "./components/ui/SkillsDrawer";
 import TerminalPanel from "./components/ui/TerminalPanel";
 import TerminalCreateDialog from "./components/ui/TerminalCreateDialog";
 import TerminalContextMenu from "./components/terminal/TerminalContextMenu";
@@ -22,6 +23,7 @@ import { useTerminalActivity } from "./hooks/useTerminalActivity";
 import { useNotesSync } from "./hooks/useNotesSync";
 import { useWiresSync } from "./hooks/useWiresSync";
 import { loadWorkspace } from "./services/tauriCommands";
+import { useSkillStore } from "./store/skillStore";
 
 export default function App() {
   useKeyboard();
@@ -33,6 +35,7 @@ export default function App() {
   useNotesSync();
   useWiresSync();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const loadSkills = useSkillStore((s) => s.loadSkills);
   const zenMode = useCanvasStore((s) => s.zenMode);
   const isHdpi = useSettingsStore((s) => s.settings?.is_hdpi ?? true);
   const theme = useSettingsStore((s) => s.settings?.theme ?? "system");
@@ -68,6 +71,10 @@ export default function App() {
     mq.addEventListener("change", listener);
     return () => mq.removeEventListener("change", listener);
   }, [theme]);
+
+  useEffect(() => {
+    loadSkills();
+  }, [loadSkills]);
 
   useEffect(() => {
     loadSettings();
@@ -119,6 +126,7 @@ export default function App() {
       <SettingsDrawer />
       <TeamsDrawer />
       <TasksDrawer />
+      <SkillsDrawer />
       <TerminalPanel />
       <TerminalCreateDialog />
       <TerminalContextMenu />

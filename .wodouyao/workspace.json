@@ -1,0 +1,1471 @@
+{
+  "canvas": {
+    "grid_size": 50.0,
+    "grid_visible": true,
+    "pan_x": 4948.969230769229,
+    "pan_y": 3603.394871794878,
+    "zoom": 1.2
+  },
+  "created_at": 1778309642711,
+  "cwd": "/Users/mt/workspace/wodouyao",
+  "file_nodes": [],
+  "id": "t_2Uw8pXHt",
+  "name": "wodouyao",
+  "notes": [
+    {
+      "color": "blue",
+      "created_at": 1778233071720,
+      "id": "n_fa56b631b45645eaad002bcc60647721",
+      "position": {
+        "x": -934.0,
+        "y": -980.0
+      },
+      "size": {
+        "height": 160.0,
+        "width": 240.0
+      },
+      "text": "🤖 PM monitor armed: 新任务会自动派发给 fresh claude worker。当前 1 任务已派给 OMC Researcher (t_a9a14...)",
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 3
+    },
+    {
+      "color": "green",
+      "created_at": 1778305394782,
+      "id": "n_437f55e40c83471eb1527c57f728f1a9",
+      "position": {
+        "x": 240.0,
+        "y": 240.0
+      },
+      "size": {
+        "height": 160.0,
+        "width": 240.0
+      },
+      "text": "✅ Skills epic 完成：BE+FE+QA 全绿。报告：.wodouyao/research/skills-acceptance.md",
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 6
+    }
+  ],
+  "task_boards": [
+    {
+      "created_at": 1778219188927,
+      "id": "tb_rjk0O1Yw",
+      "label": "Tasks",
+      "position": {
+        "x": -4559.996229260935,
+        "y": -3135.722473604827
+      },
+      "size": {
+        "height": 639.0,
+        "width": 527.0
+      },
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 1
+    }
+  ],
+  "tasks": [
+    {
+      "acceptance": [],
+      "blocked_by": [],
+      "complexity": null,
+      "created_at": 1778137374898,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "当前注入的 hook 命令用 $CLAUDE_SESSION_ID 环境变量，但 Claude Code 实际上通过 stdin 传 JSON（{\"session_id\":\"...\"} ）。需要改成从 stdin 解析：wodouyao terminal set-session \"$(cat | python3 -c 'import json,sys;print(json.load(sys.stdin)[\"session_id\"])')\"。同时更新 inject_claude_session_hook() 写入的命令字符串，以及 wodouyao skill 文档里的示例。",
+      "docs": [],
+      "id": "t_129904f5cccf417b80068d83c1cb8204",
+      "note_id": null,
+      "owner_term_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "修复 SessionStart hook：从 stdin 读 session_id",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [
+        "t_129904f5cccf417b80068d83c1cb8204"
+      ],
+      "complexity": null,
+      "created_at": 1778137380763,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "在上一个任务修好之后：重启 app，重开 workspace，确认 workspace.json 里每个 claude terminal 的 session_id 不再是 null。需要在 hub 的 terminal-session-updated 事件里加日志，方便调试。",
+      "docs": [],
+      "id": "t_9b9ed98d1efc4cff99685208290e0b55",
+      "note_id": null,
+      "owner_term_id": null,
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "验证 session_id 落盘到 workspace.json",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [
+        "t_129904f5cccf417b80068d83c1cb8204"
+      ],
+      "complexity": null,
+      "created_at": 1778137387529,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "退出 app 重开，确认：1) wodouyao task list 能还原所有任务；2) blocked_by 依赖关系保留；3) in_progress 状态的任务重开后 owner 是否清空或保留（明确策略）。当前测试任务就是验证用例。",
+      "docs": [],
+      "id": "t_f59bd6f1f80440c49ac70dc6920962cb",
+      "note_id": null,
+      "owner_term_id": null,
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "验证任务落盘和 blocked_by 关系持久化",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [],
+      "complexity": null,
+      "created_at": 1778145290541,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "现状：cb51f9e 只为 task 加了 persist_tasks_for_workspace 同步写。但其他 mutation 还是靠前端 debounce 的 workspace save，kill -9 / 双次 mutation 紧贴就丢：\n  - 终端 spawn / move / resize / kill / fold / rename / theme change\n  - 注释 (note) CRUD\n  - file_node CRUD\n  - task_board CRUD\n  - wire create / delete\n\n复现：建一个 note，立刻 kill -9 app，重启 → note 没了。\n\n可能还有一个独立 bug：CLI 建 task 时如果 hub 内 'active workspace' 跟磁盘上的 workspace.json 不是同一个（比如刚启动还没 hydrate / 刚切了 workspace），persist_tasks_for_workspace 用的 ws_id 是 settings.last_workspace_id，可能写到错的 workspace 里。\n\n请：\n1) 把 persist 模式抽象出来（参考 storage::persist_tasks_for_workspace），加同样的 persist_notes_for_workspace / persist_file_nodes_for_workspace / persist_task_boards_for_workspace / persist_terminals_for_workspace / persist_wires_for_workspace\n2) 在每个 store 的 hub 路由 + IPC mutation 都调一次\n3) terminal 的 position/size 高频 mutation 要做合并（比如 50ms debounce）避免拖动一次写盘几百次\n4) 修 task workspace_id 错位的问题：hub 端 GET active workspace 用一致的来源（不是 settings.last_workspace_id 就是 frontend 当前 workspace），理清楚\n5) 验证流程：建 note → kill -9 → 重启 → note 在；同样的对 file_node / board / terminal 拖动 / wire 都试一遍\n6) 提交 push\n\n⚠️ 这是稳定性大改，建议先把当前 fix 路径走通后再扩展。读 cb51f9e 完整 diff 理解模式再开始。",
+      "docs": [],
+      "id": "t_de206e14238b4dcc9a45edcd510b68df",
+      "note_id": null,
+      "owner_term_id": "t_53bf7b4b125b43fa827c5466faaabe3a",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "持久化要全面：所有 canvas mutation 都同步落盘（不只是 task）",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [],
+      "complexity": null,
+      "created_at": 1778145814063,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "原始问题（用户从 UI 提）：现在的 note, task-board 以及 terminal 的显示是有固定层级的？\n\n是的。当前是固定的。复盘下现状：\n\n  BackgroundLayer (Konva)         最底\n  WireLayer (SVG, z-index 5)\n  ResourceLayer (DOM)             notes + file nodes\n  TerminalLayer (DOM)             terminals + task boards\n  CanvasControls                  顶\n\n每个 layer 是独立 DOM 容器，结果是 terminal 永远盖 note，note 永远盖 wire；同 layer 内 store 里有 zIndex 但跨 layer 翻不上去，bringToFront 也只在自己 layer 内有效。\n\n目标：让 note / file_node / task_board / terminal 共享同一个 z 序，bringToFront 把任何节点提到全局最顶。Wire 仍单独一层在所有节点之下背景之上，不参与节点排序。\n\n实现思路（建议，可挑战）：\n1) ResourceLayer 和 TerminalLayer 合成一个 NodeLayer，里面所有 div 共享同一个 transform: translate(panX, panY) scale(zoom) 容器\n2) NodeLayer 渲染时把四种节点合并成数组按 zIndex 排序后 .map 出来。每种节点继续用现有组件 (TerminalNode / NoteNode / FileNode / TaskBoardNode)，外层加 stateless wrapper 处理 zIndex\n3) 各 store 的 bringToFront 改成调用共享的 zIndexAllocator（getNextZ() 全局递增），不是各自维护\n4) 持久化：workspace.json 里每种节点已经有 zIndex 字段（确认下），统一序列化\n5) wire 层保持不变，依然 z-index: 5\n\n陷阱：\n- TerminalLayer 用 pointerEvents 模式（容器 none，节点 auto），ResourceLayer 同款，合并后保持同一模式\n- TerminalNode 上有 xterm.js 实例，CSS transform 嵌套层级变化时不能让它重 mount（key 稳定）\n- task drag-to-assign 用了 dataTransfer types，hit-testing 路径要保持\n- --zoom CSS 变量是被 drag/resize handler 读的，确认 NodeLayer 上仍设这个变量\n\n验收：\n- UI：spawn 一个 terminal，建一个 note，分别点击 → 谁被点谁在最顶\n- 持久化：改变层级后保存重开，层级保留\n- 性能：100 节点时 pan/zoom 不掉帧\n- 现有功能不挂：xterm 输入、note 编辑、wire 连线、task 拖拽分配都正常\n- 类型检查 npx tsc --noEmit 通过\n\n提交 + push",
+      "docs": [],
+      "id": "t_348791728008472992a0dc541871c389",
+      "note_id": null,
+      "owner_term_id": "t_53bf7b4b125b43fa827c5466faaabe3a",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "统一画布节点 z-index：terminal / note / file_node / task_board 可自由叠放",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [],
+      "complexity": null,
+      "created_at": 1778146340409,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "原始问题（用户从 UI 提）：为什么新建 note，或者 task-board 时，他们的定位逻辑是什么，为什么会在当前画布之外？\n\n根因：\n  - src/store/noteStore.ts:60   默认 position = (200 + n*20, 200 + n*20)\n  - src/store/taskBoardStore.ts:50  默认 position = (300, 200)\n  - file_node 同样需要核查\n\n这些都是**世界坐标**硬编码值。用户把画布 pan 到远处（比如 panX=-3000）时，新节点仍然落在世界 (200,200) 附近，屏幕上看不见。\n\n正确做法：取 viewport 中心反算世界坐标。\n  worldX = (vw/2 - panX) / zoom\n  worldY = ((vh - TITLE_BAR_HEIGHT)/2 - panY) / zoom\n（参考 src/components/command-palette/CommandPalette.tsx 里 panToCenter 的镜像逻辑）\n\n请：\n1) 读 src/store/canvasStore.ts 拿当前 panX/panY/zoom；TITLE_BAR_HEIGHT 在 utils/constants.ts\n2) 修 addNote、addBoard、addFileNode 三个调用点，让它们默认 position = viewport 中心 - 节点 size/2\n3) 已有的 stagger（n*20 偏移防重叠）保留——叠在中心附近时仍要错开，避免完全重合\n4) UI 触发点（toolbar 按钮、命令面板、菜单）任何能加节点的入口都验\n5) 顺带：file_node 通过拖拽文件落到画布时，drop 位置已经是鼠标坐标，那条路径不要改\n6) 验证：pan 到画布远处 / zoom 到 0.3 或 2.0 时新建节点都落在屏幕中心\n7) 提交 push\n\n低优先级，等当前 z-index 改造（t_348791728008472992a0dc541871c389）落地后再排，避免 store 改动撞车。",
+      "docs": [],
+      "id": "t_a97e0a9e377845f59de14caedef659d3",
+      "note_id": null,
+      "owner_term_id": "t_f78310fb7cfa4969829c0c7264b6b92a",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "新建 note / task_board / file_node 时按当前 viewport 中心定位",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [],
+      "complexity": null,
+      "created_at": 1778147143872,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "现状：43d2aee 的持久化扩展覆盖了 task / note / wire / file_node / task_board 的 hub routes 和 IPC mutation，并给 terminal 加了 250ms debounce 的 IPC save。但 hub /v1/spawn 这条创建终端的路径没接 persist。\n\n证据：\n  - .wodouyao/workspace.json 里只有 3 个 terminal（PM + architect + planner，是 workspace 启动时加载的）\n  - wodouyao peers 显示 5 个 unique 终端 id —— persist-fixer-2 / viewport-pos-fixer / IME-regression-fixer / task-persist-fixer 等通过 wodouyao spawn 建出来的 worker 终端，全部不在 workspace.json 里\n  - kill -9 后这些 terminal 全丢、wires 也跟着丢\n\n请：\n1) 在 src-tauri/src/hub/server.rs 的 spawn 路由（也包括 fork 和 workflow_bootstrap 里的子 spawn）中：terminal 创建成功后立刻调 persist_terminals_for_workspace 把当前 workspace 的 terminal 切片写盘\n2) 同步：spawn 路由产生的 auto-wire 也走 persist_wires_for_workspace\n3) workspace_id 兜底：spawn body 没带 workspace_id 时用 current_workspace_id() 兜底（仿照 task / note 的处理）\n4) 旧的 z_index 字段对存量 terminal 是 None，新 spawn 应该写入 getNextZ() 的实际 z 值（确认前端 useHubSpawn 拿到 spawn 响应后是否 set zIndex；不行就在 hub 端给个 0/递增值）\n5) 验证：\n   - wodouyao spawn --name test --kind shell → 立刻 cat .wodouyao/workspace.json 看 terminal 数 +1\n   - 两个连接 spawn 后 wires 也 +1\n   - kill -9 app 进程，重启 → 这些 terminal + wires 都还在\n6) 提交 push",
+      "docs": [],
+      "id": "t_d23108d29c1747498014b0ec751d3d97",
+      "note_id": null,
+      "owner_term_id": "t_53bf7b4b125b43fa827c5466faaabe3a",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "持久化补漏：hub /v1/spawn 路径创建的 terminal 没落盘",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [],
+      "complexity": null,
+      "created_at": 1778221067893,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "原始问题（用户从 UI 提）：我们的 node 最小化体验不好，恢复的时候窗口大小会变化，且触发了 xterm 的重绘。\n\n现状（快速定位）：\n  - TerminalNode.tsx:243 折叠时 height 从 size.height → 36（硬编码）\n  - 折叠后 TerminalBody 被卸载（line 287: {!terminal.isFolded && <TerminalBody>})\n  - 展开时 TerminalBody 重新 mount → xterm 重新 open → fitAddon.fit() 被调用\n  - 如果 size 在折叠/展开过程中丢失或被重新计算，窗口尺寸会漂移\n\n可能根因：\n  1) xterm fit() 会写 term.element.clientHeight 到 cols/rows，触发 store.updateTerminal({ cols, rows })\n     但这不应该改变外部 div 的 size。检查是否某个 effect 把 xterm 的 cell 尺寸反向写进了 position/size\n  2) fitAddon.fit() 在重新 mount 时测量的容器尺寸跟之前的不一致（可能是 min-width / min-height / CSS gap 导致）\n  3) is_folded 持久化是否工作？展开/折叠状态落盘了吗？\n\n请：\n1) 在 UI 手动复现：建 terminal → 输入几行文字 → 点折叠按钮 → 再点展开\n   观察：展开后 terminal 的 width/height 是否跟折叠前一致？xterm 内容是否重绘（闪烁 / 滚动 / 丢失文字）？\n2) 读 src/components/terminal/TerminalNode.tsx + TerminalBody.tsx + hooks/useTerminalIO.ts\n   找出折叠→展开的完整生命周期：TerminalBody 卸载/重 mount → xterm open → fit → updateTerminal\n3) 修复方向（建议，可挑战）：\n   a) 折叠时不要卸载 TerminalBody，改用 CSS display:none / visibility:hidden 隐藏内容\n      这样 xterm 实例保活，fit() 不需要重跑\n   b) 如果必须卸载（性能考虑），展开时用保存的 size 严格恢复，fit() 后不要回写 cols/rows 到外部 size\n   c) 展开时手动触发一次 fit() 但加防抖/尺寸 clamp\n4) 如果 is_folded 没持久化，也一起加上\n5) UI 验收：fold → unfold 后尺寸完全不变、xterm 无闪烁、之前的文字完整\n6) 提交 push\n\n⚠️ 只改 TerminalNode / TerminalBody / isFolded 相关代码，不要碰 NodeLayer / zIndex / 其他 store。",
+      "docs": [],
+      "id": "t_3b8c4c0d1836411681d9950b0e11188b",
+      "note_id": null,
+      "owner_term_id": "t_a2d7b1ed49304df8851b6a9bee7385f3",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "修复 terminal fold/unfold 后窗口大小变化 + xterm 重绘问题",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [],
+      "complexity": null,
+      "created_at": 1778223500688,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "做一次完整的 SKILL.md ↔ wodouyao CLI 对齐审计。\n\n步骤：\n1) 列出 CLI 所有子命令（跑 wodouyao --help，以及每个子命令 -h 或 help）。分类：hello/whoami/peers/spawn/fork/bg/team/send/read/watch/task/terminal/workflow/init\n2) 对 src-tauri/resources/skills/wodouyao/SKILL.md 逐节检查：\n   - 是否有 CLI 命令没文档化？补上（参数、exit codes、example）\n   - 是否有文档里写了但 CLI 不存在的命令？删掉或标 deprecated\n   - 最近新增的功能是否漏了文档？（task show, task list --full, spawn --role, terminal set-session -, 等）\n3) 更新 'Working a task' 工作流示例，让它使用最新的命令集\n4) 更新 description 开头的 trigger phrases，覆盖新能力\n5) 验证：从头读一遍 SKILL.md 应该是一个 agent 可以完整参照使用 wodouyao 的 reference。没有死链接，没有过时参数\n\n提交 + push。\n\n⚠️ 只改 SKILL.md 这一个文件，不要碰 Rust / TS / shell 代码。",
+      "docs": [],
+      "id": "t_f73dafaad0f946a697b96e689d666269",
+      "note_id": null,
+      "owner_term_id": "t_9f870837903e41f095214942caa20777",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "全面对齐 SKILL.md 与 CLI 实际功能：audit + sync",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [],
+      "complexity": null,
+      "created_at": 1778224517558,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "原始问题（用户从 UI 提）：每次切换 workspace 的时候，xterm terminal body 也会被卸载掉！\n\n症状：画布上有一个 workspace 有 3 个终端，切换到另一个 workspace（或从 workspace 列表切回来），所有 TerminalBody 都闪一下 → 重新 mount → xterm 重新渲染 → 之前的输出可能丢失或闪烁。\n\n根因线索：\n  - src/components/canvas/InfiniteCanvas.tsx 渲染 <NodeLayer>，里面 .map(terminals) → <TerminalNode>\n  - 切换 workspace 时 terminal store 被 replace（applyWorkspace）→ terminals Map 完全清空再重建\n  - TerminalNode 的 key 变了（或 react key 不变但 parent 重新渲染导致 remount）\n  - TerminalBody 的 useEffect cleanup 被触发 → destroyTerminal → xterm dispose\n  - 新 workspace 加载时重新 createTerminal + open xterm\n\n修复方向（建议，可挑战）：\n1) 终端保活：切换 workspace 时不 destroy 已有 terminal 的 PTY session，只是 CSS 隐藏\n   - 把非 active workspace 的 TerminalNode 改为 display:none（保留 DOM 节点，xterm 保活）\n   - active workspace 的节点正常显示\n   - 这样切回时 xterm 还在，不需要重新 mount\n2) PTY session 归属：hub 端的 PTY 是按 terminal id 存在的，不受 workspace 切换影响\n   - 所以 PTY 不需要销毁，只需要前端 DOM 保活\n3) NodeLayer 层面按 workspace 过滤 vs 按 visibility：\n   - 当前是 '过滤掉非 active workspace 的' → remount\n   - 改成 '所有节点都渲染但非 active 的 display:none' → 保活\n4) 性能注意：如果有 100+ terminal 全保活会占内存。但实际 canvas 上不会堆积几百个——每个 PTY 的内存开销在 Rust 端，xterm 保活的 JS 端开销可接受\n\n请：\n1) 读 src/components/canvas/InfiniteCanvas.tsx + useWorkspace.ts applyWorkspace 理解当前过滤逻辑\n2) 改成 visibility 模式：所有 terminal 都渲染在 NodeLayer，非 active 的加 display:none\n3) 确保 fold/unfold 的保活修复（0004a5a）不受影响\n4) UI 验收：切 workspace A → B → 切回 A → 之前的 terminal 输出完整保留、无闪烁、cursor 位置不变\n5) 性能：10+ terminal 切 workspace 不卡顿\n6) 提交 push\n\n⚠️ 小心：NodeLayer 共享 zIndex / bringToFront 逻辑（0f0d0fd）。确保 display:none 的节点不参与 zIndex 竞争、不阻挡 hit-testing（pointer-events: none 配合）。",
+      "docs": [],
+      "id": "t_652284c7389c4a0a81ee6d73be062e16",
+      "note_id": null,
+      "owner_term_id": "t_e91c39004b974c41878f99ead1dfcfcf",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "修复：切换 workspace 时不应卸载 xterm TerminalBody",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [],
+      "complexity": null,
+      "created_at": 1778225857665,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "现状：当前 README.md 可能已过时。\n\n请：\n1) 读 CLAUDE.md 和 src/ 目录，理解当前架构（渲染层、状态管理、后端 hub/PTY/task 等）\n2) 参考 CLAUDE.md 里的 Architecture 表格、Commands、Conventions、Gotchas\n3) 写一个面向开发者 / 用户的 README.md：\n   - 项目一句话介绍（infinite canvas terminal multiplexer）\n   - 截图/动图占位（可以留 TODO）\n   - Quick Start（npm install, npm run tauri dev, build）\n   - Architecture 概览（Tauri 2 + React 19 + Konva + Zustand + Rust hub/PTY）\n   - 关键命令表（npm run tauri dev / build / dev:frontend）\n   - 目录结构（src/ src-tauri/src/ 的关键目录）\n   - 如何添加新终端角色 / 新 skill / 新 shader\n   - 如何贡献（PR 流程、type check npx tsc --noEmit）\n4) 只改 README.md，不要碰其他文件\n5) 提交 push\n\n注意：README 是给仓库访客看的，语气正式简洁，不要写流水账。",
+      "docs": [],
+      "id": "t_3d08f0b5543946a59517cac1cc21cbec",
+      "note_id": null,
+      "owner_term_id": "t_4e570f9b625c44b3b9863666cc05d018",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "重写 README.md：覆盖项目介绍 + 快速开始 + 架构 + 命令 + 贡献指南",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [],
+      "complexity": null,
+      "created_at": 1778232680686,
+      "created_by": "user",
+      "description": "## 背景\n用户给了链接 https://github.com/Yeachan-Heo/oh-my-claudecode/blob/main/README.zh.md ，希望评估其设计思路里有哪些值得 wodouyao 借鉴。\n\n## OMC 核心特性速览（PM 已预读）\n- 32 个专业 agent + 智能模型路由（Haiku 处理简单任务、Opus 处理复杂推理，宣称省 30-50% token）\n- 多种执行模式：Team(plan→prd→exec→verify→fix)、omc-teams (tmux+Codex/Gemini)、Autopilot、Ralph 持久模式、Pipeline 严格串行\n- Slash 命令 + 魔法关键字（/team, /deep-interview, /skill list；ralph/ulw/plan 关键字）\n- Skill 学习与复用：把调试模式抽成 .omc/skills/*.md，触发词自动注入上下文\n- HUD 状态栏：实时显示 agent / token / 状态\n- Deep Interview：苏格拉底式追问，澄清模糊需求\n- 限流恢复：omc wait --start 等额度自动续上\n- OpenClaw Gateway / 多 AI 协同 / 通知回调\n\n## 任务目标\n对照 wodouyao 当前能力（canvas/wires/tasks/teams/workflow init/spawn/role 等），输出一份「值得借鉴」的清单。\n\n## 交付物\n1. 评估文档放到 .wodouyao/research/omc-comparison.md，包含：\n   - 一句话比较：wodouyao vs OMC 的定位差异\n   - 表格：OMC 特性 -> wodouyao 现状（已有/部分/缺失）-> 是否值得借鉴 -> 借鉴方式建议\n   - 排名前 3 的「明显能抄」的点，给出落地草图（涉及哪些文件/store/CLI 改动）\n   - 排名前 3 的「不该抄」的点，说明为什么与 wodouyao 设计哲学冲突\n2. 工程上不要在这一步动代码，只交研究产物。\n\n## 验收\n- 文档存在于 .wodouyao/research/omc-comparison.md\n- 内容覆盖上述 4 个要点\n- 「值得借鉴」的建议要具体（命名 store/文件/命令），不是空话\n- task done 之前用 wodouyao note add 把文档路径贴一张便签到画布上",
+      "docs": [],
+      "id": "t_c3c559ed53ca42749fb4961e01a9be6f",
+      "note_id": null,
+      "owner_term_id": "t_6fce5c9fa775456abc6a5f8252abc9ee",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "https://github.com/Yeachan-Heo/oh-my-claudecode/blob/main/README.zh.md 看一下这个，是不是可以借鉴其中的设计思路",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [],
+      "complexity": null,
+      "created_at": 1778295344846,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "（见原描述）\n\n## 子任务\n- t_ae9fff479c1a4a52ba288f2c03696984 上下文加载\n- t_e291164a045f446db3717a0998b7a357 架构设计（依赖 load）\n- t_9206f7d0ceca4c0b846db50248c874c2 backend（依赖 arch）\n- t_12eba549e5744790b8cf3f22bc8e0eb9 frontend（依赖 arch）\n- t_21eda32ae8fe4b3aa2933206f8fa2ced QA（依赖 be + fe）",
+      "docs": [],
+      "id": "t_0de0c6801ca749139c31e498c4d8033a",
+      "note_id": null,
+      "owner_term_id": null,
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "Epic: 实现 wodouyao skills 系统（项目级+用户级 markdown，按 role/触发词注入）",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [],
+      "complexity": null,
+      "created_at": 1778295384441,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "## 角色\ncontext-loader（researcher 系），不写代码，只产出一份精简 brief 给后续 fork 出来的 architect/backend/frontend 用。\n\n## 必读\n- .wodouyao/research/omc-comparison.md（已存在）\n- src-tauri/src/integrations/ 里现有 role 注入 / system prompt bake 的代码路径\n- src/utils/terminalRoles.ts（role 元数据）\n- src-tauri/src/commands/ 里 spawn 路径如何拼 default command + system prompt\n- src/store/settingsStore.ts（看现有 settings 如何持久化，skills 走同模式）\n- src-tauri/src/workspace/ 看项目级 .wodouyao/ 目录约定\n\n## 输出\n.wodouyao/research/skills-context-brief.md，包含：\n1. 现有 role -> system prompt 注入的精确文件:行号路径（最关键）\n2. settingsStore / workspaceStore 持久化模板（让 backend 照抄）\n3. 已有 CLI 子命令注册位置（让 backend 知道在哪加 skill 子命令）\n4. 项目级 .wodouyao/ 目录已有的子目录命名约定\n5. 一段 \"给 fork 出来的 worker 看的 200 字概述\"\n\n## 验收\nbrief 文件存在；后续 worker fork 后只读这一份就能开干，不需要重新搜代码。",
+      "docs": [],
+      "id": "t_ae9fff479c1a4a52ba288f2c03696984",
+      "note_id": null,
+      "owner_term_id": "t_2114fd339e844f749e016e370dcb35a8",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "上下文加载：通读 omc-comparison.md + 现有 skills 注入路径 + 相关 store/模块，输出 ContextBrief",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [
+        "t_ae9fff479c1a4a52ba288f2c03696984"
+      ],
+      "complexity": null,
+      "created_at": 1778295384615,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "## 角色\narchitect。基于 skills-context-brief.md 设计，不写实现代码，只产文档。\n\n## 输出\n.wodouyao/research/skills-design.md，覆盖：\n1. SkillFile 数据结构（frontmatter 字段、body、合并优先级、冲突解决）\n2. 加载顺序与覆盖规则（user vs project；同名怎么办）\n3. CLI 命令签名：list / add / remove / show / capture（每个的 flag、退出码、stdout 格式）\n4. Tauri IPC 命令清单：skill_list / skill_get / skill_save / skill_delete（请求/响应 JSON shape）\n5. spawn 时注入点的伪代码（在哪 hook、按 role 怎么过滤、拼接顺序）\n6. 一份最小 skill .md 例子（含 frontmatter）\n\n## 验收\nbackend 拿这份能直接动手；frontend 拿这份知道 store shape；CLI 拿这份知道命令签名。",
+      "docs": [],
+      "id": "t_e291164a045f446db3717a0998b7a357",
+      "note_id": null,
+      "owner_term_id": "t_c2828cc785d74f729087550e6e02d329",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "架构：定 skills 系统的数据模型、目录约定、CLI/IPC 接口契约",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [
+        "t_e291164a045f446db3717a0998b7a357"
+      ],
+      "complexity": null,
+      "created_at": 1778295384828,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "## 角色\nbackend。按 skills-design.md 实现 Rust 端。\n\n## 范围\n- 新建 src-tauri/src/skills/{mod.rs, store.rs, commands.rs}\n- 实现 list/get/save/delete + frontmatter 解析（用现有依赖，能用 serde_yaml 就别引新 crate）\n- 注册 Tauri IPC 命令到 lib.rs\n- 在 spawn 路径（src-tauri/src/commands/terminal.rs 或 integrations/）的 system prompt bake 处加按 role 过滤+拼接\n- CLI 子命令：在现有 wodouyao CLI 入口加 skill list/add/remove/show\n- (P2) capture 子命令：调 read_terminal_output + 用户给的 name，存草稿\n\n## 验收\n- cargo build 通过\n- 手动测：在 .wodouyao/skills/ 放一个 frontmatter 为 roles:[backend] 的 md，spawn --role backend 后 system prompt 里能看到 skill 内容\n- wodouyao skill list 能看到该 skill",
+      "docs": [],
+      "id": "t_9206f7d0ceca4c0b846db50248c874c2",
+      "note_id": null,
+      "owner_term_id": "t_4774c7f897094d68aa730b1f07e39b8f",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "Backend: src-tauri/src/skills/ 模块 + Tauri 命令 + CLI 子命令",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [
+        "t_e291164a045f446db3717a0998b7a357"
+      ],
+      "complexity": null,
+      "created_at": 1778295385123,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "## 角色\nfrontend。按 skills-design.md 实现 TS 端。\n\n## 范围\n- src/store/skillStore.ts，跟 taskStore 同模子（zustand + Tauri IPC 包装）\n- src/services/tauriCommands.ts 加 skill_* 包装\n- src/components/SkillsDrawer/ 新组件：列表 + 增删 + markdown 编辑器（用现有 textarea 即可，别引 monaco）\n- Toolbar 加一个入口按钮（沿用 TasksDrawer 风格）\n- Tokyo Night 配色，inline styles\n\n## 验收\n- npx tsc --noEmit 通过\n- 能在 UI 增删一个 skill，刷新后还在\n- 该 skill 在 spawn 对应 role 终端时被注入（端到端联调点）",
+      "docs": [],
+      "id": "t_12eba549e5744790b8cf3f22bc8e0eb9",
+      "note_id": null,
+      "owner_term_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "Frontend: skillStore + Skills Drawer + Skill 编辑器",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "acceptance": [],
+      "blocked_by": [
+        "t_12eba549e5744790b8cf3f22bc8e0eb9"
+      ],
+      "complexity": null,
+      "created_at": 1778295385416,
+      "created_by": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "description": "## 角色\nqa。验证 backend + frontend 落地后整体流程。\n\n## 步骤\n1. 启动 dev：npm run tauri dev\n2. UI 创建一个 skill：name=\"backend-tdd\", roles=[backend], body 写 \"任何修改都先写测试\"\n3. Toolbar workflow init，确认 backend 终端的初始 prompt 包含该 skill body\n4. CLI 端：wodouyao skill list / show backend-tdd 输出符合设计\n5. 项目级 vs 用户级覆盖：分别在两处放同名 skill，确认项目级胜出\n6. 写一份 .wodouyao/research/skills-acceptance.md 记录验收结果（截图或终端输出）\n\n## 验收\nacceptance.md 存在 + 5 步全过 + 报告任何回归",
+      "docs": [],
+      "id": "t_21eda32ae8fe4b3aa2933206f8fa2ced",
+      "note_id": null,
+      "owner_term_id": "t_6b96b4237c3b4aae858347cf6afda046",
+      "parent_id": null,
+      "prd_note_id": null,
+      "role_hint": null,
+      "source": null,
+      "status": "completed",
+      "subject": "QA: skills 端到端验收 + 写一个 demo skill",
+      "workspace_id": "t_2Uw8pXHt"
+    }
+  ],
+  "teams": [
+    {
+      "created_at": 1776669098678,
+      "id": "team_9dc37b7785f04ae7aa2c7a582cef2a2b",
+      "members": [
+        {
+          "joined_at": 1776669098678,
+          "role": "lead",
+          "term_id": "t_-4c7xc7A"
+        }
+      ],
+      "name": "ai-vital-mvp",
+      "palette": {
+        "base": "#9ece6a",
+        "key": "forest",
+        "members": [
+          "#9ece6a",
+          "#73daca",
+          "#449dab",
+          "#41a6b5"
+        ]
+      },
+      "tasks": [
+        {
+          "blocked_by": [],
+          "created_at": 1776669173775,
+          "created_by": "t_-4c7xc7A",
+          "description": "在 /Users/mt/workspace/ai-vital/ 根目录写 config.yaml：去掉 database_url，配置 custom_callbacks 指向 budget.BudgetPlugin，加一个 openai/gpt-4o-mini 测试模型",
+          "id": "task_5d96adf76a394fcc966bb2087d04dbb0",
+          "owner": "t_8e99bacfce904953a848b195b0c14c40",
+          "status": "pending",
+          "subject": "写 config.yaml — 无状态 LiteLLM Proxy 配置"
+        },
+        {
+          "blocked_by": [],
+          "created_at": 1776669174232,
+          "created_by": "t_-4c7xc7A",
+          "description": "在 /Users/mt/workspace/ai-vital/ 写 budget.py：继承 CustomLogger，async_pre_call_hook 调 /verify（超时2s→503），async_log_success_event fire-and-forget /transaction，BUDGET_CENTER_URL=mock 时直通，进程内缓存 TTL 5min",
+          "id": "task_fb36a99d97ca485b965fdb85f88068ff",
+          "owner": "t_8e99bacfce904953a848b195b0c14c40",
+          "status": "pending",
+          "subject": "写 budget.py — mock 预算中心 callback"
+        },
+        {
+          "blocked_by": [],
+          "created_at": 1776669174712,
+          "created_by": "t_-4c7xc7A",
+          "description": "在 /Users/mt/workspace/ai-vital/ 写 mock_budget_server.py：FastAPI，POST /verify→{enabled:true,wallet_id:mock}，POST /transaction→{over_budget:false,left_usd:9999}，port 8001",
+          "id": "task_5ec8d94d8b5c4f258dc86ca10ddc1a3d",
+          "owner": "t_cc1b9877e9364166ad0dee809a461186",
+          "status": "pending",
+          "subject": "写 mock_budget_server.py"
+        }
+      ]
+    }
+  ],
+  "terminals": [
+    {
+      "agent_kind": "claude",
+      "color": "#7dcfff",
+      "cwd": "/Users/mt/workspace/wodouyao",
+      "id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "initial_command": "claude --dangerously-skip-permissions \"@/var/folders/xn/k_c6vj2s0bsb0zlwg9_qgcgr0000gn/T/wodouyao/prompt_t_af2ee018a8aa4f29a90b2ca343c34a74.md\"",
+      "is_folded": false,
+      "name": "⠂ PM",
+      "position": {
+        "x": -3783.871794871795,
+        "y": -3167.589743589744
+      },
+      "role": "pm",
+      "session_id": "ba84a18f-0728-45b7-840f-9300f11993a6",
+      "shell_type": "Bash",
+      "size": {
+        "height": 821.0,
+        "width": 1197.0
+      },
+      "theme": "tokyonight",
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 871
+    },
+    {
+      "agent_kind": "claude",
+      "color": "#f7768e",
+      "cwd": "/Users/mt/workspace/wodouyao",
+      "id": "t_2114fd339e844f749e016e370dcb35a8",
+      "initial_command": "claude --dangerously-skip-permissions",
+      "is_folded": false,
+      "name": "✳ Claim and show task",
+      "position": {
+        "x": -2086.1410256410245,
+        "y": -2643.662393162398
+      },
+      "role": "researcher",
+      "session_id": "1e81c0eb-23f1-4e84-aa0a-7d6ece976eaf",
+      "shell_type": "Bash",
+      "size": {
+        "height": 669.0,
+        "width": 779.0
+      },
+      "theme": "tokyonight",
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 784
+    },
+    {
+      "agent_kind": "claude",
+      "color": "#7aa2f7",
+      "cwd": "/Users/mt/workspace/wodouyao",
+      "id": "t_2184ab1514134f7699034705816aeb39",
+      "initial_command": "claude --dangerously-skip-permissions -c",
+      "is_folded": false,
+      "name": "✳ PM",
+      "position": {
+        "x": -734.1410256410246,
+        "y": -2941.662393162398
+      },
+      "role": null,
+      "session_id": "ba84a18f-0728-45b7-840f-9300f11993a6",
+      "shell_type": "Bash",
+      "size": {
+        "height": 670.0,
+        "width": 897.0
+      },
+      "theme": "tokyonight",
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 761
+    },
+    {
+      "agent_kind": "claude",
+      "color": "#9ece6a",
+      "cwd": "/Users/mt/workspace/wodouyao",
+      "id": "t_c2828cc785d74f729087550e6e02d329",
+      "initial_command": "claude --dangerously-skip-permissions",
+      "is_folded": false,
+      "name": "✳ Claim task and view briefs",
+      "position": {
+        "x": -228.14102564102473,
+        "y": -5138.662393162398
+      },
+      "role": "architect",
+      "session_id": "cc2e6c4c-786a-42a9-aeaa-fee13a9a6c26",
+      "shell_type": "Bash",
+      "size": {
+        "height": 400.0,
+        "width": 600.0
+      },
+      "theme": "tokyonight",
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 765
+    },
+    {
+      "agent_kind": "claude",
+      "color": "#e0af68",
+      "cwd": "/Users/mt/workspace/wodouyao",
+      "id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "initial_command": "claude --dangerously-skip-permissions -c",
+      "is_folded": false,
+      "name": "✳ PM",
+      "position": {
+        "x": -2184.1410256410245,
+        "y": -5138.662393162398
+      },
+      "role": null,
+      "session_id": "ba84a18f-0728-45b7-840f-9300f11993a6",
+      "shell_type": "Bash",
+      "size": {
+        "height": 400.0,
+        "width": 600.0
+      },
+      "theme": "tokyonight",
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 766
+    },
+    {
+      "agent_kind": "claude",
+      "color": "#bb9af7",
+      "cwd": "/Users/mt/workspace/wodouyao",
+      "id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "initial_command": "claude --dangerously-skip-permissions -c",
+      "is_folded": false,
+      "name": "✳ PM",
+      "position": {
+        "x": -1731.1410256410245,
+        "y": -4172.662393162398
+      },
+      "role": null,
+      "session_id": "ba84a18f-0728-45b7-840f-9300f11993a6",
+      "shell_type": "Bash",
+      "size": {
+        "height": 400.0,
+        "width": 600.0
+      },
+      "theme": "tokyonight",
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 767
+    },
+    {
+      "agent_kind": "claude",
+      "color": "#bb9af7",
+      "cwd": "/Users/mt/workspace/wodouyao",
+      "id": "t_e8a6f4780b7a4ce698579241546a7758",
+      "initial_command": "claude --dangerously-skip-permissions",
+      "is_folded": false,
+      "name": "✳ Take task t_12eba549e5744790b8cf3f22bc8e0eb9",
+      "position": {
+        "x": 230.85897435897527,
+        "y": -4108.662393162398
+      },
+      "role": "frontend",
+      "session_id": "25988621-7920-4b57-9d35-48979acd8e36",
+      "shell_type": "Bash",
+      "size": {
+        "height": 400.0,
+        "width": 600.0
+      },
+      "theme": "tokyonight",
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 772
+    },
+    {
+      "agent_kind": "claude",
+      "color": "#f7768e",
+      "cwd": "/Users/mt/workspace/wodouyao",
+      "id": "t_26cd86333bef4dcba66d82e379aa8296",
+      "initial_command": "claude --dangerously-skip-permissions",
+      "is_folded": false,
+      "name": "✳ Implement TypeScript skills system frontend",
+      "position": {
+        "x": -1391.6410256410245,
+        "y": -5990.329059829065
+      },
+      "role": "frontend",
+      "session_id": "a229d070-9e6d-4d3d-a649-773725396045",
+      "shell_type": "Bash",
+      "size": {
+        "height": 400.0,
+        "width": 600.0
+      },
+      "theme": "tokyonight",
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 851
+    },
+    {
+      "agent_kind": "claude",
+      "color": "#ff9e64",
+      "cwd": "/Users/mt/workspace/wodouyao",
+      "id": "t_66eac44cbe1e4f9fbcaf5eec58a761a5",
+      "initial_command": "claude --dangerously-skip-permissions",
+      "is_folded": false,
+      "name": "✳ Claude Code",
+      "position": {
+        "x": -1309.9743589743578,
+        "y": -6096.995726495731
+      },
+      "role": "backend",
+      "session_id": "067fbc07-2c00-4e2f-bc65-e081841c6593",
+      "shell_type": "Bash",
+      "size": {
+        "height": 400.0,
+        "width": 600.0
+      },
+      "theme": "tokyonight",
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 855
+    },
+    {
+      "agent_kind": "claude",
+      "color": "#ff007c",
+      "cwd": "/Users/mt/workspace/wodouyao",
+      "id": "t_6b96b4237c3b4aae858347cf6afda046",
+      "initial_command": "claude --dangerously-skip-permissions",
+      "is_folded": false,
+      "name": "✳ End-to-end testing for skills feature",
+      "position": {
+        "x": -1294.141025641024,
+        "y": -6053.662393162397
+      },
+      "role": "qa",
+      "session_id": "fb37b712-84b2-4eff-b9e5-37091d2938e0",
+      "shell_type": "Bash",
+      "size": {
+        "height": 590.8333333333334,
+        "width": 835.0
+      },
+      "theme": "tokyonight",
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 869
+    },
+    {
+      "agent_kind": "claude",
+      "color": "#9ece6a",
+      "cwd": "/Users/mt/workspace/wodouyao",
+      "id": "t_6235d78c6e554e44ba6c6727fc0420cf",
+      "initial_command": "claude --dangerously-skip-permissions",
+      "is_folded": false,
+      "name": "✳ Claude Code",
+      "position": {
+        "x": -1279.974358974358,
+        "y": -5892.829059829064
+      },
+      "role": "qa",
+      "session_id": "3e682106-cb35-4a1a-982e-8c9f7fec9962",
+      "shell_type": "Bash",
+      "size": {
+        "height": 400.0,
+        "width": 600.0
+      },
+      "theme": "tokyonight",
+      "workspace_id": "t_2Uw8pXHt",
+      "z_index": 847
+    }
+  ],
+  "updated_at": 1778309645995,
+  "wires": [
+    {
+      "forward_output": true,
+      "id": "a6365fa1-a46c-451e-8038-3ae4c663ac02",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_66eac44cbe1e4f9fbcaf5eec58a761a5",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "14f2c35c-c5c6-4fa9-adaf-07da09fb4d5b",
+      "kind": null,
+      "source_id": "t_e0be85fc5ebe449fbe345231d53fece6",
+      "target_id": "t_bd1bd16d270e4aa3b9d4bc868fda413f",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "00048e92-e6a3-489e-8d1e-24e34cbfbeca",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_26cd86333bef4dcba66d82e379aa8296",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "0b8db1f2-2908-4315-a454-3ddf8f5ad860",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_2114fd339e844f749e016e370dcb35a8",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "977936ad-d022-47fa-b7b6-32f40bcd7eb7",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_2114fd339e844f749e016e370dcb35a8",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "364ea092-bed4-4bb6-940d-dd00a969dba8",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_26cd86333bef4dcba66d82e379aa8296",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "729d027c-b6c5-47b2-8912-c4d579848aa1",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_26cd86333bef4dcba66d82e379aa8296",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "0d85c4f7-0908-4642-b4c3-5c864d800e08",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_66eac44cbe1e4f9fbcaf5eec58a761a5",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "cea612f4-9b55-4337-a7e1-84e61303034c",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_6b96b4237c3b4aae858347cf6afda046",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "5476c747-73d0-4549-a126-ead5402d971c",
+      "kind": null,
+      "source_id": "t_2184ab1514134f7699034705816aeb39",
+      "target_id": "t_c2828cc785d74f729087550e6e02d329",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "6c2307b2-8bab-4c8e-872c-9ee2f3f25edb",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_6b96b4237c3b4aae858347cf6afda046",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "8f68b6a0-813f-4941-9700-35cd7bc908e3",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_6235d78c6e554e44ba6c6727fc0420cf",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "w_36273942ed72442b8c4a58653681e136",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_6b96b4237c3b4aae858347cf6afda046",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "f95992a5-8b4d-4cf0-9678-9b9edbcfec16",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_e8a6f4780b7a4ce698579241546a7758",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "588dc578-e567-438e-a7cf-ae6345f1e31b",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_66eac44cbe1e4f9fbcaf5eec58a761a5",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "284e7563-df46-4187-b431-3d39eebb6de2",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_6235d78c6e554e44ba6c6727fc0420cf",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "c3038673-4521-487a-a1ee-6f53f3335b30",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_e8a6f4780b7a4ce698579241546a7758",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "d543fe82-b5bd-4c9e-bf99-98fa36718d43",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_26cd86333bef4dcba66d82e379aa8296",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "9eb1038b-ca04-4919-a279-fe644110096f",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_2114fd339e844f749e016e370dcb35a8",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "3f644cdc-6e26-4bf4-8cbc-984dd440aadc",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_6235d78c6e554e44ba6c6727fc0420cf",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "38bf5011-c4af-4aee-8aeb-fdbfcaea7695",
+      "kind": null,
+      "source_id": "t_2184ab1514134f7699034705816aeb39",
+      "target_id": "t_c2828cc785d74f729087550e6e02d329",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "d1357325-d1a1-4db5-8895-2870854fe096",
+      "kind": null,
+      "source_id": "t_e0be85fc5ebe449fbe345231d53fece6",
+      "target_id": "t_bd1bd16d270e4aa3b9d4bc868fda413f",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "5bcacc4a-4293-466e-8827-1deedb5b0eea",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_2114fd339e844f749e016e370dcb35a8",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "w_74ddf36fe0f14592a0b4ee80f6ccaba9",
+      "kind": "io",
+      "source_id": "t_2114fd339e844f749e016e370dcb35a8",
+      "target_id": "t_2184ab1514134f7699034705816aeb39",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "w_59108ccc7d0249b990e250f4d39516d4",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_2184ab1514134f7699034705816aeb39",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "16485173-217a-4788-8ec4-49ac0238a41b",
+      "kind": null,
+      "source_id": "t_2184ab1514134f7699034705816aeb39",
+      "target_id": "t_c2828cc785d74f729087550e6e02d329",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "293d7e34-ac77-4c0e-99d1-adff0bfe7af9",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_66eac44cbe1e4f9fbcaf5eec58a761a5",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "59141c33-4564-46ed-b3b1-66cd4a4744b5",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_6235d78c6e554e44ba6c6727fc0420cf",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "27ffe042-0270-4884-8c97-1659cd47a014",
+      "kind": null,
+      "source_id": "t_e0be85fc5ebe449fbe345231d53fece6",
+      "target_id": "t_bd1bd16d270e4aa3b9d4bc868fda413f",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "78f3535b-057b-4f2e-b923-aa48ba1cefb4",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_e8a6f4780b7a4ce698579241546a7758",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "75d36dab-ea00-4618-b908-69198812b8c2",
+      "kind": null,
+      "source_id": "t_e0be85fc5ebe449fbe345231d53fece6",
+      "target_id": "t_4546610a2b8248838d5cc38c895c9cf0",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "42c51423-81fa-4e3d-bf89-1a04c49ea3c4",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_6b96b4237c3b4aae858347cf6afda046",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "4e054bf3-86c7-443f-9383-c159741c10e1",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_26cd86333bef4dcba66d82e379aa8296",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "197551c9-64b9-428d-b658-059b3176197e",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_6b96b4237c3b4aae858347cf6afda046",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "e962133f-e197-4d46-9c93-e1813ece4128",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_26cd86333bef4dcba66d82e379aa8296",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "21027b30-3dbf-4f51-adf9-838a727f7284",
+      "kind": null,
+      "source_id": "t_2184ab1514134f7699034705816aeb39",
+      "target_id": "t_c2828cc785d74f729087550e6e02d329",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "07cd4971-04ad-41f1-92a9-fbe1eda6364a",
+      "kind": null,
+      "source_id": "t_e0be85fc5ebe449fbe345231d53fece6",
+      "target_id": "t_4546610a2b8248838d5cc38c895c9cf0",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "9e5bb9c6-9f20-4de5-b764-fcca5955dae2",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_2114fd339e844f749e016e370dcb35a8",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "w_7f16a730f1634dc5a12ed2038716525b",
+      "kind": "io",
+      "source_id": "t_2184ab1514134f7699034705816aeb39",
+      "target_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "bef2d374-461b-4abf-a9ac-643e2a6e3baa",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_e8a6f4780b7a4ce698579241546a7758",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "w_3ca1d8d49cad4626a474f22e2da423c1",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_c2828cc785d74f729087550e6e02d329",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "93676c2d-a8a5-441b-a111-27fd2ac15660",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_e8a6f4780b7a4ce698579241546a7758",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "9aad072f-0c03-4113-9d6a-e9ba527f22ab",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_66eac44cbe1e4f9fbcaf5eec58a761a5",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "434c3932-dd9f-410b-82c7-b6f6e4a66cdc",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_66eac44cbe1e4f9fbcaf5eec58a761a5",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "w_4151801a00634d4292f7596d188b833d",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "04b7c061-2b25-4518-833e-7ea8955a5938",
+      "kind": null,
+      "source_id": "t_2184ab1514134f7699034705816aeb39",
+      "target_id": "t_c2828cc785d74f729087550e6e02d329",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "4b06cbd1-82a1-43a4-af64-84631400a0c3",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_6b96b4237c3b4aae858347cf6afda046",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "eb641a7b-8ae7-46e7-9fa3-01afaae58be8",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_e8a6f4780b7a4ce698579241546a7758",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "c30c1a60-94f5-4a87-a8f3-0ea00bacdec6",
+      "kind": null,
+      "source_id": "t_2184ab1514134f7699034705816aeb39",
+      "target_id": "t_c2828cc785d74f729087550e6e02d329",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "a3e7e6c6-c03b-4143-bcd8-098b9070fb21",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_6b96b4237c3b4aae858347cf6afda046",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "914cf5bd-8889-4bbd-8678-eff8ba9704a8",
+      "kind": null,
+      "source_id": "t_2184ab1514134f7699034705816aeb39",
+      "target_id": "t_c2828cc785d74f729087550e6e02d329",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "64afb6db-ca99-4839-8888-84ad5924e765",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_6235d78c6e554e44ba6c6727fc0420cf",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "w_cee63cddcf9b4ab4bf1a84686c154af5",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "82e6c4c8-f06a-41cc-bc03-6aa3d370159b",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_6b96b4237c3b4aae858347cf6afda046",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "3f98a8c7-f37d-42a3-ba46-14eeab4427a2",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_e8a6f4780b7a4ce698579241546a7758",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "f06c5be7-7d3a-48d6-b909-755a529e7fd2",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_2114fd339e844f749e016e370dcb35a8",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "2e737a88-2bde-4390-8906-49ae6cce1f5c",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_26cd86333bef4dcba66d82e379aa8296",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "w_ea40bbefa5234bc781e9b1a2e358f9ad",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_861ea2005a14441196185364879a60b4",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "w_2c275c17909d4d94b8b3fafc4b9fafe5",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_26cd86333bef4dcba66d82e379aa8296",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "b7fa2aee-84e3-4d64-9996-e0001759ae81",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_66eac44cbe1e4f9fbcaf5eec58a761a5",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "3a0f912d-110b-4900-8aca-71aab174f926",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_e8a6f4780b7a4ce698579241546a7758",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "01f2dc14-ae03-4519-af41-a8060efb1102",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_6b96b4237c3b4aae858347cf6afda046",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "6d13ad4b-4ba6-42c8-9ceb-8ebd195b55e9",
+      "kind": null,
+      "source_id": "t_e0be85fc5ebe449fbe345231d53fece6",
+      "target_id": "t_bd1bd16d270e4aa3b9d4bc868fda413f",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "696b2e79-1a14-4a40-b07d-c8fddfc492a3",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_e8a6f4780b7a4ce698579241546a7758",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "165c624c-161f-4973-a786-b47b22083149",
+      "kind": null,
+      "source_id": "t_2184ab1514134f7699034705816aeb39",
+      "target_id": "t_c2828cc785d74f729087550e6e02d329",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "a16f49bb-daff-499d-87fa-e20bb19f7f81",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_26cd86333bef4dcba66d82e379aa8296",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "726adb9e-f9c2-4e0d-ab8b-05ef99541056",
+      "kind": null,
+      "source_id": "t_e0be85fc5ebe449fbe345231d53fece6",
+      "target_id": "t_4546610a2b8248838d5cc38c895c9cf0",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "0a1a57a6-d5d2-48a7-bc54-a6c773e17cf8",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_26cd86333bef4dcba66d82e379aa8296",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "10421247-7714-4922-8e64-781e9d4e6583",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_66eac44cbe1e4f9fbcaf5eec58a761a5",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "be955306-1cd8-4473-bdbe-089c0599b106",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_26cd86333bef4dcba66d82e379aa8296",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "929edbee-a566-4e28-aaf5-622508d80255",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_6235d78c6e554e44ba6c6727fc0420cf",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "bf0d0876-ca48-475d-8dc6-a3a23e944e9c",
+      "kind": null,
+      "source_id": "t_2184ab1514134f7699034705816aeb39",
+      "target_id": "t_c2828cc785d74f729087550e6e02d329",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "713d0693-573a-4194-bda9-aff057ae76a4",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_6b96b4237c3b4aae858347cf6afda046",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "w_59a9b00b12614eeeaedac7d4e51f546c",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "3515fc5d-ac8a-4898-88de-98f69495604c",
+      "kind": null,
+      "source_id": "t_e0be85fc5ebe449fbe345231d53fece6",
+      "target_id": "t_4546610a2b8248838d5cc38c895c9cf0",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "30b9aa8d-ce44-43eb-b621-ae7bcf44b6f2",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_6235d78c6e554e44ba6c6727fc0420cf",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "d66d2da2-863d-4302-b577-4807188b71a2",
+      "kind": null,
+      "source_id": "t_2184ab1514134f7699034705816aeb39",
+      "target_id": "t_c2828cc785d74f729087550e6e02d329",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "3b5d01b6-fad4-40e2-bbf8-e5a813e42069",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_2114fd339e844f749e016e370dcb35a8",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "a90ac917-90f7-423d-a354-daa30719b362",
+      "kind": null,
+      "source_id": "t_e0be85fc5ebe449fbe345231d53fece6",
+      "target_id": "t_4546610a2b8248838d5cc38c895c9cf0",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "ab2f516b-3444-43fd-b985-38a1736370ca",
+      "kind": null,
+      "source_id": "t_e0be85fc5ebe449fbe345231d53fece6",
+      "target_id": "t_bd1bd16d270e4aa3b9d4bc868fda413f",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "240f36f2-63f6-4e1d-8687-20e072f3a987",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_66eac44cbe1e4f9fbcaf5eec58a761a5",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "2ff36e60-d26d-49c4-a509-38686628cc4a",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_6235d78c6e554e44ba6c6727fc0420cf",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "w_8428b53dcd5c4bceab7d57fddca285d3",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_e8a6f4780b7a4ce698579241546a7758",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "5c36952b-e520-48e7-857d-8faa52714135",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_66eac44cbe1e4f9fbcaf5eec58a761a5",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "8e682ef7-ca61-4e21-9898-b9b9b286f503",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_6235d78c6e554e44ba6c6727fc0420cf",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "w_1a22b0356e6247598f35c53eda34d411",
+      "kind": null,
+      "source_id": "t_af2ee018a8aa4f29a90b2ca343c34a74",
+      "target_id": "t_2184ab1514134f7699034705816aeb39",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "1af11fe9-b36a-4c5c-9ab7-810958ae6981",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_6235d78c6e554e44ba6c6727fc0420cf",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "e4dfedd2-9e24-45fa-bd48-85a1c532a773",
+      "kind": null,
+      "source_id": "t_e0be85fc5ebe449fbe345231d53fece6",
+      "target_id": "t_bd1bd16d270e4aa3b9d4bc868fda413f",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "w_c777ccb57dd64941af5a6fffd2ea28b6",
+      "kind": "io",
+      "source_id": "t_2184ab1514134f7699034705816aeb39",
+      "target_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "13890203-f2b1-4bbf-94e6-663198a7a14e",
+      "kind": null,
+      "source_id": "t_ab74cf1842104bb29f0d635d9e79b32e",
+      "target_id": "t_e8a6f4780b7a4ce698579241546a7758",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "3e9da6bd-162b-4d94-9324-a2440a121a89",
+      "kind": null,
+      "source_id": "t_3ee821e9586f4c899c0b1954b074cf24",
+      "target_id": "t_6b96b4237c3b4aae858347cf6afda046",
+      "workspace_id": "t_2Uw8pXHt"
+    },
+    {
+      "forward_output": true,
+      "id": "4e7150f0-3460-410d-bd9a-7375fe11df35",
+      "kind": null,
+      "source_id": "t_e0be85fc5ebe449fbe345231d53fece6",
+      "target_id": "t_4546610a2b8248838d5cc38c895c9cf0",
+      "workspace_id": "t_2Uw8pXHt"
+    }
+  ]
+}

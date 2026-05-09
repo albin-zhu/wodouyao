@@ -4,6 +4,7 @@ import type { Workspace, WorkspaceMeta } from "../types/workspace";
 import type { AppSettings } from "../types/settings";
 import type { Team } from "../types/team";
 import type { Task, TaskCreateInput, TaskPatchInput } from "../types/task";
+import type { Skill } from "../types/skill";
 
 export async function createTerminal(request: CreateTerminalRequest): Promise<string> {
   return invoke<string>("create_terminal", { request });
@@ -374,6 +375,28 @@ export async function taskBoardsRemove(id: string): Promise<boolean> {
 
 export async function taskBoardsReplaceAll(boards: TaskBoardIpc[]): Promise<void> {
   return invoke<void>("task_boards_replace_all", { boards });
+}
+
+// Skills
+export async function skillList(cwd?: string): Promise<Skill[]> {
+  return invoke<Skill[]>("skill_list", { cwd: cwd ?? null });
+}
+
+export async function skillGet(name: string, cwd?: string): Promise<Skill> {
+  return invoke<Skill>("skill_get", { name, cwd: cwd ?? null });
+}
+
+export async function skillSave(
+  skill: Skill,
+  scope: "user" | "project",
+  cwd: string,
+  force = false
+): Promise<void> {
+  return invoke<void>("skill_save", { skill, scope, cwd, force });
+}
+
+export async function skillDelete(name: string, scope: "user" | "project", cwd: string): Promise<void> {
+  return invoke<void>("skill_delete", { name, scope, cwd });
 }
 
 export async function getHubEndpoint(): Promise<{ url: string; token: string }> {

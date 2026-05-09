@@ -5,6 +5,7 @@ mod integrations;
 pub mod notes;
 pub mod pty;
 mod settings;
+pub mod skills;
 mod state;
 pub mod task_boards;
 pub mod tasks;
@@ -271,6 +272,10 @@ pub fn run() {
             commands::shaders::shaders_list,
             commands::shaders::shaders_get,
             commands::shaders::shaders_dir_path,
+            skills::commands::skill_list,
+            skills::commands::skill_get,
+            skills::commands::skill_save,
+            skills::commands::skill_delete,
             open_url,
         ])
         .run(tauri::generate_context!())

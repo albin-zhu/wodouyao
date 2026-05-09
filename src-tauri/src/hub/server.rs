@@ -658,10 +658,31 @@ fn spawn(
         .as_deref()
         .filter(|_| parsed.append_system_prompt.is_none())
         .and_then(builtin_role_prompt);
-    let effective_append = parsed
-        .append_system_prompt
-        .as_deref()
-        .or(role_prompt);
+
+    // Inject matching skill bodies into the system prompt.
+    let skill_injection = crate::skills::skill_injection_for_role(
+        parsed.role.as_deref(),
+        parsed.cwd.as_deref(),
+    );
+
+    // Compose effective_append: skill bodies → user append → builtin role prompt
+    let composed_append: Option<String> = {
+        let parts: Vec<&str> = [
+            if skill_injection.is_empty() { None } else { Some(skill_injection.as_str()) },
+            parsed.append_system_prompt.as_deref(),
+            role_prompt,
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+
+        if parts.is_empty() {
+            None
+        } else {
+            Some(parts.join("\n\n"))
+        }
+    };
+    let effective_append = composed_append.as_deref();
 
     let command = parsed.command.clone().or_else(|| {
         parsed.kind.as_deref().and_then(|k| match k {

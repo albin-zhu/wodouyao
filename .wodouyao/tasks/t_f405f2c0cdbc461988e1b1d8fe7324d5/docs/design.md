@@ -1,0 +1,1 @@
+# Design Notes\n\nThis is a test document to verify task doc storage works.\n\n- Stored at .wodouyao/tasks/<id>/docs/\n- Listed in task.docs[]\n

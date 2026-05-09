@@ -46,6 +46,14 @@ Usage: wodouyao <subcommand> [args]
   wire add <source-id> <target-id> [--kind K]
                                      create a wire
   wire remove <wire-id>              remove a wire
+  skill list [--role R] [--source user|project] [--json]
+                                     list skills matching optional filters
+  skill show <name> [--body-only]    print a skill's frontmatter + body
+  skill add <file.md> [--user] [--force]
+                                     install a skill (default: project scope)
+  skill remove <name> [--user]       delete a skill file
+  skill capture <peer> --subject "<desc>" [--lines N]
+                                     draft a skill from a peer's recent output
   note list                          list all notes
   note add "<text>" [--color C]      create a note
   note update <note-id> "<text>"     update note text
@@ -1620,6 +1628,333 @@ cmd_note() {
     esac
 }
 
+# ── Skill commands ───────────────────────────────────────────────────
+
+_skill_project_dir() {
+    # Resolve project-level skills dir from cwd (no hub required)
+    printf '%s/.wodouyao/skills' "${WODOUYAO_CWD:-$(pwd)}"
+}
+
+_skill_user_dir() {
+    printf '%s/.wodouyao/skills' "${HOME}"
+}
+
+cmd_skill_list() {
+    _role=""
+    _source=""
+    _json=0
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --role)   [ $# -ge 2 ] || die "skill list: --role requires a value"
+                      _role=$2; shift 2 ;;
+            --source) [ $# -ge 2 ] || die "skill list: --source requires a value"
+                      _source=$2; shift 2 ;;
+            --json)   _json=1; shift ;;
+            -*)       die "skill list: unknown flag: $1" ;;
+            *)        die "skill list: unexpected argument: $1" ;;
+        esac
+    done
+
+    # Collect skills from both dirs; project overrides user on same name
+    if command -v python3 >/dev/null 2>&1; then
+        WODOUYAO_SKILL_USER_DIR=$(_skill_user_dir) \
+        WODOUYAO_SKILL_PROJ_DIR=$(_skill_project_dir) \
+        WODOUYAO_SKILL_ROLE="$_role" \
+        WODOUYAO_SKILL_SOURCE="$_source" \
+        WODOUYAO_SKILL_JSON="$_json" \
+        python3 << 'PYEOF'
+import os, glob, sys
+
+def parse_fm(text):
+    """Return (frontmatter_dict, body) from markdown with --- delimiters."""
+    if not text.startswith('---'):
+        return {}, text
+    end = text.find('\n---', 3)
+    if end == -1:
+        return {}, text
+    fm_raw = text[3:end].strip()
+    body = text[end+4:].lstrip('\n')
+    fm = {}
+    cur_key = None
+    cur_list = []
+    for line in fm_raw.splitlines():
+        stripped = line.strip()
+        if stripped.startswith('- '):
+            val = stripped[2:].strip().strip('"')
+            cur_list.append(val)
+            continue
+        if ':' in stripped:
+            if cur_key:
+                fm[cur_key] = cur_list if cur_list else fm.get(cur_key, '')
+                cur_list = []
+            idx = stripped.index(':')
+            k = stripped[:idx].strip()
+            v = stripped[idx+1:].strip().strip('"')
+            if v == '':
+                cur_key = k
+            else:
+                fm[k] = v
+                cur_key = None
+    if cur_key:
+        fm[cur_key] = cur_list if cur_list else ''
+    return fm, body
+
+user_dir = os.environ.get('WODOUYAO_SKILL_USER_DIR', '')
+proj_dir = os.environ.get('WODOUYAO_SKILL_PROJ_DIR', '')
+filter_role = os.environ.get('WODOUYAO_SKILL_ROLE', '')
+filter_src  = os.environ.get('WODOUYAO_SKILL_SOURCE', '')
+as_json     = os.environ.get('WODOUYAO_SKILL_JSON', '0') == '1'
+
+skills = {}  # name → dict
+
+for src_dir, src_label in [(user_dir, 'user'), (proj_dir, 'project')]:
+    if not src_dir or not os.path.isdir(src_dir):
+        continue
+    for path in sorted(glob.glob(os.path.join(src_dir, '*.md'))):
+        try:
+            text = open(path).read()
+        except Exception:
+            continue
+        fm, body = parse_fm(text)
+        name = fm.get('name') or os.path.splitext(os.path.basename(path))[0]
+        roles = fm.get('roles') or []
+        if isinstance(roles, str):
+            roles = [r.strip() for r in roles.strip('[]').split(',') if r.strip()]
+        triggers = fm.get('triggers') or []
+        if isinstance(triggers, str):
+            triggers = [t.strip() for t in triggers.strip('[]').split(',') if t.strip()]
+        tags = fm.get('tags') or []
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.strip('[]').split(',') if t.strip()]
+        skills[name] = {
+            'name': name,
+            'description': fm.get('description', ''),
+            'roles': roles,
+            'triggers': triggers,
+            'tags': tags,
+            'body': body,
+            'source': src_label,
+        }
+
+results = list(skills.values())
+
+if filter_role:
+    results = [s for s in results if not s['roles'] or filter_role in s['roles']]
+if filter_src:
+    results = [s for s in results if s['source'] == filter_src]
+
+if as_json:
+    import json
+    print(json.dumps(results, ensure_ascii=False, indent=2))
+else:
+    fmt = '%-24s %-8s %-20s %s'
+    print(fmt % ('NAME', 'SOURCE', 'ROLES', 'TRIGGERS'))
+    for s in results:
+        print(fmt % (
+            s['name'][:24],
+            s['source'],
+            ','.join(s['roles'])[:20],
+            ','.join(s['triggers'])[:40],
+        ))
+PYEOF
+    else
+        # Minimal fallback: just list .md filenames
+        for _d in "$(_skill_user_dir)" "$(_skill_project_dir)"; do
+            [ -d "$_d" ] || continue
+            for _f in "$_d"/*.md; do
+                [ -f "$_f" ] || continue
+                printf '%s\n' "$(basename "$_f" .md)"
+            done
+        done
+    fi
+}
+
+cmd_skill_show() {
+    _body_only=0
+    _name=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --body-only) _body_only=1; shift ;;
+            -*)          die "skill show: unknown flag: $1" ;;
+            *)           [ -z "$_name" ] || die "skill show: too many arguments"
+                         _name=$1; shift ;;
+        esac
+    done
+    [ -n "$_name" ] || die "skill show: missing <name>"
+
+    # Search project first (higher priority), then user
+    _found=""
+    for _d in "$(_skill_project_dir)" "$(_skill_user_dir)"; do
+        _candidate="$_d/$_name.md"
+        if [ -f "$_candidate" ]; then
+            _found="$_candidate"
+            break
+        fi
+    done
+    [ -n "$_found" ] || die "skill not found: $_name" 1
+
+    if [ "$_body_only" -eq 1 ] && command -v python3 >/dev/null 2>&1; then
+        python3 << PYEOF
+text = open('$_found').read()
+if text.startswith('---'):
+    end = text.find('\n---', 3)
+    if end != -1:
+        print(text[end+4:].lstrip('\n'), end='')
+        exit()
+print(text, end='')
+PYEOF
+    else
+        cat "$_found"
+    fi
+}
+
+cmd_skill_add() {
+    _user=0
+    _force=0
+    _file=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --user)  _user=1; shift ;;
+            --force) _force=1; shift ;;
+            -*)      die "skill add: unknown flag: $1" ;;
+            *)       [ -z "$_file" ] || die "skill add: too many arguments"
+                     _file=$1; shift ;;
+        esac
+    done
+    [ -n "$_file" ] || die "skill add: missing <file.md>"
+    [ -f "$_file" ] || die "skill add: file not found: $_file"
+
+    # Derive name from file (or frontmatter if python3 available)
+    _name=$(basename "$_file" .md)
+    if command -v python3 >/dev/null 2>&1; then
+        _name_fm=$(python3 -c '
+import sys
+text = open(sys.argv[1]).read()
+if text.startswith("---"):
+    end = text.find("\n---", 3)
+    if end != -1:
+        for line in text[3:end].splitlines():
+            if line.strip().startswith("name:"):
+                print(line.split(":",1)[1].strip().strip("\""))
+                break
+' "$_file" 2>/dev/null)
+        [ -n "$_name_fm" ] && _name=$_name_fm
+    fi
+
+    if [ "$_user" -eq 1 ]; then
+        _dest_dir=$(_skill_user_dir)
+    else
+        _dest_dir=$(_skill_project_dir)
+    fi
+
+    mkdir -p "$_dest_dir"
+    _dest="$_dest_dir/$_name.md"
+
+    if [ -f "$_dest" ] && [ "$_force" -eq 0 ]; then
+        die "skill already exists: $_name (use --force to overwrite)" 2
+    fi
+
+    cp "$_file" "$_dest"
+    printf 'Installed skill "%s" → %s\n' "$_name" "$_dest"
+}
+
+cmd_skill_remove() {
+    _user=0
+    _name=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --user) _user=1; shift ;;
+            -*)     die "skill remove: unknown flag: $1" ;;
+            *)      [ -z "$_name" ] || die "skill remove: too many arguments"
+                    _name=$1; shift ;;
+        esac
+    done
+    [ -n "$_name" ] || die "skill remove: missing <name>"
+
+    if [ "$_user" -eq 1 ]; then
+        _target=$(_skill_user_dir)/"$_name.md"
+        _scope="user"
+    else
+        _target=$(_skill_project_dir)/"$_name.md"
+        _scope="project"
+    fi
+
+    if [ ! -f "$_target" ]; then
+        # Helpful: check if it exists in the other scope
+        if [ "$_user" -eq 0 ] && [ -f "$(_skill_user_dir)/$_name.md" ]; then
+            die "skill '$_name' exists in user scope; add --user to remove it" 2
+        fi
+        die "skill not found in $_scope scope: $_name" 1
+    fi
+
+    rm "$_target"
+    printf 'Removed skill "%s"\n' "$_name"
+}
+
+cmd_skill_capture() {
+    _peer=""
+    _subject=""
+    _lines=200
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --subject) [ $# -ge 2 ] || die "skill capture: --subject requires a value"
+                       _subject=$2; shift 2 ;;
+            --lines)   [ $# -ge 2 ] || die "skill capture: --lines requires a value"
+                       _lines=$2; shift 2 ;;
+            -*)        die "skill capture: unknown flag: $1" ;;
+            *)         [ -z "$_peer" ] || die "skill capture: too many arguments"
+                       _peer=$1; shift ;;
+        esac
+    done
+    [ -n "$_peer" ]    || die "skill capture: missing <peer>"
+    [ -n "$_subject" ] || die "skill capture: missing --subject"
+
+    # Slugify subject for filename
+    _slug=$(printf '%s' "$_subject" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/-*$//')
+
+    # Read from peer
+    load_endpoint
+    _output=$(curl_auth -f "$URL/v1/terminals/$_peer/output?bytes=$((_lines * 80))") \
+        || die "skill capture: failed to read peer output (peer not found?)" 1
+    [ -n "$_output" ] || die "skill capture: no output available from peer $_peer" 2
+
+    _dest_dir=$(_skill_project_dir)
+    mkdir -p "$_dest_dir"
+    _dest="$_dest_dir/$_slug.md"
+
+    _ts=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date '+%Y-%m-%dT%H:%M:%SZ')
+
+    printf '%s\n' \
+"---
+# DRAFT — review triggers/roles before activating
+name: $_slug
+description: \"$_subject\"
+triggers: []
+roles: []
+---
+
+<!-- captured from peer $_peer at $_ts -->
+<!-- edit triggers and roles, then run: wodouyao skill add $_dest -->
+
+$_output" > "$_dest"
+
+    printf 'Draft saved → %s\n' "$_dest"
+    printf 'Edit triggers/roles, then: wodouyao skill add "%s"\n' "$_dest"
+}
+
+cmd_skill() {
+    [ $# -gt 0 ] || die "skill: missing subcommand (list|show|add|remove|capture)"
+    _sub=$1; shift
+    case $_sub in
+        list)    cmd_skill_list    "$@" ;;
+        show)    cmd_skill_show    "$@" ;;
+        add)     cmd_skill_add     "$@" ;;
+        remove)  cmd_skill_remove  "$@" ;;
+        capture) cmd_skill_capture "$@" ;;
+        *)       die "skill: unknown subcommand: $_sub" ;;
+    esac
+}
+
 # ── Terminal commands ────────────────────────────────────────────────
 
 cmd_terminal_list() {
@@ -1842,6 +2177,7 @@ case $sub in
     task)           cmd_task  "$@" ;;
     wire)           cmd_wire  "$@" ;;
     note)           cmd_note  "$@" ;;
+    skill)          cmd_skill "$@" ;;
     terminal)       cmd_terminal "$@" ;;
     bg)             cmd_bg "$@" ;;
     workflow)       cmd_workflow "$@" ;;
