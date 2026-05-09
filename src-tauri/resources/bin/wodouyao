@@ -28,7 +28,7 @@ Usage: wodouyao <subcommand> [args]
                                      --kind because the hub doesn't track which
                                      CLI a terminal is currently running.
   send <peer> [--raw|--keys] <text>  send text (keys mode always appends Enter)
-  read <peer> [--bytes N]            read recent output (default N=16384)
+  read <peer> [--bytes N] [--raw]    read recent output (cooked/plain by default; --raw keeps ANSI)
   watch <peer>                       stream a peer's output until Ctrl+C
   task list [--full|-l]              list all global tasks (--full prints
                                      each task's description indented under
@@ -224,15 +224,17 @@ cmd_read() {
     [ $# -gt 0 ] || usage
     _peer=$1; shift
     _bytes=16384
+    _mode=cooked
     while [ $# -gt 0 ]; do
         case $1 in
             --bytes) [ $# -ge 2 ] || die "--bytes requires a value"
                      _bytes=$2; shift 2 ;;
+            --raw)   _mode=raw; shift ;;
             *) die "unknown argument: $1" ;;
         esac
     done
     load_endpoint
-    curl_auth -f "$URL/v1/read?from=$WODOUYAO_ID&to=$_peer&bytes=$_bytes" \
+    curl_auth -f "$URL/v1/read?from=$WODOUYAO_ID&to=$_peer&bytes=$_bytes&mode=$_mode" \
         || die "read failed"
 }
 

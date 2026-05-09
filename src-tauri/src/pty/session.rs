@@ -32,6 +32,7 @@ pub struct PtySession {
     pub rows: u16,
     pub ring_buffer: Arc<Mutex<VecDeque<u8>>>,
     pub subscribers: Arc<Mutex<Vec<mpsc::Sender<Vec<u8>>>>>,
+    pub vt100_parser: Arc<Mutex<vt100::Parser>>,
     /// One-shot rcfile / ZDOTDIR temp directory; cleaned up on drop.
     rc_tempdir: Option<std::path::PathBuf>,
 }
@@ -297,6 +298,9 @@ printf '\033]133;A\007'
         let subscribers: Arc<Mutex<Vec<mpsc::Sender<Vec<u8>>>>> =
             Arc::new(Mutex::new(Vec::new()));
         let subscribers_for_reader = Arc::clone(&subscribers);
+        let vt100_parser: Arc<Mutex<vt100::Parser>> =
+            Arc::new(Mutex::new(vt100::Parser::new(rows, cols, 1000)));
+        let vt100_for_reader = Arc::clone(&vt100_parser);
 
         // Use a plain std::thread instead of tokio — no runtime needed
         let reader_id = id.clone();
@@ -315,8 +319,8 @@ printf '\033]133;A\007'
                         break;
                     }
                     Ok(n) => {
+                        let slice = &buf[..n];
                         if let Ok(mut ring) = ring_for_reader.lock() {
-                            let slice = &buf[..n];
                             if slice.len() >= RING_BUFFER_CAPACITY {
                                 ring.clear();
                                 ring.extend(&slice[slice.len() - RING_BUFFER_CAPACITY..]);
@@ -329,8 +333,10 @@ printf '\033]133;A\007'
                                 ring.extend(slice);
                             }
                         }
+                        if let Ok(mut parser) = vt100_for_reader.lock() {
+                            parser.process(slice);
+                        }
                         if let Ok(mut subs) = subscribers_for_reader.lock() {
-                            let slice = &buf[..n];
                             subs.retain(|s| s.send(slice.to_vec()).is_ok());
                         }
                         let _ = app_handle.emit(
@@ -367,6 +373,7 @@ printf '\033]133;A\007'
             rows,
             ring_buffer,
             subscribers,
+            vt100_parser,
             rc_tempdir,
         };
 
@@ -432,6 +439,16 @@ printf '\033]133;A\007'
         let take = max_bytes.min(len);
         let start = len - take;
         ring.iter().skip(start).copied().collect()
+    }
+
+    /// Returns the current screen contents with ANSI sequences stripped.
+    /// Uses the vt100 screen emulator so cursor movement, overwriting, and
+    /// alternate-screen apps (like Claude Code) render correctly.
+    pub fn cooked_output(&self) -> String {
+        let Ok(parser) = self.vt100_parser.lock() else {
+            return String::new();
+        };
+        parser.screen().contents()
     }
 }
 

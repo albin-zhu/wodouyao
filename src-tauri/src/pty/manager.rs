@@ -105,6 +105,14 @@ impl PtyManager {
         }
     }
 
+    pub fn read_cooked(&self, id: &str) -> Result<String, String> {
+        if let Some(session) = self.sessions.get(id) {
+            Ok(session.cooked_output())
+        } else {
+            Err(format!("Session {} not found", id))
+        }
+    }
+
     pub fn subscribe(&self, id: &str) -> Result<mpsc::Receiver<Vec<u8>>, String> {
         self.sessions
             .get(id)

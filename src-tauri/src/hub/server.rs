@@ -1518,23 +1518,37 @@ fn read(
         return;
     }
 
-    let result = {
-        let mgr = match pty_manager.lock() {
-            Ok(g) => g,
-            Err(e) => {
-                let _ = request.respond(text(500, &format!("pty lock: {}", e)));
-                return;
-            }
-        };
-        mgr.read_recent(&to, max_bytes)
+    let mode = query
+        .iter()
+        .find(|(k, _)| k == "mode")
+        .map(|(_, v)| v.as_str())
+        .unwrap_or("cooked");
+
+    let mgr = match pty_manager.lock() {
+        Ok(g) => g,
+        Err(e) => {
+            let _ = request.respond(text(500, &format!("pty lock: {}", e)));
+            return;
+        }
     };
 
-    match result {
-        Ok(bytes) => {
-            let _ = request.respond(plain_bytes(200, bytes));
+    if mode == "raw" {
+        match mgr.read_recent(&to, max_bytes) {
+            Ok(bytes) => {
+                let _ = request.respond(plain_bytes(200, bytes));
+            }
+            Err(e) => {
+                let _ = request.respond(text(404, &e));
+            }
         }
-        Err(e) => {
-            let _ = request.respond(text(404, &e));
+    } else {
+        match mgr.read_cooked(&to) {
+            Ok(s) => {
+                let _ = request.respond(plain_bytes(200, s.into_bytes()));
+            }
+            Err(e) => {
+                let _ = request.respond(text(404, &e));
+            }
         }
     }
 }
