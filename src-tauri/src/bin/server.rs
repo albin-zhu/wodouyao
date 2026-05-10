@@ -12,14 +12,17 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 use axum::{
-    extract::{Path, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Path, Query, State,
+    },
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -28,7 +31,7 @@ use wodouyao_lib::file_nodes::FileNodeStore;
 use wodouyao_lib::hub::{server as hub_server, IdentityRegistry, TeamRegistry, WireTopology};
 use wodouyao_lib::notes::NoteStore;
 use wodouyao_lib::pty::manager::PtyManager;
-use wodouyao_lib::runtime::web_impl::{WebEmitter, WebPathResolver};
+use wodouyao_lib::runtime::web_impl::{WebEmitter, WebEvent, WebPathResolver};
 use wodouyao_lib::runtime::{EventEmitter, PathResolver};
 use wodouyao_lib::state::AppState;
 use wodouyao_lib::task_boards::TaskBoardStore;
@@ -37,7 +40,6 @@ use wodouyao_lib::tasks::TaskStore;
 #[derive(Clone)]
 struct ServerState {
     inner: Arc<AppState>,
-    #[allow(dead_code)] // wired up to broadcast events in Phase 3 (WS)
     emitter: Arc<WebEmitter>,
     bearer_token: String,
 }
@@ -95,14 +97,18 @@ async fn main() {
         bearer_token: bearer_token.clone(),
     };
 
-    let app = Router::new()
+    // /v1/events sits outside the Bearer-header middleware because browsers
+    // can't attach Authorization headers to WebSocket upgrades — the
+    // handler validates a `?token=…` query param itself.
+    let private = Router::new()
         .route("/v1/ping", get(ping))
         .route("/v1/cmd/:name", post(cmd_dispatch))
         .layer(middleware::from_fn_with_state(
             server_state.clone(),
             bearer_auth,
-        ))
-        .with_state(server_state);
+        ));
+    let public = Router::new().route("/v1/events", get(ws_events));
+    let app = public.merge(private).with_state(server_state);
 
     let addr: SocketAddr = "127.0.0.1:0".parse().expect("hardcoded addr");
     let listener = tokio::net::TcpListener::bind(addr)
@@ -135,6 +141,69 @@ async fn bearer_auth(
         Ok(next.run(req).await)
     } else {
         Err(StatusCode::UNAUTHORIZED)
+    }
+}
+
+#[derive(Deserialize)]
+struct EventsQuery {
+    token: String,
+}
+
+async fn ws_events(
+    ws: WebSocketUpgrade,
+    State(state): State<ServerState>,
+    Query(q): Query<EventsQuery>,
+) -> Response {
+    if q.token != state.bearer_token {
+        return (StatusCode::UNAUTHORIZED, "bad token").into_response();
+    }
+    ws.on_upgrade(move |socket| handle_ws(socket, state.emitter.clone()))
+}
+
+/// Drain the broadcast channel onto a single WS connection. Text frames
+/// carry a JSON envelope `{event, payload}`; binary frames carry
+/// terminal output framed as `[id_len:u8][id_utf8][data]`. Lagged
+/// receivers (slow clients) skip dropped events and keep going — fine
+/// for status pings, lossy for terminal output, but acceptable for
+/// self-use over a LAN tunnel.
+async fn handle_ws(mut socket: WebSocket, emitter: Arc<WebEmitter>) {
+    let mut rx = emitter.subscribe();
+    loop {
+        match rx.recv().await {
+            Ok(event) => {
+                let msg = match event {
+                    WebEvent::Json { event, payload } => {
+                        let envelope =
+                            serde_json::json!({ "event": event, "payload": payload });
+                        Message::Text(envelope.to_string())
+                    }
+                    WebEvent::TerminalOutput { id, data } => {
+                        let id_bytes = id.as_bytes();
+                        let id_len = id_bytes.len().min(255) as u8;
+                        let mut frame = Vec::with_capacity(1 + id_bytes.len() + data.len());
+                        frame.push(id_len);
+                        frame.extend_from_slice(&id_bytes[..id_len as usize]);
+                        frame.extend_from_slice(&data);
+                        Message::Binary(frame)
+                    }
+                    WebEvent::TerminalExit { id, exit_code } => {
+                        let envelope = serde_json::json!({
+                            "event": format!("terminal-exit-{}", id),
+                            "payload": { "id": id, "exit_code": exit_code }
+                        });
+                        Message::Text(envelope.to_string())
+                    }
+                };
+                if socket.send(msg).await.is_err() {
+                    break;
+                }
+            }
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                log::warn!("ws client lagged by {} events; continuing", n);
+                continue;
+            }
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+        }
     }
 }
 
