@@ -78,6 +78,19 @@ async fn main() {
     .expect("failed to start hub server");
     log::info!("hub listening at {}", hub_handle.url);
 
+    // Seed bundled shaders into ~/.wodouyao/shaders/ on first boot so the
+    // canvas background renders without the user having to manually copy
+    // .frag files. Tauri does this in its setup hook; the headless server
+    // has to wire it up itself.
+    match path_resolver.resource_dir() {
+        Ok(dir) => {
+            if let Err(e) = wodouyao_lib::shaders::seed_from(&dir) {
+                log::warn!("shader seed failed: {}", e);
+            }
+        }
+        Err(e) => log::warn!("shader seed skipped (no resource dir): {}", e),
+    }
+
     let app_state = Arc::new(AppState::new(
         hub_handle,
         pty_manager,
