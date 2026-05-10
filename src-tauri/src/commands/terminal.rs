@@ -24,6 +24,18 @@ pub fn create_terminal_impl(
     state: &AppState,
     request: CreateTerminalRequest,
 ) -> Result<String, String> {
+    // Idempotency: if a PTY with this id is already alive, treat the
+    // call as a re-attach and bail before doing anything destructive.
+    // Crucial for browser-refresh / workspace-switch in web mode where
+    // the frontend rebuilds its terminal-node Map from the persisted
+    // layout and would otherwise nuke the running session each time.
+    {
+        let manager = state.pty_manager.lock().map_err(|e| e.to_string())?;
+        if manager.has_session(&request.id) {
+            return Ok(request.id);
+        }
+    }
+
     let shell_path = request
         .shell_path
         .unwrap_or_else(|| shell::detect_default_shell().path);
