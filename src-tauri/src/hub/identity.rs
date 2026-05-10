@@ -22,6 +22,8 @@ pub struct Identity {
     pub capabilities: Vec<String>,
     #[serde(default)]
     pub registered_at: u64,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 #[derive(Clone, Default)]

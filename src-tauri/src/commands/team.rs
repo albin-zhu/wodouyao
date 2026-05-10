@@ -53,7 +53,7 @@ pub fn teams_create(
     caller_term_id: Option<String>,
 ) -> Result<Team, String> {
     let palette_key = palette.as_deref().unwrap_or("blue");
-    let mut team = state.team_registry.create(&name, palette_key)?;
+    let mut team = state.team_registry.create(&name, palette_key, None)?;
     if as_lead.unwrap_or(false) {
         if let Some(id) = caller_term_id.filter(|s| !s.is_empty()) {
             team = state.team_registry.join(&team.id, id, Role::Lead)?;

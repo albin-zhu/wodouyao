@@ -412,6 +412,7 @@ fn peers(
                 agent_kind: Some("note".into()),
                 capabilities: vec!["read".into()],
                 registered_at: 0,
+                workspace_id: note.workspace_id.clone(),
             });
         } else if let Some(fnode) = file_node_store.get(id) {
             peer_entries.push(Identity {
@@ -420,6 +421,7 @@ fn peers(
                 agent_kind: Some(format!("file/{}", fnode.kind)),
                 capabilities: vec!["read".into()],
                 registered_at: 0,
+                workspace_id: None,
             });
         } else if let Some(board) = task_board_store.get(id) {
             peer_entries.push(Identity {
@@ -428,6 +430,7 @@ fn peers(
                 agent_kind: Some("board".into()),
                 capabilities: vec!["read".into()],
                 registered_at: 0,
+                workspace_id: None,
             });
         }
     }
@@ -1651,6 +1654,8 @@ struct CreateTeamBody {
     palette: Option<String>,
     #[serde(default)]
     lead: Option<String>,
+    #[serde(default)]
+    workspace_id: Option<String>,
 }
 
 fn emit_teams_updated(app_handle: &AppHandleSlot) {
@@ -1677,7 +1682,9 @@ fn teams_create(
         }
     };
     let palette_key = parsed.palette.as_deref().unwrap_or("blue");
-    let mut team = match team_registry.create(&parsed.name, palette_key) {
+    let workspace_id = parsed.workspace_id
+        .or_else(crate::workspace::storage::current_workspace_id);
+    let mut team = match team_registry.create(&parsed.name, palette_key, workspace_id) {
         Ok(t) => t,
         Err(e) => {
             let _ = request.respond(text(400, &e));
@@ -1699,7 +1706,15 @@ fn teams_create(
 }
 
 fn teams_list(request: tiny_http::Request, team_registry: &TeamRegistry) {
-    let body = serde_json::to_string(&team_registry.list()).unwrap_or_else(|_| "[]".into());
+    let url = request.url().to_string();
+    let (_, query) = split_query(&url);
+    let ws = query.iter().find(|(k, _)| k == "workspace").map(|(_, v)| v.clone());
+    let teams: Vec<_> = team_registry
+        .list()
+        .into_iter()
+        .filter(|t| ws.as_deref().map_or(true, |w| t.workspace_id.as_deref() == Some(w)))
+        .collect();
+    let body = serde_json::to_string(&teams).unwrap_or_else(|_| "[]".into());
     let _ = request.respond(json(200, body));
 }
 
@@ -2263,7 +2278,15 @@ fn persist_workspace_wires(topology: &WireTopology, ws_id: Option<&str>) {
 }
 
 fn tasks_list_route(request: tiny_http::Request, task_store: &TaskStore) {
-    let body = serde_json::to_string(&task_store.list()).unwrap_or_else(|_| "[]".into());
+    let url = request.url().to_string();
+    let (_, query) = split_query(&url);
+    let ws = query.iter().find(|(k, _)| k == "workspace").map(|(_, v)| v.clone());
+    let tasks: Vec<_> = task_store
+        .list()
+        .into_iter()
+        .filter(|t| ws.as_deref().map_or(true, |w| t.workspace_id.as_deref() == Some(w)))
+        .collect();
+    let body = serde_json::to_string(&tasks).unwrap_or_else(|_| "[]".into());
     let _ = request.respond(json(200, body));
 }
 
@@ -2704,19 +2727,26 @@ fn terminals_list_route(
     pty_manager: &Arc<Mutex<PtyManager>>,
     identities: &IdentityRegistry,
 ) {
+    let url = request.url().to_string();
+    let (_, query) = split_query(&url);
+    let ws = query.iter().find(|(k, _)| k == "workspace").map(|(_, v)| v.clone());
     let ids = pty_manager
         .lock()
         .map(|m| m.live_ids())
         .unwrap_or_default();
     let infos: Vec<TerminalInfo> = ids
         .into_iter()
-        .map(|id| {
+        .filter_map(|id| {
             let ident = identities.get(&id);
-            TerminalInfo {
-                id,
-                name: ident.name,
-                agent_kind: ident.agent_kind,
-                capabilities: ident.capabilities,
+            if ws.as_deref().map_or(true, |w| ident.workspace_id.as_deref() == Some(w)) {
+                Some(TerminalInfo {
+                    id,
+                    name: ident.name,
+                    agent_kind: ident.agent_kind,
+                    capabilities: ident.capabilities,
+                })
+            } else {
+                None
             }
         })
         .collect();

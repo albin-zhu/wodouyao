@@ -23,3 +23,4 @@ Thumbs.db
 !assets/screen-snapshot.png
 .playwright-mcp/
 bun.lock
+.wodouyao/workspace.json

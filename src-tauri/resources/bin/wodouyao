@@ -157,6 +157,7 @@ cmd_hello() {
                 WODOUYAO_HELLO_NAME=$_name \
                 WODOUYAO_HELLO_KIND=$_kind \
                 WODOUYAO_HELLO_CAPS=$_caps \
+                WODOUYAO_HELLO_WS=${WODOUYAO_WORKSPACE_ID:-} \
                 python3 -c '
 import json, os
 caps = os.environ.get("WODOUYAO_HELLO_CAPS", "")
@@ -164,12 +165,15 @@ caps_list = [c.strip() for c in caps.split(",") if c.strip()]
 obj = {"id": os.environ["WODOUYAO_HELLO_ID"]}
 name = os.environ.get("WODOUYAO_HELLO_NAME", "")
 kind = os.environ.get("WODOUYAO_HELLO_KIND", "")
+ws = os.environ.get("WODOUYAO_HELLO_WS", "")
 if name:
     obj["name"] = name
 if kind:
     obj["agent_kind"] = kind
 if caps_list:
     obj["capabilities"] = caps_list
+if ws:
+    obj["workspace_id"] = ws
 print(json.dumps(obj))
 ')
     else
@@ -180,6 +184,10 @@ print(json.dumps(obj))
             | awk -F, 'BEGIN{printf "["} {for(i=1;i<=NF;i++){if($i!=""){if(out)printf ",";printf "\"%s\"",$i;out=1}}} END{printf "]"}')
         _body=$(printf '{"id":"%s","name":%s,"agent_kind":%s,"capabilities":%s}' \
             "$WODOUYAO_ID" "$_name_j" "$_kind_j" "$_caps_j")
+        if [ -n "${WODOUYAO_WORKSPACE_ID:-}" ]; then
+            _ws_j=$(json_escape "$WODOUYAO_WORKSPACE_ID")
+            _body="${_body%\}}",\"workspace_id\":$_ws_j}"
+        fi
     fi
     _code=$(curl_auth -o /dev/null -w '%{http_code}' \
         -X POST -H 'Content-Type: application/json' \
@@ -316,6 +324,7 @@ cmd_team_create() {
         _body=$(WODOUYAO_T_NAME=$_name \
                 WODOUYAO_T_PALETTE=$_palette \
                 WODOUYAO_T_LEAD=$_lead \
+                WODOUYAO_T_WS=${WODOUYAO_WORKSPACE_ID:-} \
                 python3 -c '
 import json, os
 obj = {"name": os.environ["WODOUYAO_T_NAME"]}
@@ -325,6 +334,9 @@ if p:
 lead = os.environ.get("WODOUYAO_T_LEAD", "")
 if lead:
     obj["lead"] = lead
+ws = os.environ.get("WODOUYAO_T_WS", "")
+if ws:
+    obj["workspace_id"] = ws
 print(json.dumps(obj))
 ')
     else
@@ -337,6 +349,10 @@ print(json.dumps(obj))
         if [ -n "$_lead" ]; then
             _l_j=$(json_escape "$_lead")
             _body="$_body,\"lead\":$_l_j"
+        fi
+        if [ -n "${WODOUYAO_WORKSPACE_ID:-}" ]; then
+            _ws_j=$(json_escape "$WODOUYAO_WORKSPACE_ID")
+            _body="$_body,\"workspace_id\":$_ws_j"
         fi
         _body="$_body}"
     fi
@@ -361,7 +377,9 @@ print(json.dumps(obj))
 
 cmd_team_list() {
     load_endpoint
-    _body=$(curl_auth -f "$URL/v1/teams") || die "team list failed"
+    _team_qs=""
+    [ -n "${WODOUYAO_WORKSPACE_ID:-}" ] && _team_qs="?workspace=$WODOUYAO_WORKSPACE_ID"
+    _body=$(curl_auth -f "$URL/v1/teams$_team_qs") || die "team list failed"
     if command -v python3 >/dev/null 2>&1; then
         printf '%s' "$_body" | python3 -c '
 import json, sys
@@ -978,7 +996,9 @@ cmd_task_list() {
         esac
     done
     load_endpoint
-    _body=$(curl_auth -f "$URL/v1/tasks") || die "task list failed"
+    _task_qs=""
+    [ -n "${WODOUYAO_WORKSPACE_ID:-}" ] && _task_qs="?workspace=$WODOUYAO_WORKSPACE_ID"
+    _body=$(curl_auth -f "$URL/v1/tasks$_task_qs") || die "task list failed"
     if command -v python3 >/dev/null 2>&1; then
         printf '%s' "$_body" | WD_FULL=$_full python3 -c '
 import json, os, sys
@@ -1626,7 +1646,9 @@ cmd_note() {
 
 cmd_terminal_list() {
     load_endpoint
-    _body=$(curl_auth -f "$URL/v1/terminals") || die "terminal list failed"
+    _term_qs=""
+    [ -n "${WODOUYAO_WORKSPACE_ID:-}" ] && _term_qs="?workspace=$WODOUYAO_WORKSPACE_ID"
+    _body=$(curl_auth -f "$URL/v1/terminals$_term_qs") || die "terminal list failed"
     if command -v python3 >/dev/null 2>&1; then
         printf '%s' "$_body" | python3 -c '
 import json, sys

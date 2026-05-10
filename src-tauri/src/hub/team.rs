@@ -12,6 +12,8 @@ pub struct Team {
     pub created_at: u64,
     #[serde(default)]
     pub tasks: Vec<Task>,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -119,7 +121,7 @@ impl TeamRegistry {
         Self::default()
     }
 
-    pub fn create(&self, name: &str, palette_key: &str) -> Result<Team, String> {
+    pub fn create(&self, name: &str, palette_key: &str, workspace_id: Option<String>) -> Result<Team, String> {
         let mut map = self.inner.lock().unwrap();
         if map.values().any(|t| t.name == name) {
             return Err("duplicate_name".to_string());
@@ -131,6 +133,7 @@ impl TeamRegistry {
             members: Vec::new(),
             created_at: now_ms(),
             tasks: Vec::new(),
+            workspace_id,
         };
         map.insert(team.id.clone(), team.clone());
         Ok(team)
