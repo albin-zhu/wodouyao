@@ -36,8 +36,13 @@ export interface TerminalOptions {
 
 export const DEFAULT_TERMINAL_OPTIONS: TerminalOptions = {
   font_size: 13,
+  // ASCII fonts (guaranteed via bundled JetBrains Mono) come first, then a
+  // fall-through chain of high-quality CJK monospace fonts that ship with
+  // common OSes or are easy to install. xterm.js looks up each glyph against
+  // this chain individually, so Latin chars use JetBrains Mono and CJK chars
+  // pick the first installed option.
   font_family:
-    "'JetBrainsMono Nerd Font Mono', 'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+    "'JetBrains Mono', 'JetBrainsMono Nerd Font Mono', 'SF Mono', 'Cascadia Code', 'Sarasa Term SC', 'Maple Mono CN', 'LXGW WenKai Mono', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Noto Sans Mono CJK SC', monospace",
   font_weight: "normal",
   font_weight_bold: "bold",
   line_height: 1.2,
