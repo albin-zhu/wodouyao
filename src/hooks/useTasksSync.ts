@@ -1,12 +1,12 @@
 import { useEffect } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { useTaskStore } from "../store/taskStore";
+import { subscribeJson } from "../services/transport";
 
 export function useTasksSync() {
   useEffect(() => {
     const hydrate = useTaskStore.getState().hydrate;
     hydrate();
-    const unlistenPromise = listen("tasks-updated", () => {
+    const unlistenPromise = subscribeJson("tasks-updated", () => {
       hydrate();
     });
     return () => {

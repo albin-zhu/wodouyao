@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@tauri-apps/api/core";
+import { call } from "../../services/transport";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import type {
@@ -37,7 +37,7 @@ export default function SettingsDrawer() {
   const [shaderList, setShaderList] = useState<string[]>([]);
 
   const refreshShaders = useCallback(() => {
-    invoke<string[]>("shaders_list")
+    call<string[]>("shaders_list")
       .then((list) => setShaderList(list))
       .catch((e) => console.warn("[settings] shaders_list failed:", e));
   }, []);

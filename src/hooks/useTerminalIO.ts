@@ -4,9 +4,9 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { CanvasAddon } from "@xterm/addon-canvas";
 import { ImageAddon } from "@xterm/addon-image";
-import { invoke } from "@tauri-apps/api/core";
 import { writeTerminal, resizeTerminal, destroyTerminal } from "../services/tauriCommands";
 import { listenTerminalOutput, listenTerminalExit } from "../services/tauriEvents";
+import { openUrl } from "../services/transport";
 import { registerXterm, unregisterXterm } from "../services/terminalRegistry";
 import { useTerminalStore } from "../store/terminalStore";
 import { useSettingsStore } from "../store/settingsStore";
@@ -76,7 +76,7 @@ export function useTerminalIO(
       ...toXtermOptions(opts, opacity, baseTheme),
       linkHandler: {
         activate: (_e, text) => {
-          invoke("open_url", { url: text }).catch(console.error);
+          openUrl(text);
         },
         allowNonHttpProtocols: true,
       },
@@ -103,7 +103,7 @@ export function useTerminalIO(
           links.push({
             range: { start: { x: startX + 1, y }, end: { x: endX, y } },
             text: url,
-            activate() { invoke("open_url", { url }).catch(console.error); },
+            activate() { openUrl(url); },
           });
         }
         cb(links);

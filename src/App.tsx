@@ -22,6 +22,7 @@ import { useTerminalActivity } from "./hooks/useTerminalActivity";
 import { useNotesSync } from "./hooks/useNotesSync";
 import { useWiresSync } from "./hooks/useWiresSync";
 import { loadWorkspace } from "./services/tauriCommands";
+import { subscribeJson } from "./services/transport";
 
 export default function App() {
   useKeyboard();
@@ -73,9 +74,7 @@ export default function App() {
     loadSettings();
     // Hub or other processes may mutate settings on disk (e.g. wodouyao bg).
     // Listen for the settings-changed event and reload.
-    const unlisten = import("@tauri-apps/api/event").then(({ listen }) =>
-      listen("settings-changed", () => loadSettings())
-    );
+    const unlisten = subscribeJson("settings-changed", () => loadSettings());
     return () => {
       unlisten.then((fn) => fn()).catch(() => {});
     };
