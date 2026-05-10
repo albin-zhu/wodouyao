@@ -9,6 +9,7 @@
 //! adds the `GET /v1/events` WebSocket multiplexer.
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use axum::{
@@ -91,7 +92,7 @@ async fn main() {
         path_resolver,
     ));
 
-    let bearer_token = Uuid::new_v4().to_string();
+    let bearer_token = load_or_create_token().expect("load_or_create_token failed");
     let server_state = ServerState {
         inner: app_state,
         emitter: web_emitter,
@@ -131,10 +132,14 @@ async fn main() {
         .with_state(server_state)
         .fallback_service(static_files);
 
-    let addr: SocketAddr = "127.0.0.1:0".parse().expect("hardcoded addr");
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .expect("bind failed");
+    let port = read_port();
+    let addr: SocketAddr = format!("127.0.0.1:{}", port).parse().expect("invalid addr");
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap_or_else(|e| {
+        panic!(
+            "bind 127.0.0.1:{} failed: {} (port in use? set WODOUYAO_WEB_PORT to another port)",
+            port, e
+        )
+    });
     let local_addr = listener.local_addr().expect("local_addr failed");
     println!("wodouyao-server listening at:");
     println!("  http://{}/#token={}", local_addr, bearer_token);
@@ -142,6 +147,60 @@ async fn main() {
     log::info!("wodouyao-server bound to {}", local_addr);
 
     axum::serve(listener, app).await.expect("axum serve failed");
+}
+
+/// Persistent port: defaults to 19799 (next to the hub's 19790-ish range
+/// and the desktop pet's 19800) so the user can bookmark a stable URL
+/// and reuse the same SSH-tunnel command across server restarts. Set
+/// WODOUYAO_WEB_PORT to override; set it to 0 for an ephemeral port.
+fn read_port() -> u16 {
+    std::env::var("WODOUYAO_WEB_PORT")
+        .ok()
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(19799)
+}
+
+/// Persistent bearer token. Resolution order:
+///   1. WODOUYAO_WEB_TOKEN env var (when caller wants ad-hoc rotation)
+///   2. ~/.wodouyao/web-token   (created on first run, mode 0600)
+///   3. fresh UUID, written to (2)
+///
+/// Stable across restarts so `http://host:19799/#token=…` stays a valid
+/// bookmark. Rotate by deleting the file.
+fn load_or_create_token() -> Result<String, String> {
+    if let Ok(t) = std::env::var("WODOUYAO_WEB_TOKEN") {
+        if !t.is_empty() {
+            return Ok(t);
+        }
+    }
+    let path = token_file_path()?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("create {}: {}", parent.display(), e))?;
+    }
+    if path.exists() {
+        let s = std::fs::read_to_string(&path).map_err(|e| format!("read: {}", e))?;
+        let trimmed = s.trim().to_string();
+        if !trimmed.is_empty() {
+            return Ok(trimmed);
+        }
+    }
+    let token = Uuid::new_v4().to_string();
+    std::fs::write(&path, &token).map_err(|e| format!("write: {}", e))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+    log::info!("persistent web token written to {}", path.display());
+    Ok(token)
+}
+
+fn token_file_path() -> Result<PathBuf, String> {
+    Ok(dirs::home_dir()
+        .ok_or_else(|| "home dir not found".to_string())?
+        .join(".wodouyao")
+        .join("web-token"))
 }
 
 async fn ping() -> Json<Value> {
