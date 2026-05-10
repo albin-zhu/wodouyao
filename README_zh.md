@@ -228,6 +228,64 @@ npm run tauri build
 npx tsc --noEmit
 ```
 
+### Headless 服务器模式（浏览器端 UI）
+
+同一份 Rust 核心也能以 headless HTTP+WebSocket 服务器形态启动，从
+**另一台机器的浏览器**操作画布——PTY 终端、Claude / Codex 会话、
+hub 全部在服务器侧跑。典型场景：SSH 隧道到工作站，部署到远端开发
+机，或者就是想让会话长期挂着、关浏览器后再开。
+
+```bash
+# 后台启动（自动 build SPA + cargo --release + nohup），脱离启动
+# 它的 shell；URL 打印一次后 bookmark 即可永久使用。
+npm run server:start
+
+npm run server:status   # 看 pid + URL
+npm run server:logs     # tail -f .wodouyao-runtime/server.log
+npm run server:stop     # 优雅停止（SIGTERM 2s 超时退化 SIGKILL）
+
+# 前台变体（开发用，日志直接打在 terminal 里）：
+npm run server:dev
+```
+
+`server:start` 打印的 URL 是**稳定**的——端口和 token 跨重启都不变：
+
+```
+wodouyao-server listening at:
+  http://127.0.0.1:19799/#token=23d31e67-…
+```
+
+- **端口**默认 `19799`，可用 `WODOUYAO_WEB_PORT` 覆盖；设成 `0` 退回
+  随机端口
+- **Token** 持久化在 `~/.wodouyao/web-token`（0600 权限，首次运行生
+  成），用 `WODOUYAO_WEB_TOKEN` 临时覆盖；要轮换就删文件再重启
+
+浏览器打开这个 URL 就行。前端把 `#token=…` 抠出来放进 sessionStorage，
+后续 `/v1/cmd/*` 走 fetch、`/v1/events` 走 WebSocket，都拿这个 token 鉴权。
+
+远程使用走 SSH 隧道（端口稳定意味着这条命令永久有效）：
+
+```bash
+ssh -L 19799:127.0.0.1:19799 your-server
+# 本地浏览器: 收藏 http://127.0.0.1:19799/#token=…
+```
+
+**PTY 会话在关闭浏览器后继续运行**。daemon 持有 `PtyManager`，关浏
+览器只是断开 WebSocket。下次再开 tab，原有终端都还在跑。刷新和切换
+workspace 也是幂等的——server 看到 id 已经活着就直接复用，不会杀掉
+重建（新 xterm 显示是空的，但底层进程没换）。
+
+headless binary 只监听 `127.0.0.1`，**程序内不做 TLS，不做多租户隔
+离**。把 bearer token 当共享密钥用，公网部署前置 TLS 反代。这个模
+式定位**单用户远程访问**，不是多租户 SaaS。
+
+其他环境变量：
+- `WODOUYAO_DIST_DIR` — SPA bundle 位置（默认 binary 同目录下的
+  `dist/`）
+- `WODOUYAO_RESOURCE_DIR` — bundled `wodouyao` CLI 位置（默认 binary
+  父目录；开发时设为 `$PWD/src-tauri`，让 PTY 在 PATH 里找到
+  `resources/bin/wodouyao`）
+
 ---
 
 ## 📁 项目结构

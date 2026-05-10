@@ -232,36 +232,56 @@ npx tsc --noEmit
 
 The same Rust core can run as a headless HTTP+WebSocket server so you
 can drive the canvas — including PTY terminals, Claude / Codex
-sessions, and the hub — from a browser on another machine. Useful for:
+sessions, and the hub — from a browser on another machine. Useful for
 SSH-tunnelling into a workstation, running the orchestrator on a
-remote dev box, or just keeping a long-lived session on a server.
+remote dev box, or just keeping a long-lived session up while you
+close and reopen browser windows.
 
 ```bash
-# Build the SPA bundle + the headless server binary
-npm run server:build
+# Daemonize: build SPA + cargo --release + nohup. Survives the
+# launching shell. URL prints to stdout once, then bookmark it.
+npm run server:start
 
-# Or dev-style (debug build, foreground)
+npm run server:status   # pid + URL
+npm run server:logs     # tail -f .wodouyao-runtime/server.log
+npm run server:stop     # SIGTERM, escalates to SIGKILL after 2s
+
+# Foreground variant for active development (logs to stdout):
 npm run server:dev
 ```
 
-When the server starts it prints a one-shot URL with the bearer token
-embedded in the hash:
+`server:start` prints a stable URL — the port and bearer token are
+both pinned across restarts:
 
 ```
 wodouyao-server listening at:
-  http://127.0.0.1:54321/#token=…
+  http://127.0.0.1:19799/#token=23d31e67-…
 ```
 
-Open that URL in any browser. The frontend reads the token from the
+- **Port** is 19799 by default. Override via `WODOUYAO_WEB_PORT`; set
+  it to `0` for an ephemeral port.
+- **Token** lives at `~/.wodouyao/web-token` (mode 0600, generated on
+  first run). Override per-launch via `WODOUYAO_WEB_TOKEN`. Rotate by
+  deleting the file and restarting.
+
+Open the URL in any browser. The frontend strips `#token=…` from the
 hash, stashes it in `sessionStorage`, and uses it for both the
 `/v1/cmd/*` HTTP commands and the `/v1/events` WebSocket.
 
-For remote use, SSH-tunnel the port:
+For remote use, SSH-tunnel the port (the same command works forever
+since the port is pinned):
 
 ```bash
-ssh -L 54321:127.0.0.1:54321 your-server
-# then on your laptop, open http://127.0.0.1:54321/#token=…
+ssh -L 19799:127.0.0.1:19799 your-server
+# on your laptop: bookmark http://127.0.0.1:19799/#token=…
 ```
+
+**PTY sessions survive browser close.** The daemon owns the
+`PtyManager`; closing the browser only drops the WebSocket. Open a
+fresh tab later, the existing terminals are still running. Browser
+refresh and workspace switch are also idempotent — the server keeps
+the live PTY when the frontend re-attaches with the same id (the new
+xterm starts blank but the underlying process is the same).
 
 The headless binary listens on `127.0.0.1` only — there is **no
 in-process TLS, no multi-tenant auth**. Treat the bearer token as a
@@ -270,8 +290,12 @@ without a TLS-terminating reverse proxy in front. This mode is
 intended for **single-user remote access**, not multi-tenant SaaS
 deployment.
 
-Set `WODOUYAO_DIST_DIR` to override where the server looks for the
-SPA bundle (defaults to `dist/` next to the binary).
+Other env overrides:
+- `WODOUYAO_DIST_DIR` — where the server looks for the SPA bundle
+  (defaults to `dist/` next to the binary).
+- `WODOUYAO_RESOURCE_DIR` — where to find the bundled `wodouyao` CLI
+  (defaults to the binary's parent dir; set to `$PWD/src-tauri` in
+  dev so PTYs find `resources/bin/wodouyao` on PATH).
 
 ---
 
