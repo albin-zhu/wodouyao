@@ -1,5 +1,4 @@
-#[cfg(feature = "tauri-runtime")]
-mod commands;
+pub mod commands;
 pub mod file_nodes;
 pub mod hub;
 pub mod integrations;

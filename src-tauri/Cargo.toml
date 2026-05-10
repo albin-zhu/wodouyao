@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Cross-platform infinite canvas terminal orchestrator"
 authors = ["you"]
 edition = "2021"
+default-run = "wodouyao"
 
 [lib]
 name = "wodouyao_lib"

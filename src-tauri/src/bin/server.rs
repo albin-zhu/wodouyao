@@ -3,24 +3,27 @@
 //! and exposes commands over HTTP + a WebSocket event stream that a
 //! browser-side SPA consumes via `src/services/transport.ts`.
 //!
-//! Phase 2a scaffolding: starts the existing tiny_http hub on its usual
-//! port, builds a minimal axum app with Bearer auth and a /v1/ping
-//! endpoint, and binds 127.0.0.1:0. Command routing and WS streaming
-//! land in subsequent commits.
+//! `POST /v1/cmd/{name}` is the universal IPC endpoint — body is a JSON
+//! object whose keys mirror the camelCase parameter names that the
+//! existing Tauri frontend already sends to `invoke()`. A future commit
+//! adds the `GET /v1/events` WebSocket multiplexer.
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     middleware::{self, Next},
-    response::Response,
-    routing::get,
+    response::{IntoResponse, Response},
+    routing::{get, post},
     Json, Router,
 };
+use serde::de::DeserializeOwned;
+use serde_json::Value;
 use uuid::Uuid;
 
+use wodouyao_lib::commands;
 use wodouyao_lib::file_nodes::FileNodeStore;
 use wodouyao_lib::hub::{server as hub_server, IdentityRegistry, TeamRegistry, WireTopology};
 use wodouyao_lib::notes::NoteStore;
@@ -34,6 +37,7 @@ use wodouyao_lib::tasks::TaskStore;
 #[derive(Clone)]
 struct ServerState {
     inner: Arc<AppState>,
+    #[allow(dead_code)] // wired up to broadcast events in Phase 3 (WS)
     emitter: Arc<WebEmitter>,
     bearer_token: String,
 }
@@ -43,7 +47,6 @@ async fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     wodouyao_lib::hydrate_login_shell_env();
 
-    // Same set of stores the Tauri build constructs.
     let topology = WireTopology::new();
     let identities = IdentityRegistry::new();
     let team_registry = TeamRegistry::new();
@@ -52,9 +55,6 @@ async fn main() {
     let file_node_store = FileNodeStore::new();
     let task_board_store = TaskBoardStore::new();
 
-    // Web event bus — broadcast channel fans out to all connected WS
-    // clients. Capacity 1024 buffers a generous amount of terminal
-    // output between client polls.
     let web_emitter = Arc::new(WebEmitter::new(1024));
     let emitter: Arc<dyn EventEmitter> = web_emitter.clone();
     let path_resolver: Arc<dyn PathResolver> = Arc::new(WebPathResolver::new());
@@ -97,6 +97,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/v1/ping", get(ping))
+        .route("/v1/cmd/:name", post(cmd_dispatch))
         .layer(middleware::from_fn_with_state(
             server_state.clone(),
             bearer_auth,
@@ -116,7 +117,7 @@ async fn main() {
     axum::serve(listener, app).await.expect("axum serve failed");
 }
 
-async fn ping() -> Json<serde_json::Value> {
+async fn ping() -> Json<Value> {
     Json(serde_json::json!({ "ok": true, "service": "wodouyao-server" }))
 }
 
@@ -134,5 +135,358 @@ async fn bearer_auth(
         Ok(next.run(req).await)
     } else {
         Err(StatusCode::UNAUTHORIZED)
+    }
+}
+
+#[derive(Debug)]
+enum AppError {
+    BadRequest(String),
+    Internal(String),
+    NotFound(String),
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        let (code, msg) = match self {
+            AppError::BadRequest(m) => (StatusCode::BAD_REQUEST, m),
+            AppError::Internal(m) => (StatusCode::INTERNAL_SERVER_ERROR, m),
+            AppError::NotFound(m) => (StatusCode::NOT_FOUND, m),
+        };
+        (code, msg).into_response()
+    }
+}
+
+fn extract<T: DeserializeOwned>(args: &Value, key: &str) -> Result<T, AppError> {
+    let v = args.get(key).cloned().unwrap_or(Value::Null);
+    serde_json::from_value(v).map_err(|e| AppError::BadRequest(format!("{}: {}", key, e)))
+}
+
+fn ok<T: serde::Serialize>(value: T) -> Result<Json<Value>, AppError> {
+    serde_json::to_value(value)
+        .map(Json)
+        .map_err(|e| AppError::Internal(format!("response serialize: {}", e)))
+}
+
+fn err_to_app(s: String) -> AppError {
+    AppError::Internal(s)
+}
+
+/// Universal command endpoint. Body is the same shape Tauri's
+/// `invoke()` second-arg sends (camelCase keys mapping to the Rust
+/// command function's parameters). Each match arm extracts what it
+/// needs and forwards to the corresponding `*_impl` in
+/// `wodouyao_lib::commands`.
+async fn cmd_dispatch(
+    Path(name): Path<String>,
+    State(state): State<ServerState>,
+    Json(args): Json<Value>,
+) -> Result<Json<Value>, AppError> {
+    let s = &*state.inner;
+
+    match name.as_str() {
+        // ── hub ────────────────────────────────────────────────────────
+        "get_hub_endpoint" => ok(commands::hub::get_hub_endpoint_impl(s)),
+        "bootstrap_workflow" => {
+            let roles = extract(&args, "roles")?;
+            let wire_mesh = extract::<Option<bool>>(&args, "wireMesh").unwrap_or(None);
+            let cwd = extract::<Option<String>>(&args, "cwd").unwrap_or(None);
+            commands::hub::bootstrap_workflow_impl(s, roles, wire_mesh, cwd)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+
+        // ── terminal ───────────────────────────────────────────────────
+        "create_terminal" => {
+            let request = extract(&args, "request")?;
+            commands::terminal::create_terminal_impl(s, request)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "destroy_terminal" => {
+            let id: String = extract(&args, "id")?;
+            commands::terminal::destroy_terminal_impl(s, &id)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "write_terminal" => {
+            let id: String = extract(&args, "id")?;
+            let data: Vec<u8> = extract(&args, "data")?;
+            commands::terminal::write_terminal_impl(s, &id, &data)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "resize_terminal" => {
+            let id: String = extract(&args, "id")?;
+            let cols: u16 = extract(&args, "cols")?;
+            let rows: u16 = extract(&args, "rows")?;
+            commands::terminal::resize_terminal_impl(s, &id, cols, rows)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "get_default_shell" => ok(commands::terminal::get_default_shell_impl()),
+        "list_available_shells" => ok(commands::terminal::list_available_shells_impl()),
+        "save_clipboard_image" => {
+            let data: Vec<u8> = extract(&args, "data")?;
+            let ext: String = extract(&args, "ext")?;
+            commands::terminal::save_clipboard_image_impl(&data, &ext)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+
+        // ── workspace ──────────────────────────────────────────────────
+        "save_workspace" => {
+            let workspace = extract(&args, "workspace")?;
+            commands::workspace::save_workspace_impl(s, workspace)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "load_workspace" => {
+            let id: String = extract(&args, "id")?;
+            commands::workspace::load_workspace_impl(s, &id)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "list_workspaces" => commands::workspace::list_workspaces_impl()
+            .map_err(err_to_app)
+            .and_then(ok),
+        "delete_workspace" => {
+            let id: String = extract(&args, "id")?;
+            commands::workspace::delete_workspace_impl(&id)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "save_workspace_terminals" => {
+            let id: String = extract(&args, "id")?;
+            let terminals = extract(&args, "terminals")?;
+            commands::workspace::save_workspace_terminals_impl(&id, terminals)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+
+        // ── settings ───────────────────────────────────────────────────
+        "get_settings" => commands::settings::get_settings_impl()
+            .map_err(err_to_app)
+            .and_then(ok),
+        "update_settings" => {
+            let settings = extract(&args, "settings")?;
+            commands::settings::update_settings_impl(&settings)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+
+        // ── agents ─────────────────────────────────────────────────────
+        "detect_cli_agents" => ok(commands::agents::detect_cli_agents_impl()),
+
+        // ── wire ───────────────────────────────────────────────────────
+        "wire_list" => ok(commands::wire::wire_list_impl(s)),
+        "wire_create" => {
+            let source_id: String = extract(&args, "sourceId")?;
+            let target_id: String = extract(&args, "targetId")?;
+            let kind: Option<String> = extract(&args, "kind").unwrap_or(None);
+            let workspace_id: Option<String> =
+                extract(&args, "workspaceId").unwrap_or(None);
+            ok(commands::wire::wire_create_impl(
+                s,
+                source_id,
+                target_id,
+                kind,
+                workspace_id,
+            ))
+        }
+        "wire_remove" => {
+            let id: String = extract(&args, "id")?;
+            ok(commands::wire::wire_remove_impl(s, &id))
+        }
+        "wire_replace_all" => {
+            let wires = extract(&args, "wires")?;
+            commands::wire::wire_replace_all_impl(s, wires);
+            ok(())
+        }
+        "wire_peers_for" => {
+            let terminal_id: String = extract(&args, "terminalId")?;
+            ok(commands::wire::wire_peers_for_impl(s, &terminal_id))
+        }
+
+        // ── integrations ───────────────────────────────────────────────
+        "integrations_status" => ok(commands::integrations::integrations_status_impl()),
+        "integrations_install" => {
+            let agent: String = extract(&args, "agent")?;
+            commands::integrations::integrations_install_impl(s, &agent)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "integrations_uninstall" => {
+            let agent: String = extract(&args, "agent")?;
+            commands::integrations::integrations_uninstall_impl(&agent)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+
+        // ── teams ──────────────────────────────────────────────────────
+        "teams_list" => ok(commands::team::teams_list_impl(s)),
+        "teams_team_for_terminal" => {
+            let term_id: String = extract(&args, "termId")?;
+            ok(commands::team::teams_team_for_terminal_impl(s, &term_id))
+        }
+        "teams_dissolve" => {
+            let team_id: String = extract(&args, "teamId")?;
+            commands::team::teams_dissolve_impl(s, &team_id)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "teams_create" => {
+            let name: String = extract(&args, "name")?;
+            let palette: Option<String> = extract(&args, "palette").unwrap_or(None);
+            let as_lead: Option<bool> = extract(&args, "asLead").unwrap_or(None);
+            let caller_term_id: Option<String> =
+                extract(&args, "callerTermId").unwrap_or(None);
+            commands::team::teams_create_impl(s, &name, palette.as_deref(), as_lead, caller_term_id)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "teams_join" => {
+            let team_id: String = extract(&args, "teamId")?;
+            let term_id: String = extract(&args, "termId")?;
+            let role: Option<String> = extract(&args, "role").unwrap_or(None);
+            commands::team::teams_join_impl(s, &team_id, term_id, role.as_deref())
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "teams_leave" => {
+            let team_id: String = extract(&args, "teamId")?;
+            let term_id: String = extract(&args, "termId")?;
+            commands::team::teams_leave_impl(s, &team_id, &term_id)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+
+        // ── file preview ───────────────────────────────────────────────
+        "file_preview_text" => {
+            let path: String = extract(&args, "path")?;
+            let max_bytes: Option<usize> = extract(&args, "maxBytes").unwrap_or(None);
+            commands::file_preview::file_preview_text_impl(&path, max_bytes)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "file_preview_dir" => {
+            let path: String = extract(&args, "path")?;
+            commands::file_preview::file_preview_dir_impl(&path)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "file_inspect" => {
+            let path: String = extract(&args, "path")?;
+            commands::file_preview::file_inspect_impl(&path)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+
+        // ── tasks ──────────────────────────────────────────────────────
+        "tasks_list" => ok(commands::tasks::tasks_list_impl(s)),
+        "tasks_create" => {
+            let input = extract(&args, "input")?;
+            commands::tasks::tasks_create_impl(s, input)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "tasks_update" => {
+            let id: String = extract(&args, "id")?;
+            let patch = extract(&args, "patch")?;
+            commands::tasks::tasks_update_impl(s, &id, patch)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "tasks_remove" => {
+            let id: String = extract(&args, "id")?;
+            commands::tasks::tasks_remove_impl(s, &id)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+
+        // ── notes ──────────────────────────────────────────────────────
+        "notes_list" => ok(commands::notes::notes_list_impl(s)),
+        "notes_create" => {
+            let input = extract(&args, "input")?;
+            ok(commands::notes::notes_create_impl(s, input))
+        }
+        "notes_update" => {
+            let id: String = extract(&args, "id")?;
+            let patch = extract(&args, "patch")?;
+            ok(commands::notes::notes_update_impl(s, &id, patch))
+        }
+        "notes_remove" => {
+            let id: String = extract(&args, "id")?;
+            ok(commands::notes::notes_remove_impl(s, &id))
+        }
+        "notes_replace_all" => {
+            let notes = extract(&args, "notes")?;
+            commands::notes::notes_replace_all_impl(s, notes);
+            ok(())
+        }
+
+        // ── file nodes ─────────────────────────────────────────────────
+        "file_nodes_list" => ok(commands::file_nodes::file_nodes_list_impl(s)),
+        "file_nodes_create" => {
+            let input = extract(&args, "input")?;
+            ok(commands::file_nodes::file_nodes_create_impl(s, input))
+        }
+        "file_nodes_update" => {
+            let id: String = extract(&args, "id")?;
+            let patch = extract(&args, "patch")?;
+            ok(commands::file_nodes::file_nodes_update_impl(s, &id, patch))
+        }
+        "file_nodes_remove" => {
+            let id: String = extract(&args, "id")?;
+            ok(commands::file_nodes::file_nodes_remove_impl(s, &id))
+        }
+        "file_nodes_replace_all" => {
+            let nodes = extract(&args, "nodes")?;
+            commands::file_nodes::file_nodes_replace_all_impl(s, nodes);
+            ok(())
+        }
+
+        // ── task boards ────────────────────────────────────────────────
+        "task_boards_list" => ok(commands::task_boards::task_boards_list_impl(s)),
+        "task_boards_create" => {
+            let input = extract(&args, "input")?;
+            ok(commands::task_boards::task_boards_create_impl(s, input))
+        }
+        "task_boards_update" => {
+            let id: String = extract(&args, "id")?;
+            let patch = extract(&args, "patch")?;
+            ok(commands::task_boards::task_boards_update_impl(s, &id, patch))
+        }
+        "task_boards_remove" => {
+            let id: String = extract(&args, "id")?;
+            ok(commands::task_boards::task_boards_remove_impl(s, &id))
+        }
+        "task_boards_replace_all" => {
+            let boards = extract(&args, "boards")?;
+            commands::task_boards::task_boards_replace_all_impl(s, boards);
+            ok(())
+        }
+
+        // ── shaders ────────────────────────────────────────────────────
+        "shaders_list" => commands::shaders::shaders_list_impl()
+            .map_err(err_to_app)
+            .and_then(ok),
+        "shaders_get" => {
+            let name: String = extract(&args, "name")?;
+            commands::shaders::shaders_get_impl(&name)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "shaders_dir_path" => commands::shaders::shaders_dir_path_impl()
+            .map_err(err_to_app)
+            .and_then(ok),
+
+        // ── misc ───────────────────────────────────────────────────────
+        "open_url" => {
+            // Web mode: the frontend handles `window.open(url)` itself; the
+            // server just no-ops to avoid breaking the IPC contract.
+            ok(())
+        }
+
+        other => Err(AppError::NotFound(format!("unknown command: {}", other))),
     }
 }

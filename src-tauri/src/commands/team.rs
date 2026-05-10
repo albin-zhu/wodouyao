@@ -1,25 +1,32 @@
-use tauri::State;
 use uuid::Uuid;
 
 use crate::hub::{topology::Wire, Role, Team};
 use crate::state::AppState;
 
-#[tauri::command]
-pub fn teams_list(state: State<'_, AppState>) -> Vec<Team> {
+fn parse_role(s: Option<&str>) -> Role {
+    match s.map(|v| v.to_ascii_lowercase()).as_deref() {
+        Some("lead") => Role::Lead,
+        Some("observer") => Role::Observer,
+        _ => Role::Worker,
+    }
+}
+
+fn emit_teams_updated(state: &AppState) {
+    state
+        .app_handle
+        .emit_json("teams-updated", serde_json::Value::Null);
+}
+
+pub fn teams_list_impl(state: &AppState) -> Vec<Team> {
     state.team_registry.list()
 }
 
-#[tauri::command]
-pub fn teams_team_for_terminal(state: State<'_, AppState>, term_id: String) -> Option<Team> {
-    state.team_registry.team_for_terminal(&term_id)
+pub fn teams_team_for_terminal_impl(state: &AppState, term_id: &str) -> Option<Team> {
+    state.team_registry.team_for_terminal(term_id)
 }
 
-#[tauri::command]
-pub fn teams_dissolve(
-    state: State<'_, AppState>,
-    team_id: String,
-) -> Result<Vec<String>, String> {
-    let evicted = state.team_registry.dissolve(&team_id)?;
+pub fn teams_dissolve_impl(state: &AppState, team_id: &str) -> Result<Vec<String>, String> {
+    let evicted = state.team_registry.dissolve(team_id)?;
     {
         let mut mgr = state.pty_manager.lock().map_err(|e| e.to_string())?;
         for id in &evicted {
@@ -30,66 +37,48 @@ pub fn teams_dissolve(
         state.topology.remove_for_terminal(id);
         state.identities.remove(id);
     }
-    state
-        .app_handle
-        .emit_json("teams-updated", serde_json::Value::Null);
+    emit_teams_updated(state);
     Ok(evicted)
 }
 
-fn parse_role(s: Option<&str>) -> Role {
-    match s.map(|v| v.to_ascii_lowercase()).as_deref() {
-        Some("lead") => Role::Lead,
-        Some("observer") => Role::Observer,
-        _ => Role::Worker,
-    }
-}
-
-#[tauri::command]
-pub fn teams_create(
-    state: State<'_, AppState>,
-    name: String,
-    palette: Option<String>,
+pub fn teams_create_impl(
+    state: &AppState,
+    name: &str,
+    palette: Option<&str>,
     as_lead: Option<bool>,
     caller_term_id: Option<String>,
 ) -> Result<Team, String> {
-    let palette_key = palette.as_deref().unwrap_or("blue");
-    let mut team = state.team_registry.create(&name, palette_key, None)?;
+    let palette_key = palette.unwrap_or("blue");
+    let mut team = state.team_registry.create(name, palette_key, None)?;
     if as_lead.unwrap_or(false) {
         if let Some(id) = caller_term_id.filter(|s| !s.is_empty()) {
             team = state.team_registry.join(&team.id, id, Role::Lead)?;
         }
     }
-    state
-        .app_handle
-        .emit_json("teams-updated", serde_json::Value::Null);
+    emit_teams_updated(state);
     Ok(team)
 }
 
-#[tauri::command]
-pub fn teams_join(
-    state: State<'_, AppState>,
-    team_id: String,
+pub fn teams_join_impl(
+    state: &AppState,
+    team_id: &str,
     term_id: String,
-    role: Option<String>,
+    role: Option<&str>,
 ) -> Result<Team, String> {
-    let r = parse_role(role.as_deref());
+    let r = parse_role(role);
     let is_lead = matches!(r, Role::Lead);
-    // Snapshot existing members BEFORE join so we know who to wire to.
     let existing = state
         .team_registry
-        .get(&team_id)
+        .get(team_id)
         .ok_or_else(|| "not_found".to_string())?;
-    let team = state.team_registry.join(&team_id, term_id.clone(), r)?;
-    // Star topology with lead as source: lead → member, never member → lead.
+    let team = state.team_registry.join(team_id, term_id.clone(), r)?;
     let pairs: Vec<(String, String)> = if is_lead {
-        // new member IS the lead: lead (new) → each existing member
         existing
             .members
             .iter()
             .map(|m| (term_id.clone(), m.term_id.clone()))
             .collect()
     } else {
-        // worker/observer joining: existing lead → new member
         existing
             .members
             .iter()
@@ -107,21 +96,73 @@ pub fn teams_join(
             workspace_id: None,
         });
     }
-    state
-        .app_handle
-        .emit_json("teams-updated", serde_json::Value::Null);
+    emit_teams_updated(state);
     Ok(team)
 }
 
+pub fn teams_leave_impl(
+    state: &AppState,
+    team_id: &str,
+    term_id: &str,
+) -> Result<Team, String> {
+    let team = state.team_registry.leave(team_id, term_id)?;
+    emit_teams_updated(state);
+    Ok(team)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn teams_list(state: tauri::State<'_, AppState>) -> Vec<Team> {
+    teams_list_impl(&state)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn teams_team_for_terminal(
+    state: tauri::State<'_, AppState>,
+    term_id: String,
+) -> Option<Team> {
+    teams_team_for_terminal_impl(&state, &term_id)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn teams_dissolve(
+    state: tauri::State<'_, AppState>,
+    team_id: String,
+) -> Result<Vec<String>, String> {
+    teams_dissolve_impl(&state, &team_id)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn teams_create(
+    state: tauri::State<'_, AppState>,
+    name: String,
+    palette: Option<String>,
+    as_lead: Option<bool>,
+    caller_term_id: Option<String>,
+) -> Result<Team, String> {
+    teams_create_impl(&state, &name, palette.as_deref(), as_lead, caller_term_id)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn teams_join(
+    state: tauri::State<'_, AppState>,
+    team_id: String,
+    term_id: String,
+    role: Option<String>,
+) -> Result<Team, String> {
+    teams_join_impl(&state, &team_id, term_id, role.as_deref())
+}
+
+#[cfg(feature = "tauri-runtime")]
 #[tauri::command]
 pub fn teams_leave(
-    state: State<'_, AppState>,
+    state: tauri::State<'_, AppState>,
     team_id: String,
     term_id: String,
 ) -> Result<Team, String> {
-    let team = state.team_registry.leave(&team_id, &term_id)?;
-    state
-        .app_handle
-        .emit_json("teams-updated", serde_json::Value::Null);
-    Ok(team)
+    teams_leave_impl(&state, &team_id, &term_id)
 }

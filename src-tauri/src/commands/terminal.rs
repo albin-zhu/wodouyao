@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use tauri::State;
 
 use crate::pty::shell;
 use crate::state::AppState;
@@ -21,9 +20,8 @@ pub struct CreateTerminalRequest {
     pub workspace_id: Option<String>,
 }
 
-#[tauri::command]
-pub fn create_terminal(
-    state: State<'_, AppState>,
+pub fn create_terminal_impl(
+    state: &AppState,
     request: CreateTerminalRequest,
 ) -> Result<String, String> {
     let shell_path = request
@@ -100,48 +98,42 @@ pub fn create_terminal(
     )
 }
 
-#[tauri::command]
-pub fn destroy_terminal(state: State<'_, AppState>, id: String) -> Result<(), String> {
+pub fn destroy_terminal_impl(state: &AppState, id: &str) -> Result<(), String> {
     // Kill the PTY first; even if that fails, clean up the hub bookkeeping
     // so peers stop seeing a dead terminal.
     let pty_result = {
         let mut manager = state.pty_manager.lock().map_err(|e| e.to_string())?;
-        manager.destroy_session(&id)
+        manager.destroy_session(id)
     };
-    state.topology.remove_for_terminal(&id);
-    state.identities.remove(&id);
+    state.topology.remove_for_terminal(id);
+    state.identities.remove(id);
     pty_result
 }
 
-#[tauri::command]
-pub fn write_terminal(state: State<'_, AppState>, id: String, data: Vec<u8>) -> Result<(), String> {
+pub fn write_terminal_impl(state: &AppState, id: &str, data: &[u8]) -> Result<(), String> {
     let mut manager = state.pty_manager.lock().map_err(|e| e.to_string())?;
-    manager.write_to_session(&id, &data)
+    manager.write_to_session(id, data)
 }
 
-#[tauri::command]
-pub fn resize_terminal(
-    state: State<'_, AppState>,
-    id: String,
+pub fn resize_terminal_impl(
+    state: &AppState,
+    id: &str,
     cols: u16,
     rows: u16,
 ) -> Result<(), String> {
     let manager = state.pty_manager.lock().map_err(|e| e.to_string())?;
-    manager.resize_session(&id, cols, rows)
+    manager.resize_session(id, cols, rows)
 }
 
-#[tauri::command]
-pub fn get_default_shell() -> shell::ShellInfo {
+pub fn get_default_shell_impl() -> shell::ShellInfo {
     shell::detect_default_shell()
 }
 
-#[tauri::command]
-pub fn list_available_shells() -> Vec<shell::ShellInfo> {
+pub fn list_available_shells_impl() -> Vec<shell::ShellInfo> {
     shell::list_available_shells()
 }
 
-#[tauri::command]
-pub fn save_clipboard_image(data: Vec<u8>, ext: String) -> Result<String, String> {
+pub fn save_clipboard_image_impl(data: &[u8], ext: &str) -> Result<String, String> {
     let base = dirs::download_dir()
         .or_else(dirs::home_dir)
         .ok_or_else(|| "cannot locate downloads dir".to_string())?;
@@ -155,8 +147,62 @@ pub fn save_clipboard_image(data: Vec<u8>, ext: String) -> Result<String, String
     let safe_ext = if safe_ext.is_empty() { "png".into() } else { safe_ext };
 
     let path = base.join(format!("clipboard-{}.{}", ts, safe_ext));
-    std::fs::write(&path, &data).map_err(|e| e.to_string())?;
+    std::fs::write(&path, data).map_err(|e| e.to_string())?;
     path.to_str()
         .ok_or_else(|| "non-UTF8 path".to_string())
         .map(|s| s.to_string())
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn create_terminal(
+    state: tauri::State<'_, AppState>,
+    request: CreateTerminalRequest,
+) -> Result<String, String> {
+    create_terminal_impl(&state, request)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn destroy_terminal(state: tauri::State<'_, AppState>, id: String) -> Result<(), String> {
+    destroy_terminal_impl(&state, &id)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn write_terminal(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    data: Vec<u8>,
+) -> Result<(), String> {
+    write_terminal_impl(&state, &id, &data)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn resize_terminal(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(), String> {
+    resize_terminal_impl(&state, &id, cols, rows)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn get_default_shell() -> shell::ShellInfo {
+    get_default_shell_impl()
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn list_available_shells() -> Vec<shell::ShellInfo> {
+    list_available_shells_impl()
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn save_clipboard_image(data: Vec<u8>, ext: String) -> Result<String, String> {
+    save_clipboard_image_impl(&data, &ext)
 }
