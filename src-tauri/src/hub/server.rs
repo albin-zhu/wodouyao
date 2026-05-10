@@ -2989,7 +2989,7 @@ fn background_get(request: tiny_http::Request) {
 }
 
 fn shaders_list_route(request: tiny_http::Request) {
-    match crate::commands::shaders::shaders_list() {
+    match crate::shaders::list() {
         Ok(list) => {
             let body = serde_json::to_string(&list).unwrap_or_else(|_| "[]".into());
             let _ = request.respond(json(200, body));

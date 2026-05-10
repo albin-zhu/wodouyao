@@ -1,26 +1,38 @@
+#[cfg(feature = "tauri-runtime")]
 mod commands;
 pub mod file_nodes;
 pub mod hub;
-mod integrations;
+pub mod integrations;
 pub mod notes;
 pub mod pty;
 pub mod runtime;
-mod settings;
-mod state;
+pub mod settings;
+pub mod shaders;
+pub mod state;
 pub mod task_boards;
 pub mod tasks;
 pub mod workspace;
 
+#[cfg(feature = "tauri-runtime")]
 use std::sync::{Arc, Mutex, OnceLock};
 
+#[cfg(feature = "tauri-runtime")]
 use file_nodes::FileNodeStore;
+#[cfg(feature = "tauri-runtime")]
 use hub::{server, AppHandleSlot, IdentityRegistry, TeamRegistry, WireTopology};
+#[cfg(feature = "tauri-runtime")]
 use notes::NoteStore;
+#[cfg(feature = "tauri-runtime")]
 use pty::manager::PtyManager;
+#[cfg(feature = "tauri-runtime")]
 use runtime::tauri_impl::{TauriEmitter, TauriPathResolver};
+#[cfg(feature = "tauri-runtime")]
 use runtime::{EventEmitter, PathResolver};
+#[cfg(feature = "tauri-runtime")]
 use state::AppState;
+#[cfg(feature = "tauri-runtime")]
 use task_boards::TaskBoardStore;
+#[cfg(feature = "tauri-runtime")]
 use tasks::TaskStore;
 
 /// On macOS (and to a lesser extent Linux), GUI apps launched from
@@ -33,7 +45,7 @@ use tasks::TaskStore;
 /// dump its env, and merge anything missing into the current process
 /// env. From then on, every PTY (and our hub) sees the same PATH the
 /// user gets in Terminal.app.
-fn hydrate_login_shell_env() {
+pub fn hydrate_login_shell_env() {
     if std::env::var("WODOUYAO_LOGIN_SHELL_HYDRATED").is_ok() {
         return; // already done in this process
     }
@@ -86,6 +98,7 @@ fn hydrate_login_shell_env() {
     log::info!("env hydrate: imported {} vars from {} -ilc", imported, shell);
 }
 
+#[cfg(feature = "tauri-runtime")]
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
     open::that(&url).map_err(|e| e.to_string())
@@ -120,6 +133,7 @@ fn enable_macos_font_smoothing() {
         .status();
 }
 
+#[cfg(feature = "tauri-runtime")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     hydrate_login_shell_env();

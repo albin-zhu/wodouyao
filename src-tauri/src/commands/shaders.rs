@@ -1,21 +1,13 @@
 use std::fs;
-use std::path::PathBuf;
 
 use tauri::{AppHandle, Manager};
-
-fn shaders_dir() -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or("Cannot find home directory")?;
-    let dir = home.join(".wodouyao").join("shaders");
-    fs::create_dir_all(&dir).map_err(|e| format!("Cannot create shaders dir: {}", e))?;
-    Ok(dir)
-}
 
 /// Copy every `.frag` from the bundled resources/shaders/ into
 /// `~/.wodouyao/shaders/` that doesn't already exist there. Called once
 /// on app setup so users/agents start with a handful of example shaders
 /// and can then add their own.
 pub fn seed_from_resources(app: &AppHandle) -> Result<(), String> {
-    let dest = shaders_dir()?;
+    let dest = crate::shaders::shaders_dir()?;
     let resource_dir = app
         .path()
         .resource_dir()
@@ -45,37 +37,15 @@ pub fn seed_from_resources(app: &AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn shaders_list() -> Result<Vec<String>, String> {
-    let dir = shaders_dir()?;
-    let mut out = Vec::new();
-    for entry in fs::read_dir(&dir).map_err(|e| format!("read: {}", e))? {
-        let entry = entry.map_err(|e| format!("entry: {}", e))?;
-        let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) != Some("frag") {
-            continue;
-        }
-        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-            out.push(stem.to_string());
-        }
-    }
-    out.sort();
-    Ok(out)
+    crate::shaders::list()
 }
 
 #[tauri::command]
 pub fn shaders_get(name: String) -> Result<String, String> {
-    if name.is_empty() || name.contains('/') || name.contains('\\') || name.contains("..") {
-        return Err("invalid shader name".into());
-    }
-    let dir = shaders_dir()?;
-    let path = dir.join(format!("{}.frag", name));
-    if !path.exists() {
-        return Err(format!("shader not found: {}", name));
-    }
-    fs::read_to_string(&path).map_err(|e| format!("read: {}", e))
+    crate::shaders::get(&name)
 }
 
 #[tauri::command]
 pub fn shaders_dir_path() -> Result<String, String> {
-    let dir = shaders_dir()?;
-    Ok(dir.to_string_lossy().into_owned())
+    crate::shaders::dir_path()
 }

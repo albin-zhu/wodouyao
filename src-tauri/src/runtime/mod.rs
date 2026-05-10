@@ -4,7 +4,11 @@
 //! `Arc<dyn EventEmitter>` and get path-resolution via
 //! `Arc<dyn PathResolver>`.
 
+#[cfg(feature = "tauri-runtime")]
 pub mod tauri_impl;
+
+#[cfg(feature = "web-runtime")]
+pub mod web_impl;
 
 use std::path::PathBuf;
 use std::sync::Arc;
