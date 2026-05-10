@@ -29,35 +29,30 @@ let cachedToken: string | null = null;
 
 export function getToken(): string {
   if (isTauri) return "";
-  if (cachedToken !== null) return cachedToken;
+  if (cachedToken !== null && cachedToken !== "") return cachedToken;
 
   // Hash takes precedence — landing URL from server stdout is
-  // `http://host:port/#token=…`; capture and strip it from the URL bar.
+  // `http://host:port/#token=…`. We deliberately do NOT strip the hash:
+  // the user typically bookmarks this URL, and the bookmark must keep
+  // the token so re-opening from a fresh browser still authenticates.
   if (typeof window !== "undefined" && window.location.hash) {
     const m = window.location.hash.match(/[#&]token=([^&]+)/);
     if (m) {
       cachedToken = decodeURIComponent(m[1]);
       try {
-        sessionStorage.setItem(TOKEN_KEY, cachedToken);
+        localStorage.setItem(TOKEN_KEY, cachedToken);
       } catch {
-        /* sessionStorage unavailable, oh well */
-      }
-      try {
-        history.replaceState(
-          null,
-          "",
-          window.location.pathname + window.location.search,
-        );
-      } catch {
-        /* ignore */
+        /* localStorage unavailable, fine — keep the in-memory cache */
       }
       return cachedToken;
     }
   }
 
-  // Fallback: previously-stashed token in sessionStorage.
+  // Fallback: previously-stashed token in localStorage. Persists across
+  // browser restarts so a user who bookmarks the bare host URL (without
+  // the hash) still gets in.
   try {
-    const stored = sessionStorage.getItem(TOKEN_KEY);
+    const stored = localStorage.getItem(TOKEN_KEY);
     if (stored) {
       cachedToken = stored;
       return stored;
