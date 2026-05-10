@@ -23,6 +23,12 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
   const team = useTeamStore((s) => s.getTeamForTerminal(terminal.id));
   const opacity = useSettingsStore((s) => s.settings?.terminal_opacity ?? 1);
   const titleBg = opacity < 1 ? `rgba(var(--color-surface-rgb), ${opacity})` : "var(--color-surface)";
+  // Tint the title bar background with the terminal's color so a colour
+  // change is visible at a glance, especially when folded. ~18% mix is
+  // strong enough to read but stays well under the text contrast floor.
+  const tintedTitleBg = terminal.color
+    ? `color-mix(in srgb, ${titleBg} 82%, ${terminal.color} 18%)`
+    : titleBg;
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
   const roleMeta = terminal.role ? TERMINAL_ROLES[terminal.role] : undefined;
 
@@ -78,7 +84,7 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
         display: "flex",
         alignItems: "center",
         padding: "0 10px",
-        background: titleBg,
+        background: tintedTitleBg,
         borderBottom: terminal.isFolded ? "none" : "1px solid var(--color-border)",
         borderLeft: `3px solid ${terminal.color}`,
         position: "relative",
