@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 use wodouyao_lib::file_nodes::FileNodeStore;
 use wodouyao_lib::hub::{
@@ -26,7 +26,7 @@ fn fresh_hub() -> (
     let file_node_store = FileNodeStore::new();
     let task_board_store = TaskBoardStore::new();
     let pty_manager = Arc::new(Mutex::new(PtyManager::new(Arc::new(NoOpEmitter))));
-    let app_handle_slot: AppHandleSlot = Arc::new(OnceLock::new());
+    let app_handle_slot: AppHandleSlot = Arc::new(NoOpEmitter);
     let handle = hub::server::start(
         topology.clone(),
         identities.clone(),

@@ -53,6 +53,10 @@ impl EventEmitter for TauriEmitter {
             );
         }
     }
+
+    fn is_ready(&self) -> bool {
+        self.handle.get().is_some()
+    }
 }
 
 pub struct TauriPathResolver {

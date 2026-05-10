@@ -28,6 +28,14 @@ pub trait EventEmitter: Send + Sync {
 
     /// Per-terminal exit notification.
     fn emit_terminal_exit(&self, terminal_id: &str, exit_code: Option<u32>);
+
+    /// Whether a receiver is hooked up. Hub routes that fan out an event
+    /// to the frontend (e.g. `hub-spawn-request` driving an actual PTY
+    /// spawn) use this to early-return 503 instead of silently losing the
+    /// request. Default `true` so impls don't have to override.
+    fn is_ready(&self) -> bool {
+        true
+    }
 }
 
 /// Resolves bundled-resource paths. Tauri uses `app.path().resource_dir()`;

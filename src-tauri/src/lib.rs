@@ -132,12 +132,14 @@ pub fn run() {
     let note_store = NoteStore::new();
     let file_node_store = FileNodeStore::new();
     let task_board_store = TaskBoardStore::new();
-    let app_handle_slot: AppHandleSlot = Arc::new(OnceLock::new());
-    // The TauriEmitter wraps the same `Arc<OnceLock<AppHandle>>` the hub
-    // server already uses; the setup hook below fills it. Emit calls before
-    // the hook fires (none should occur in practice) silently no-op.
+    // Inner OnceLock holds the AppHandle once Tauri's setup hook fires.
+    // TauriEmitter wraps it; hub server, PTY, AppState all take a typed
+    // `Arc<dyn EventEmitter>` (aliased as `AppHandleSlot` in the hub mod
+    // for back-compat). Emit calls before setup fires silently no-op.
+    let app_handle_inner: Arc<OnceLock<tauri::AppHandle>> = Arc::new(OnceLock::new());
     let emitter: Arc<dyn EventEmitter> =
-        Arc::new(TauriEmitter::new(app_handle_slot.clone()));
+        Arc::new(TauriEmitter::new(app_handle_inner.clone()));
+    let app_handle_slot: AppHandleSlot = emitter.clone();
     let pty_manager = Arc::new(Mutex::new(PtyManager::new(emitter.clone())));
     let hub_handle = server::start(
         topology.clone(),
@@ -163,9 +165,9 @@ pub fn run() {
         note_store,
         file_node_store,
         task_board_store,
-        app_handle_slot.clone(),
+        app_handle_slot,
     );
-    let setup_slot = app_handle_slot.clone();
+    let setup_slot = app_handle_inner;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
