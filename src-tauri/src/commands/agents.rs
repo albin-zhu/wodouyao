@@ -8,8 +8,7 @@ pub struct CliAgent {
     pub available: bool,
 }
 
-#[tauri::command]
-pub fn detect_cli_agents() -> Vec<CliAgent> {
+pub fn detect_cli_agents_impl() -> Vec<CliAgent> {
     let agent_names = ["claude", "codex", "opencode"];
     let mut agents = Vec::new();
 
@@ -44,4 +43,10 @@ fn find_in_path(name: &str) -> (bool, String) {
         }
         _ => (false, String::new()),
     }
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn detect_cli_agents() -> Vec<CliAgent> {
+    detect_cli_agents_impl()
 }

@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
@@ -21,20 +21,25 @@ pub struct FileInspect {
     pub exists: bool,
 }
 
+#[derive(Deserialize)]
+pub struct FilePreviewTextArgs {
+    pub path: String,
+    #[serde(default)]
+    pub max_bytes: Option<usize>,
+}
+
 const MAX_DIR_ENTRIES: usize = 50;
 const DEFAULT_TEXT_BYTES: usize = 4096;
 
-#[tauri::command]
-pub fn file_preview_text(path: String, max_bytes: Option<usize>) -> Result<String, String> {
+pub fn file_preview_text_impl(path: &str, max_bytes: Option<usize>) -> Result<String, String> {
     let cap = max_bytes.unwrap_or(DEFAULT_TEXT_BYTES);
-    let bytes = fs::read(&path).map_err(|e| format!("read failed: {}", e))?;
+    let bytes = fs::read(path).map_err(|e| format!("read failed: {}", e))?;
     let slice = if bytes.len() > cap { &bytes[..cap] } else { &bytes[..] };
     Ok(String::from_utf8_lossy(slice).into_owned())
 }
 
-#[tauri::command]
-pub fn file_preview_dir(path: String) -> Result<DirListing, String> {
-    let dir = PathBuf::from(&path);
+pub fn file_preview_dir_impl(path: &str) -> Result<DirListing, String> {
+    let dir = PathBuf::from(path);
     let read = fs::read_dir(&dir).map_err(|e| format!("read_dir failed: {}", e))?;
     let mut entries: Vec<DirEntryInfo> = Vec::new();
     let mut truncated = false;
@@ -57,9 +62,8 @@ pub fn file_preview_dir(path: String) -> Result<DirListing, String> {
     Ok(DirListing { entries, truncated })
 }
 
-#[tauri::command]
-pub fn file_inspect(path: String) -> Result<FileInspect, String> {
-    let p = PathBuf::from(&path);
+pub fn file_inspect_impl(path: &str) -> Result<FileInspect, String> {
+    let p = PathBuf::from(path);
     let meta = match fs::metadata(&p) {
         Ok(m) => m,
         Err(_) => {
@@ -71,4 +75,22 @@ pub fn file_inspect(path: String) -> Result<FileInspect, String> {
         size: meta.len(),
         exists: true,
     })
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn file_preview_text(path: String, max_bytes: Option<usize>) -> Result<String, String> {
+    file_preview_text_impl(&path, max_bytes)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn file_preview_dir(path: String) -> Result<DirListing, String> {
+    file_preview_dir_impl(&path)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn file_inspect(path: String) -> Result<FileInspect, String> {
+    file_inspect_impl(&path)
 }

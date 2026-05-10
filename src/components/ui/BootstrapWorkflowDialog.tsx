@@ -98,8 +98,8 @@ export default function BootstrapWorkflowDialog() {
     };
 
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const data = await invoke<{ terminal_ids: string[] }>("bootstrap_workflow", {
+      const { call } = await import("../../services/transport");
+      const data = await call<{ terminal_ids: string[] }>("bootstrap_workflow", {
         roles: payload.roles,
         wireMesh: payload.wire_mesh,
         cwd: payload.cwd,

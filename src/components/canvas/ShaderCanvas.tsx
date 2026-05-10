@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { call } from "../../services/transport";
 
 interface Props {
   name: string;
@@ -30,7 +30,7 @@ export default function ShaderCanvas({ name, style }: Props) {
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    invoke<string>("shaders_get", { name })
+    call<string>("shaders_get", { name })
       .then((src) => {
         if (!cancelled) setSource(src);
       })

@@ -13,7 +13,7 @@ function hexToRgba(hex: string, alpha: number): string {
   const n = parseInt(m[1], 16);
   return `rgba(${(n >> 16) & 0xff}, ${(n >> 8) & 0xff}, ${n & 0xff}, ${alpha})`;
 }
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { fileUrl } from "../../services/fileUrl";
 import type { Terminal } from "@xterm/xterm";
 import { writeTerminal, saveClipboardImage } from "../../services/tauriCommands";
 import PasteConfirmDialog from "./PasteConfirmDialog";
@@ -392,7 +392,7 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
 
         if (word && IMAGE_EXT.test(word)) {
           try {
-            const src = convertFileSrc(word);
+            const src = fileUrl(word);
             const filename = word.replace(/\\/g, "/").split("/").pop() ?? word;
             if (!signal.aborted) setImageTooltip({ x: e.clientX, y: e.clientY, src, filename });
           } catch {

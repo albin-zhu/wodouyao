@@ -7,9 +7,16 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "server:build": "vite build && cargo build --manifest-path src-tauri/Cargo.toml --no-default-features --features web-runtime --bin wodouyao-server --release",
+    "server:dev": "vite build && WODOUYAO_DIST_DIR=$PWD/dist WODOUYAO_RESOURCE_DIR=$PWD/src-tauri cargo run --manifest-path src-tauri/Cargo.toml --no-default-features --features web-runtime --bin wodouyao-server",
+    "server:start": "bash scripts/server-start.sh",
+    "server:stop": "bash scripts/server-stop.sh",
+    "server:status": "bash scripts/server-status.sh",
+    "server:logs": "tail -f .wodouyao-runtime/server.log"
   },
   "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "@tauri-apps/api": "^2.5.0",
     "@tauri-apps/plugin-dialog": "^2.7.0",
     "@tauri-apps/plugin-shell": "^2.2.1",

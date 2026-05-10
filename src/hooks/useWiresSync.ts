@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { useWireStore } from "../store/wireStore";
 import { wireList } from "../services/tauriCommands";
+import { subscribeJson } from "../services/transport";
 import type { Wire } from "../types/wire";
 
 export function useWiresSync() {
@@ -22,7 +22,7 @@ export function useWiresSync() {
         })
         .catch(() => {});
     };
-    const unlistenPromise = listen("wires-updated", sync);
+    const unlistenPromise = subscribeJson("wires-updated", sync);
     return () => {
       unlistenPromise.then((fn) => fn()).catch(() => {});
     };

@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { call } from "./transport";
 import type { CreateTerminalRequest, ShellInfo } from "../types/terminal";
 import type { Workspace, WorkspaceMeta } from "../types/workspace";
 import type { AppSettings } from "../types/settings";
@@ -6,47 +6,47 @@ import type { Team } from "../types/team";
 import type { Task, TaskCreateInput, TaskPatchInput } from "../types/task";
 
 export async function createTerminal(request: CreateTerminalRequest): Promise<string> {
-  return invoke<string>("create_terminal", { request });
+  return call<string>("create_terminal", { request });
 }
 
 export async function destroyTerminal(id: string): Promise<void> {
-  return invoke<void>("destroy_terminal", { id });
+  return call<void>("destroy_terminal", { id });
 }
 
 export async function writeTerminal(id: string, data: number[]): Promise<void> {
-  return invoke<void>("write_terminal", { id, data });
+  return call<void>("write_terminal", { id, data });
 }
 
 export async function resizeTerminal(id: string, cols: number, rows: number): Promise<void> {
-  return invoke<void>("resize_terminal", { id, cols, rows });
+  return call<void>("resize_terminal", { id, cols, rows });
 }
 
 export async function saveClipboardImage(data: number[], ext: string): Promise<string> {
-  return invoke<string>("save_clipboard_image", { data, ext });
+  return call<string>("save_clipboard_image", { data, ext });
 }
 
 export async function getDefaultShell(): Promise<ShellInfo> {
-  return invoke<ShellInfo>("get_default_shell");
+  return call<ShellInfo>("get_default_shell");
 }
 
 export async function listAvailableShells(): Promise<ShellInfo[]> {
-  return invoke<ShellInfo[]>("list_available_shells");
+  return call<ShellInfo[]>("list_available_shells");
 }
 
 export async function saveWorkspace(workspace: Workspace): Promise<void> {
-  return invoke<void>("save_workspace", { workspace });
+  return call<void>("save_workspace", { workspace });
 }
 
 export async function loadWorkspace(id: string): Promise<Workspace> {
-  return invoke<Workspace>("load_workspace", { id });
+  return call<Workspace>("load_workspace", { id });
 }
 
 export async function listWorkspaces(): Promise<WorkspaceMeta[]> {
-  return invoke<WorkspaceMeta[]>("list_workspaces");
+  return call<WorkspaceMeta[]>("list_workspaces");
 }
 
 export async function deleteWorkspace(id: string): Promise<void> {
-  return invoke<void>("delete_workspace", { id });
+  return call<void>("delete_workspace", { id });
 }
 
 /** Partial save for terminal layouts only — fast, debounced path so
@@ -56,15 +56,15 @@ export async function saveWorkspaceTerminals(
   id: string,
   terminals: Workspace["terminals"],
 ): Promise<void> {
-  return invoke<void>("save_workspace_terminals", { id, terminals });
+  return call<void>("save_workspace_terminals", { id, terminals });
 }
 
 export async function getSettings(): Promise<AppSettings> {
-  return invoke<AppSettings>("get_settings");
+  return call<AppSettings>("get_settings");
 }
 
 export async function updateSettings(settings: AppSettings): Promise<void> {
-  return invoke<void>("update_settings", { settings });
+  return call<void>("update_settings", { settings });
 }
 
 export interface CliAgent {
@@ -74,7 +74,7 @@ export interface CliAgent {
 }
 
 export async function detectCliAgents(): Promise<CliAgent[]> {
-  return invoke<CliAgent[]>("detect_cli_agents");
+  return call<CliAgent[]>("detect_cli_agents");
 }
 
 export interface WireIpc {
@@ -87,7 +87,7 @@ export interface WireIpc {
 }
 
 export async function wireList(): Promise<WireIpc[]> {
-  return invoke<WireIpc[]>("wire_list");
+  return call<WireIpc[]>("wire_list");
 }
 
 export async function wireCreate(
@@ -96,7 +96,7 @@ export async function wireCreate(
   kind?: string,
   workspaceId?: string | null
 ): Promise<WireIpc> {
-  return invoke<WireIpc>("wire_create", {
+  return call<WireIpc>("wire_create", {
     sourceId,
     targetId,
     kind: kind ?? null,
@@ -105,15 +105,15 @@ export async function wireCreate(
 }
 
 export async function wireRemove(id: string): Promise<boolean> {
-  return invoke<boolean>("wire_remove", { id });
+  return call<boolean>("wire_remove", { id });
 }
 
 export async function wireReplaceAll(wires: WireIpc[]): Promise<void> {
-  return invoke<void>("wire_replace_all", { wires });
+  return call<void>("wire_replace_all", { wires });
 }
 
 export async function wirePeersFor(terminalId: string): Promise<string[]> {
-  return invoke<string[]>("wire_peers_for", { terminalId });
+  return call<string[]>("wire_peers_for", { terminalId });
 }
 
 export type IntegrationAgent = "claude" | "codex";
@@ -125,33 +125,33 @@ export interface IntegrationStatus {
 }
 
 export async function integrationsStatus(): Promise<IntegrationStatus[]> {
-  return invoke<IntegrationStatus[]>("integrations_status");
+  return call<IntegrationStatus[]>("integrations_status");
 }
 
 export async function integrationsInstall(
   agent: IntegrationAgent
 ): Promise<IntegrationStatus> {
-  return invoke<IntegrationStatus>("integrations_install", { agent });
+  return call<IntegrationStatus>("integrations_install", { agent });
 }
 
 export async function integrationsUninstall(
   agent: IntegrationAgent
 ): Promise<IntegrationStatus> {
-  return invoke<IntegrationStatus>("integrations_uninstall", { agent });
+  return call<IntegrationStatus>("integrations_uninstall", { agent });
 }
 
 export async function teamsList(): Promise<Team[]> {
-  return invoke<Team[]>("teams_list");
+  return call<Team[]>("teams_list");
 }
 
 export async function teamsTeamForTerminal(
   termId: string
 ): Promise<Team | null> {
-  return invoke<Team | null>("teams_team_for_terminal", { termId });
+  return call<Team | null>("teams_team_for_terminal", { termId });
 }
 
 export async function teamsDissolve(teamId: string): Promise<string[]> {
-  return invoke<string[]>("teams_dissolve", { teamId });
+  return call<string[]>("teams_dissolve", { teamId });
 }
 
 export interface TeamsCreateParams {
@@ -162,7 +162,7 @@ export interface TeamsCreateParams {
 }
 
 export async function teamsCreate(params: TeamsCreateParams): Promise<Team> {
-  return invoke<Team>("teams_create", { ...params });
+  return call<Team>("teams_create", { ...params });
 }
 
 export interface TeamsJoinParams {
@@ -172,7 +172,7 @@ export interface TeamsJoinParams {
 }
 
 export async function teamsJoin(params: TeamsJoinParams): Promise<Team> {
-  return invoke<Team>("teams_join", { ...params });
+  return call<Team>("teams_join", { ...params });
 }
 
 export interface TeamsLeaveParams {
@@ -181,7 +181,7 @@ export interface TeamsLeaveParams {
 }
 
 export async function teamsLeave(params: TeamsLeaveParams): Promise<void> {
-  return invoke<void>("teams_leave", { ...params });
+  return call<void>("teams_leave", { ...params });
 }
 
 // File preview / inspection
@@ -202,32 +202,32 @@ export interface FileInspect {
 }
 
 export async function filePreviewText(path: string, maxBytes?: number): Promise<string> {
-  return invoke<string>("file_preview_text", { path, maxBytes: maxBytes ?? null });
+  return call<string>("file_preview_text", { path, maxBytes: maxBytes ?? null });
 }
 
 export async function filePreviewDir(path: string): Promise<DirListing> {
-  return invoke<DirListing>("file_preview_dir", { path });
+  return call<DirListing>("file_preview_dir", { path });
 }
 
 export async function fileInspect(path: string): Promise<FileInspect> {
-  return invoke<FileInspect>("file_inspect", { path });
+  return call<FileInspect>("file_inspect", { path });
 }
 
 // Tasks
 export async function tasksList(): Promise<Task[]> {
-  return invoke<Task[]>("tasks_list");
+  return call<Task[]>("tasks_list");
 }
 
 export async function tasksCreate(input: TaskCreateInput): Promise<Task> {
-  return invoke<Task>("tasks_create", { input });
+  return call<Task>("tasks_create", { input });
 }
 
 export async function tasksUpdate(id: string, patch: TaskPatchInput): Promise<Task> {
-  return invoke<Task>("tasks_update", { id, patch });
+  return call<Task>("tasks_update", { id, patch });
 }
 
 export async function tasksRemove(id: string): Promise<boolean> {
-  return invoke<boolean>("tasks_remove", { id });
+  return call<boolean>("tasks_remove", { id });
 }
 
 // Notes
@@ -258,23 +258,23 @@ export interface NotePatchInput {
 }
 
 export async function notesList(): Promise<NoteIpc[]> {
-  return invoke<NoteIpc[]>("notes_list");
+  return call<NoteIpc[]>("notes_list");
 }
 
 export async function notesCreate(input: NoteCreateInput): Promise<NoteIpc> {
-  return invoke<NoteIpc>("notes_create", { input });
+  return call<NoteIpc>("notes_create", { input });
 }
 
 export async function notesUpdate(id: string, patch: NotePatchInput): Promise<NoteIpc | null> {
-  return invoke<NoteIpc | null>("notes_update", { id, patch });
+  return call<NoteIpc | null>("notes_update", { id, patch });
 }
 
 export async function notesRemove(id: string): Promise<boolean> {
-  return invoke<boolean>("notes_remove", { id });
+  return call<boolean>("notes_remove", { id });
 }
 
 export async function notesReplaceAll(notes: NoteIpc[]): Promise<void> {
-  return invoke<void>("notes_replace_all", { notes });
+  return call<void>("notes_replace_all", { notes });
 }
 
 // File nodes (images, text files, directories dropped on the canvas)
@@ -306,26 +306,26 @@ export interface FileNodePatchInput {
 }
 
 export async function fileNodesList(): Promise<FileNodeIpc[]> {
-  return invoke<FileNodeIpc[]>("file_nodes_list");
+  return call<FileNodeIpc[]>("file_nodes_list");
 }
 
 export async function fileNodesCreate(input: FileNodeCreateInput): Promise<FileNodeIpc> {
-  return invoke<FileNodeIpc>("file_nodes_create", { input });
+  return call<FileNodeIpc>("file_nodes_create", { input });
 }
 
 export async function fileNodesUpdate(
   id: string,
   patch: FileNodePatchInput
 ): Promise<FileNodeIpc | null> {
-  return invoke<FileNodeIpc | null>("file_nodes_update", { id, patch });
+  return call<FileNodeIpc | null>("file_nodes_update", { id, patch });
 }
 
 export async function fileNodesRemove(id: string): Promise<boolean> {
-  return invoke<boolean>("file_nodes_remove", { id });
+  return call<boolean>("file_nodes_remove", { id });
 }
 
 export async function fileNodesReplaceAll(nodes: FileNodeIpc[]): Promise<void> {
-  return invoke<void>("file_nodes_replace_all", { nodes });
+  return call<void>("file_nodes_replace_all", { nodes });
 }
 
 // Task boards
@@ -354,30 +354,30 @@ export interface TaskBoardPatchInput {
 }
 
 export async function taskBoardsList(): Promise<TaskBoardIpc[]> {
-  return invoke<TaskBoardIpc[]>("task_boards_list");
+  return call<TaskBoardIpc[]>("task_boards_list");
 }
 
 export async function taskBoardsCreate(input: TaskBoardCreateInput): Promise<TaskBoardIpc> {
-  return invoke<TaskBoardIpc>("task_boards_create", { input });
+  return call<TaskBoardIpc>("task_boards_create", { input });
 }
 
 export async function taskBoardsUpdate(
   id: string,
   patch: TaskBoardPatchInput
 ): Promise<TaskBoardIpc | null> {
-  return invoke<TaskBoardIpc | null>("task_boards_update", { id, patch });
+  return call<TaskBoardIpc | null>("task_boards_update", { id, patch });
 }
 
 export async function taskBoardsRemove(id: string): Promise<boolean> {
-  return invoke<boolean>("task_boards_remove", { id });
+  return call<boolean>("task_boards_remove", { id });
 }
 
 export async function taskBoardsReplaceAll(boards: TaskBoardIpc[]): Promise<void> {
-  return invoke<void>("task_boards_replace_all", { boards });
+  return call<void>("task_boards_replace_all", { boards });
 }
 
 export async function getHubEndpoint(): Promise<{ url: string; token: string }> {
-  return invoke<{ url: string; token: string }>("get_hub_endpoint");
+  return call<{ url: string; token: string }>("get_hub_endpoint");
 }
 
 /**

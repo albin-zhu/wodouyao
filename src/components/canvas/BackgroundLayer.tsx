@@ -1,4 +1,4 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { fileUrl } from "../../services/fileUrl";
 import { useSettingsStore } from "../../store/settingsStore";
 import ShaderCanvas from "./ShaderCanvas";
 
@@ -87,7 +87,7 @@ export default function BackgroundLayer() {
 function resolveSrc(src: string): string {
   if (/^(https?|data|blob):/i.test(src)) return src;
   try {
-    return convertFileSrc(src);
+    return fileUrl(src);
   } catch {
     return src;
   }

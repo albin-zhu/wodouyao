@@ -4,6 +4,7 @@ use crate::file_nodes::FileNodeStore;
 use crate::hub::{AppHandleSlot, HubHandle, IdentityRegistry, TeamRegistry, WireTopology};
 use crate::notes::NoteStore;
 use crate::pty::manager::PtyManager;
+use crate::runtime::SharedPathResolver;
 use crate::task_boards::TaskBoardStore;
 use crate::tasks::TaskStore;
 
@@ -17,10 +18,14 @@ pub struct AppState {
     pub file_nodes: FileNodeStore,
     pub task_boards: TaskBoardStore,
     pub hub: HubHandle,
-    /// Same slot the hub server uses to reach the Tauri app. We hold a
-    /// clone here so in-process Tauri commands (e.g. bootstrap_workflow)
-    /// can emit `hub-spawn-request` etc. without going through HTTP.
+    /// Same emitter the hub server uses to reach the frontend (Tauri
+    /// WebView or browser WS client). In-process Tauri commands emit
+    /// `notes-updated`, `teams-updated` etc. through this slot.
     pub app_handle: AppHandleSlot,
+    /// Resolver for bundled-resource paths (CLI bin, integration assets,
+    /// shaders). Tauri builds use `app.path().resource_dir()`; the
+    /// headless web binary will derive it from `current_exe()`.
+    pub path_resolver: SharedPathResolver,
 }
 
 impl AppState {
@@ -36,6 +41,7 @@ impl AppState {
         file_nodes: FileNodeStore,
         task_boards: TaskBoardStore,
         app_handle: AppHandleSlot,
+        path_resolver: SharedPathResolver,
     ) -> Self {
         AppState {
             pty_manager,
@@ -48,6 +54,7 @@ impl AppState {
             task_boards,
             hub,
             app_handle,
+            path_resolver,
         }
     }
 }

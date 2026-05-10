@@ -4,7 +4,8 @@ use std::io::{Read, Write};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use tauri::{AppHandle, Emitter};
+
+use crate::runtime::SharedEmitter;
 
 use super::shell::ShellType;
 
@@ -47,7 +48,7 @@ impl PtySession {
         cwd: Option<&str>,
         env: &[(String, String)],
         fast_start: bool,
-        app_handle: AppHandle,
+        emitter: SharedEmitter,
     ) -> Result<Self, String> {
         let pty_system = portable_pty::native_pty_system();
 
@@ -304,18 +305,13 @@ printf '\033]133;A\007'
 
         // Use a plain std::thread instead of tokio — no runtime needed
         let reader_id = id.clone();
+        let reader_emitter = emitter.clone();
         thread::spawn(move || {
             let mut buf = [0u8; 4096];
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => {
-                        let _ = app_handle.emit(
-                            &format!("terminal-exit-{}", reader_id),
-                            TerminalExitPayload {
-                                id: reader_id.clone(),
-                                exit_code: None,
-                            },
-                        );
+                        reader_emitter.emit_terminal_exit(&reader_id, None);
                         break;
                     }
                     Ok(n) => {
@@ -339,22 +335,10 @@ printf '\033]133;A\007'
                         if let Ok(mut subs) = subscribers_for_reader.lock() {
                             subs.retain(|s| s.send(slice.to_vec()).is_ok());
                         }
-                        let _ = app_handle.emit(
-                            &format!("terminal-output-{}", reader_id),
-                            TerminalOutputPayload {
-                                id: reader_id.clone(),
-                                data: buf[..n].to_vec(),
-                            },
-                        );
+                        reader_emitter.emit_terminal_output(&reader_id, slice);
                     }
                     Err(_) => {
-                        let _ = app_handle.emit(
-                            &format!("terminal-exit-{}", reader_id),
-                            TerminalExitPayload {
-                                id: reader_id.clone(),
-                                exit_code: None,
-                            },
-                        );
+                        reader_emitter.emit_terminal_exit(&reader_id, None);
                         break;
                     }
                 }

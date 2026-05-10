@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { useNoteStore } from "../store/noteStore";
 import { notesList } from "../services/tauriCommands";
+import { subscribeJson } from "../services/transport";
 
 export function useNotesSync() {
   useEffect(() => {
@@ -10,7 +10,7 @@ export function useNotesSync() {
         .then((notes) => useNoteStore.getState().syncFromRust(notes))
         .catch(() => {});
     };
-    const unlistenPromise = listen("notes-updated", sync);
+    const unlistenPromise = subscribeJson("notes-updated", sync);
     return () => {
       unlistenPromise.then((fn) => fn()).catch(() => {});
     };

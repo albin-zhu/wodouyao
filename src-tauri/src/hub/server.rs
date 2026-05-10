@@ -1,10 +1,9 @@
 use std::io::{self, Cursor};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
 use tiny_http::{Header, Method, Response, Server, StatusCode};
 use uuid::Uuid;
 
@@ -16,10 +15,19 @@ use super::topology::{Wire, WireTopology};
 use crate::file_nodes::FileNodeStore;
 use crate::notes::{NoteCreate, NotePatch as NoteStorePatch, NoteStore};
 use crate::pty::manager::PtyManager;
+use crate::runtime::EventEmitter;
 use crate::task_boards::TaskBoardStore;
 use crate::tasks::{ClaimResult, TaskCreate, TaskPatch as TaskStorePatch, TaskStore};
 
-pub type AppHandleSlot = Arc<OnceLock<AppHandle>>;
+/// Shared sink for events going from the hub HTTP server to whatever
+/// frontend (Tauri WebView or browser WS client) is listening. Same name
+/// the file used for the prior `Arc<OnceLock<AppHandle>>` slot — every
+/// downstream consumer just sees a clonable handle to "the bus".
+pub type AppHandleSlot = Arc<dyn EventEmitter>;
+
+fn to_value<T: Serialize>(payload: &T) -> serde_json::Value {
+    serde_json::to_value(payload).unwrap_or(serde_json::Value::Null)
+}
 
 #[derive(Clone)]
 pub struct HubHandle {
@@ -584,10 +592,10 @@ fn spawn(
     team_registry: &TeamRegistry,
     app_handle: &AppHandleSlot,
 ) {
-    let Some(app) = app_handle.get() else {
+    if !app_handle.is_ready() {
         let _ = request.respond(text(503, "frontend not ready yet; spawn again in a moment"));
         return;
-    };
+    }
 
     let mut body = String::new();
     if request.as_reader().read_to_string(&mut body).is_err() {
@@ -735,10 +743,7 @@ fn spawn(
         role: parsed.role,
     };
 
-    if let Err(e) = app.emit("hub-spawn-request", payload) {
-        let _ = request.respond(text(500, &format!("emit failed: {}", e)));
-        return;
-    }
+    app_handle.emit_json("hub-spawn-request", to_value(&payload));
 
     let resp_body = serde_json::to_string(&SpawnResponse { id: new_id })
         .unwrap_or_else(|_| "{}".into());
@@ -1076,9 +1081,9 @@ pub fn do_workflow_bootstrap(
     topology: &WireTopology,
     app_handle: &AppHandleSlot,
 ) -> Result<WorkflowBootstrapResponse, (u16, String)> {
-    let Some(app) = app_handle.get() else {
+    if !app_handle.is_ready() {
         return Err((503, "frontend not ready yet; try again in a moment".into()));
-    };
+    }
     if parsed.roles.is_empty() {
         return Err((400, "roles[] cannot be empty".into()));
     }
@@ -1152,9 +1157,8 @@ pub fn do_workflow_bootstrap(
             role: Some(br.role.clone()),
         };
 
-        if let Err(e) = app.emit("hub-spawn-request", payload) {
-            return Err((500, format!("emit failed at index {}: {}", i, e)));
-        }
+        app_handle.emit_json("hub-spawn-request", to_value(&payload));
+        let _ = i; // i no longer needed for error context
     }
 
     if parsed.wire_mesh && ids.len() > 2 {
@@ -1213,10 +1217,10 @@ fn fork(
     identities: &IdentityRegistry,
     app_handle: &AppHandleSlot,
 ) {
-    let Some(app) = app_handle.get() else {
+    if !app_handle.is_ready() {
         let _ = request.respond(text(503, "frontend not ready yet; fork again in a moment"));
         return;
-    };
+    }
 
     let mut body = String::new();
     if request.as_reader().read_to_string(&mut body).is_err() {
@@ -1285,7 +1289,7 @@ fn fork(
     };
     topology.insert(wire);
     persist_workspace_wires(topology, workspace_id.as_deref());
-    let _ = app.emit("wires-updated", ());
+    emit_wires_updated(app_handle);
 
     let payload = SpawnEventPayload {
         id: new_id.clone(),
@@ -1299,10 +1303,7 @@ fn fork(
         role: None,
     };
 
-    if let Err(e) = app.emit("hub-spawn-request", payload) {
-        let _ = request.respond(text(500, &format!("emit failed: {}", e)));
-        return;
-    }
+    app_handle.emit_json("hub-spawn-request", to_value(&payload));
 
     let resp_body = serde_json::to_string(&SpawnResponse { id: new_id })
         .unwrap_or_else(|_| "{}".into());
@@ -1659,9 +1660,7 @@ struct CreateTeamBody {
 }
 
 fn emit_teams_updated(app_handle: &AppHandleSlot) {
-    if let Some(app) = app_handle.get() {
-        let _ = app.emit("teams-updated", ());
-    }
+    app_handle.emit_json("teams-updated", serde_json::Value::Null);
 }
 
 fn teams_create(
@@ -2245,9 +2244,7 @@ fn json(code: u16, body: String) -> Response<Cursor<Vec<u8>>> {
 }
 
 fn emit_tasks_updated(app_handle: &AppHandleSlot) {
-    if let Some(app) = app_handle.get() {
-        let _ = app.emit("tasks-updated", ());
-    }
+    app_handle.emit_json("tasks-updated", serde_json::Value::Null);
 }
 
 /// Atomically write the affected workspace's `tasks` slice to disk.
@@ -2632,9 +2629,7 @@ fn tasks_claim_route(
 // ── Wire endpoints ──────────────────────────────────────────────────
 
 fn emit_wires_updated(app_handle: &AppHandleSlot) {
-    if let Some(app) = app_handle.get() {
-        let _ = app.emit("wires-updated", ());
-    }
+    app_handle.emit_json("wires-updated", serde_json::Value::Null);
 }
 
 fn wires_list_route(request: tiny_http::Request, topology: &WireTopology) {
@@ -2793,13 +2788,11 @@ fn terminals_set_session_route(
         let _ = request.respond(text(400, "session_id cannot be empty"));
         return;
     }
-    if let Some(app) = app_handle.get() {
-        let payload = TerminalSessionUpdatedPayload {
-            id: term_id.to_string(),
-            session_id: parsed.session_id,
-        };
-        let _ = app.emit("terminal-session-updated", payload);
-    }
+    let payload = TerminalSessionUpdatedPayload {
+        id: term_id.to_string(),
+        session_id: parsed.session_id,
+    };
+    app_handle.emit_json("terminal-session-updated", to_value(&payload));
     let _ = request.respond(empty(204));
 }
 
@@ -2818,9 +2811,7 @@ fn terminals_close_route(
     if destroyed {
         topology.remove_for_terminal(term_id);
         identities.remove(term_id);
-        if let Some(app) = app_handle.get() {
-            let _ = app.emit(&format!("terminal-exit-{}", term_id), 0i32);
-        }
+        app_handle.emit_terminal_exit(term_id, Some(0));
         let _ = request.respond(empty(204));
     } else {
         let _ = request.respond(text(404, "terminal not found"));
@@ -2830,9 +2821,7 @@ fn terminals_close_route(
 // ── Note endpoints ──────────────────────────────────────────────────
 
 fn emit_notes_updated(app_handle: &AppHandleSlot) {
-    if let Some(app) = app_handle.get() {
-        let _ = app.emit("notes-updated", ());
-    }
+    app_handle.emit_json("notes-updated", serde_json::Value::Null);
 }
 
 fn notes_list_route(request: tiny_http::Request, note_store: &NoteStore) {
@@ -2982,9 +2971,7 @@ fn background_set(mut request: tiny_http::Request, app_handle: &AppHandleSlot) {
         let _ = request.respond(text(500, &format!("save: {}", e)));
         return;
     }
-    if let Some(handle) = app_handle.get() {
-        let _ = handle.emit("settings-changed", ());
-    }
+    app_handle.emit_json("settings-changed", serde_json::Value::Null);
     let body = serde_json::to_string(&settings.background).unwrap_or_else(|_| "{}".into());
     let _ = request.respond(json(200, body));
 }
@@ -3002,7 +2989,7 @@ fn background_get(request: tiny_http::Request) {
 }
 
 fn shaders_list_route(request: tiny_http::Request) {
-    match crate::commands::shaders::shaders_list() {
+    match crate::shaders::list() {
         Ok(list) => {
             let body = serde_json::to_string(&list).unwrap_or_else(|_| "[]".into());
             let _ = request.respond(json(200, body));

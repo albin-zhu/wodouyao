@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { subscribeJson } from "../services/transport";
 import { useTerminal } from "./useTerminal";
 import { useWireStore } from "../store/wireStore";
 import { useTeamStore } from "../store/teamStore";
@@ -29,10 +29,10 @@ export function useHubSpawn() {
   // resume with `claude -r <id>`. Driven by `wodouyao terminal set-session`,
   // typically called from a Claude Code SessionStart hook.
   useEffect(() => {
-    const unlistenPromise = listen<{ id: string; session_id: string }>(
+    const unlistenPromise = subscribeJson<{ id: string; session_id: string }>(
       "terminal-session-updated",
-      (event) => {
-        const { id, session_id } = event.payload;
+      (payload) => {
+        const { id, session_id } = payload;
         if (id && session_id) {
           updateTerminal(id, { sessionId: session_id });
         }
@@ -44,10 +44,10 @@ export function useHubSpawn() {
   }, [updateTerminal]);
 
   useEffect(() => {
-    const unlistenPromise = listen<SpawnRequestPayload>(
+    const unlistenPromise = subscribeJson<SpawnRequestPayload>(
       "hub-spawn-request",
-      async (event) => {
-        const p = event.payload;
+      async (payload) => {
+        const p = payload;
         try {
           // If the new terminal joined a team as worker/observer, auto-place
           // it in the next slot of the star layout relative to the lead.

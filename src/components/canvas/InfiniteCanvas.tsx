@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { isTauri } from "../../services/transport";
 import { useCanvas } from "../../hooks/useCanvas";
 import { useCanvasStore } from "../../store/canvasStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
@@ -210,6 +211,10 @@ export default function InfiniteCanvas() {
   // handler so the effect doesn't re-register on every viewport change
   // (the async unlisten Promise made re-registration leak listeners).
   useEffect(() => {
+    // OS-native file drop is a Tauri-only API. Under web mode we'd need
+    // an HTML5 dragover/drop handler, but the dropped File objects don't
+    // expose a server-side path — Phase 5+ would add an upload step.
+    if (!isTauri) return;
     let cancelled = false;
     let unlisten: (() => void) | undefined;
     const webview = getCurrentWebview();

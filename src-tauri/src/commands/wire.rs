@@ -1,4 +1,3 @@
-use tauri::State;
 use uuid::Uuid;
 
 use crate::hub::{Wire, WireTopology};
@@ -12,14 +11,12 @@ fn persist_workspace_wires(topology: &WireTopology, ws_id: Option<&str>) {
     }
 }
 
-#[tauri::command]
-pub fn wire_list(state: State<'_, AppState>) -> Vec<Wire> {
+pub fn wire_list_impl(state: &AppState) -> Vec<Wire> {
     state.topology.list()
 }
 
-#[tauri::command]
-pub fn wire_create(
-    state: State<'_, AppState>,
+pub fn wire_create_impl(
+    state: &AppState,
     source_id: String,
     target_id: String,
     kind: Option<String>,
@@ -39,27 +36,60 @@ pub fn wire_create(
     inserted
 }
 
-#[tauri::command]
-pub fn wire_remove(state: State<'_, AppState>, id: String) -> bool {
+pub fn wire_remove_impl(state: &AppState, id: &str) -> bool {
     let ws_id = state
         .topology
         .list()
         .into_iter()
         .find(|w| w.id == id)
         .and_then(|w| w.workspace_id);
-    let removed = state.topology.remove(&id);
+    let removed = state.topology.remove(id);
     if removed {
         persist_workspace_wires(&state.topology, ws_id.as_deref());
     }
     removed
 }
 
-#[tauri::command]
-pub fn wire_replace_all(state: State<'_, AppState>, wires: Vec<Wire>) {
+pub fn wire_replace_all_impl(state: &AppState, wires: Vec<Wire>) {
     state.topology.replace_all(wires);
 }
 
+pub fn wire_peers_for_impl(state: &AppState, terminal_id: &str) -> Vec<String> {
+    state.topology.peers_for(terminal_id)
+}
+
+#[cfg(feature = "tauri-runtime")]
 #[tauri::command]
-pub fn wire_peers_for(state: State<'_, AppState>, terminal_id: String) -> Vec<String> {
-    state.topology.peers_for(&terminal_id)
+pub fn wire_list(state: tauri::State<'_, AppState>) -> Vec<Wire> {
+    wire_list_impl(&state)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn wire_create(
+    state: tauri::State<'_, AppState>,
+    source_id: String,
+    target_id: String,
+    kind: Option<String>,
+    workspace_id: Option<String>,
+) -> Wire {
+    wire_create_impl(&state, source_id, target_id, kind, workspace_id)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn wire_remove(state: tauri::State<'_, AppState>, id: String) -> bool {
+    wire_remove_impl(&state, &id)
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn wire_replace_all(state: tauri::State<'_, AppState>, wires: Vec<Wire>) {
+    wire_replace_all_impl(&state, wires);
+}
+
+#[cfg(feature = "tauri-runtime")]
+#[tauri::command]
+pub fn wire_peers_for(state: tauri::State<'_, AppState>, terminal_id: String) -> Vec<String> {
+    wire_peers_for_impl(&state, &terminal_id)
 }

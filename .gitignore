@@ -24,3 +24,6 @@ Thumbs.db
 .playwright-mcp/
 bun.lock
 .wodouyao/workspace.json
+
+# wodouyao-server daemon runtime files (pid + log)
+.wodouyao-runtime/

@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { TerminalOptions } from "../../types/settings";
+import FontPresetPicker from "./FontPresetPicker";
 
 interface Props {
   opts: TerminalOptions;
@@ -164,15 +165,14 @@ export default function TerminalOptionsSection({ opts, onPatch }: Props) {
         </div>
       </div>
 
-      {/* Font family — own card for the wide input */}
+      {/* Font family — own card for the picker + preview */}
       <div style={{ ...card, marginBottom: 8 }}>
         <div style={cardHeader}>{t("settings.term.fontFamily")}</div>
         <div style={{ padding: "10px 0" }}>
-          <input
+          <FontPresetPicker
             value={opts.font_family}
-            onChange={(e) => onPatch({ font_family: e.target.value })}
-            spellCheck={false}
-            style={{
+            onChange={(font_family) => onPatch({ font_family })}
+            inputStyle={{
               width: "100%",
               padding: "7px 10px",
               background: "var(--color-surface)",
@@ -180,14 +180,11 @@ export default function TerminalOptionsSection({ opts, onPatch }: Props) {
               borderRadius: 6,
               color: "var(--color-text)",
               fontSize: 11,
-              fontFamily: "'SF Mono','Menlo','Monaco',monospace",
+              fontFamily: "'JetBrains Mono', 'SF Mono', 'Menlo', monospace",
               outline: "none",
               boxSizing: "border-box" as const,
             }}
           />
-          <div style={{ color: "var(--color-text-muted)", fontSize: 10, marginTop: 5, lineHeight: 1.4 }}>
-            {t("settings.term.fontFamilyHint")}
-          </div>
         </div>
       </div>
 

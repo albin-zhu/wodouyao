@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { useTeamStore } from "../store/teamStore";
 import { useWireStore } from "../store/wireStore";
+import { subscribeJson } from "../services/transport";
 
 export function useTeamsSync() {
   useEffect(() => {
@@ -11,7 +11,7 @@ export function useTeamsSync() {
     // Team mutations (join/leave/spawn/dissolve) can insert/remove wires on
     // the backend's topology directly; refresh the wire mirror so the canvas
     // reflects the new connections.
-    const unlistenPromise = listen("teams-updated", () => {
+    const unlistenPromise = subscribeJson("teams-updated", () => {
       hydrateTeams();
       hydrateWires();
     });
