@@ -186,7 +186,7 @@ print(json.dumps(obj))
             "$WODOUYAO_ID" "$_name_j" "$_kind_j" "$_caps_j")
         if [ -n "${WODOUYAO_WORKSPACE_ID:-}" ]; then
             _ws_j=$(json_escape "$WODOUYAO_WORKSPACE_ID")
-            _body="${_body%\}}",\"workspace_id\":$_ws_j}"
+            _body="${_body%\}},\"workspace_id\":$_ws_j}"
         fi
     fi
     _code=$(curl_auth -o /dev/null -w '%{http_code}' \
