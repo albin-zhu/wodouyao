@@ -6,6 +6,7 @@ use wodouyao_lib::hub::{
 };
 use wodouyao_lib::notes::NoteStore;
 use wodouyao_lib::pty::manager::PtyManager;
+use wodouyao_lib::runtime::NoOpEmitter;
 use wodouyao_lib::task_boards::TaskBoardStore;
 use wodouyao_lib::tasks::TaskStore;
 use wodouyao_lib::workspace::storage::{self as ws_storage, CanvasState, Workspace};
@@ -24,7 +25,7 @@ fn fresh_hub() -> (
     let note_store = NoteStore::new();
     let file_node_store = FileNodeStore::new();
     let task_board_store = TaskBoardStore::new();
-    let pty_manager = Arc::new(Mutex::new(PtyManager::new()));
+    let pty_manager = Arc::new(Mutex::new(PtyManager::new(Arc::new(NoOpEmitter))));
     let app_handle_slot: AppHandleSlot = Arc::new(OnceLock::new());
     let handle = hub::server::start(
         topology.clone(),

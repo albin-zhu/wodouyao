@@ -89,7 +89,6 @@ pub fn create_terminal(
     }
 
     let mut manager = state.pty_manager.lock().map_err(|e| e.to_string())?;
-    manager.set_app_handle(app);
     manager.create_session(
         request.id,
         &shell_path,

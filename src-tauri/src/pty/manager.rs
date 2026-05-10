@@ -1,26 +1,23 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
-use tauri::AppHandle;
+
+use crate::runtime::SharedEmitter;
 
 use super::session::PtySession;
 
 pub struct PtyManager {
     sessions: HashMap<String, PtySession>,
-    app_handle: Option<AppHandle>,
+    emitter: SharedEmitter,
     live_test_ids: HashSet<String>,
 }
 
 impl PtyManager {
-    pub fn new() -> Self {
+    pub fn new(emitter: SharedEmitter) -> Self {
         PtyManager {
             sessions: HashMap::new(),
-            app_handle: None,
+            emitter,
             live_test_ids: HashSet::new(),
         }
-    }
-
-    pub fn set_app_handle(&mut self, handle: AppHandle) {
-        self.app_handle = Some(handle);
     }
 
     pub fn create_session(
@@ -34,11 +31,6 @@ impl PtyManager {
         env: &[(String, String)],
         fast_start: bool,
     ) -> Result<String, String> {
-        let app_handle = self
-            .app_handle
-            .clone()
-            .ok_or("App handle not set")?;
-
         let session = PtySession::spawn(
             id.clone(),
             shell_path,
@@ -48,7 +40,7 @@ impl PtyManager {
             cwd,
             env,
             fast_start,
-            app_handle,
+            self.emitter.clone(),
         )?;
 
         self.sessions.insert(id.clone(), session);

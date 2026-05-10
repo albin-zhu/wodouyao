@@ -4,6 +4,7 @@ pub mod hub;
 mod integrations;
 pub mod notes;
 pub mod pty;
+pub mod runtime;
 mod settings;
 mod state;
 pub mod task_boards;
@@ -16,6 +17,8 @@ use file_nodes::FileNodeStore;
 use hub::{server, AppHandleSlot, IdentityRegistry, TeamRegistry, WireTopology};
 use notes::NoteStore;
 use pty::manager::PtyManager;
+use runtime::tauri_impl::TauriEmitter;
+use runtime::EventEmitter;
 use state::AppState;
 use task_boards::TaskBoardStore;
 use tasks::TaskStore;
@@ -129,8 +132,13 @@ pub fn run() {
     let note_store = NoteStore::new();
     let file_node_store = FileNodeStore::new();
     let task_board_store = TaskBoardStore::new();
-    let pty_manager = Arc::new(Mutex::new(PtyManager::new()));
     let app_handle_slot: AppHandleSlot = Arc::new(OnceLock::new());
+    // The TauriEmitter wraps the same `Arc<OnceLock<AppHandle>>` the hub
+    // server already uses; the setup hook below fills it. Emit calls before
+    // the hook fires (none should occur in practice) silently no-op.
+    let emitter: Arc<dyn EventEmitter> =
+        Arc::new(TauriEmitter::new(app_handle_slot.clone()));
+    let pty_manager = Arc::new(Mutex::new(PtyManager::new(emitter.clone())));
     let hub_handle = server::start(
         topology.clone(),
         identities.clone(),
