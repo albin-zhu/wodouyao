@@ -95,6 +95,15 @@ impl Default for WebPathResolver {
 
 impl PathResolver for WebPathResolver {
     fn resource_dir(&self) -> std::io::Result<PathBuf> {
+        // Dev convenience: `WODOUYAO_RESOURCE_DIR` points at the source
+        // tree's `src-tauri/` so callers find the bundled `wodouyao` CLI
+        // at `<resource_dir>/resources/bin/wodouyao`. The npm `server:dev`
+        // script sets it for you.
+        if let Ok(p) = std::env::var("WODOUYAO_RESOURCE_DIR") {
+            if !p.is_empty() {
+                return Ok(PathBuf::from(p));
+            }
+        }
         let exe = std::env::current_exe()?;
         let dir = exe.parent().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::NotFound, "binary has no parent dir")
