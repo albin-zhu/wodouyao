@@ -1,10 +1,12 @@
-use tauri::{AppHandle, Emitter, State};
+use tauri::State;
 
 use crate::notes::{Note, NoteCreate, NotePatch, NoteStore};
 use crate::state::AppState;
 
-fn emit_notes_updated(app: &AppHandle) {
-    let _ = app.emit("notes-updated", ());
+fn emit_notes_updated(state: &AppState) {
+    state
+        .app_handle
+        .emit_json("notes-updated", serde_json::Value::Null);
 }
 
 /// Mirror of the hub's persistence hook for IPC-driven note mutations.
@@ -23,45 +25,36 @@ pub fn notes_list(state: State<'_, AppState>) -> Vec<Note> {
 }
 
 #[tauri::command]
-pub fn notes_create(
-    state: State<'_, AppState>,
-    app: AppHandle,
-    input: NoteCreate,
-) -> Note {
+pub fn notes_create(state: State<'_, AppState>, input: NoteCreate) -> Note {
     let mut input = input;
     if input.workspace_id.is_none() {
         input.workspace_id = crate::workspace::storage::current_workspace_id();
     }
     let note = state.notes.create(input);
     persist_workspace_notes(&state.notes, note.workspace_id.as_deref());
-    emit_notes_updated(&app);
+    emit_notes_updated(&state);
     note
 }
 
 #[tauri::command]
 pub fn notes_update(
     state: State<'_, AppState>,
-    app: AppHandle,
     id: String,
     patch: NotePatch,
 ) -> Option<Note> {
     let updated = state.notes.update(&id, patch)?;
     persist_workspace_notes(&state.notes, updated.workspace_id.as_deref());
-    emit_notes_updated(&app);
+    emit_notes_updated(&state);
     Some(updated)
 }
 
 #[tauri::command]
-pub fn notes_remove(
-    state: State<'_, AppState>,
-    app: AppHandle,
-    id: String,
-) -> bool {
+pub fn notes_remove(state: State<'_, AppState>, id: String) -> bool {
     let ws_id = state.notes.get(&id).and_then(|n| n.workspace_id);
     let removed = state.notes.remove(&id);
     if removed {
         persist_workspace_notes(&state.notes, ws_id.as_deref());
-        emit_notes_updated(&app);
+        emit_notes_updated(&state);
     }
     removed
 }

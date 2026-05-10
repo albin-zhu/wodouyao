@@ -17,8 +17,8 @@ use file_nodes::FileNodeStore;
 use hub::{server, AppHandleSlot, IdentityRegistry, TeamRegistry, WireTopology};
 use notes::NoteStore;
 use pty::manager::PtyManager;
-use runtime::tauri_impl::TauriEmitter;
-use runtime::EventEmitter;
+use runtime::tauri_impl::{TauriEmitter, TauriPathResolver};
+use runtime::{EventEmitter, PathResolver};
 use state::AppState;
 use task_boards::TaskBoardStore;
 use tasks::TaskStore;
@@ -139,6 +139,8 @@ pub fn run() {
     let app_handle_inner: Arc<OnceLock<tauri::AppHandle>> = Arc::new(OnceLock::new());
     let emitter: Arc<dyn EventEmitter> =
         Arc::new(TauriEmitter::new(app_handle_inner.clone()));
+    let path_resolver: Arc<dyn PathResolver> =
+        Arc::new(TauriPathResolver::new(app_handle_inner.clone()));
     let app_handle_slot: AppHandleSlot = emitter.clone();
     let pty_manager = Arc::new(Mutex::new(PtyManager::new(emitter.clone())));
     let hub_handle = server::start(
@@ -166,6 +168,7 @@ pub fn run() {
         file_node_store,
         task_board_store,
         app_handle_slot,
+        path_resolver,
     );
     let setup_slot = app_handle_inner;
 

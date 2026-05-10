@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Emitter, State};
+use tauri::State;
 use uuid::Uuid;
 
 use crate::hub::{topology::Wire, Role, Team};
@@ -16,7 +16,6 @@ pub fn teams_team_for_terminal(state: State<'_, AppState>, term_id: String) -> O
 
 #[tauri::command]
 pub fn teams_dissolve(
-    app: AppHandle,
     state: State<'_, AppState>,
     team_id: String,
 ) -> Result<Vec<String>, String> {
@@ -31,7 +30,9 @@ pub fn teams_dissolve(
         state.topology.remove_for_terminal(id);
         state.identities.remove(id);
     }
-    let _ = app.emit("teams-updated", ());
+    state
+        .app_handle
+        .emit_json("teams-updated", serde_json::Value::Null);
     Ok(evicted)
 }
 
@@ -45,7 +46,6 @@ fn parse_role(s: Option<&str>) -> Role {
 
 #[tauri::command]
 pub fn teams_create(
-    app: AppHandle,
     state: State<'_, AppState>,
     name: String,
     palette: Option<String>,
@@ -59,13 +59,14 @@ pub fn teams_create(
             team = state.team_registry.join(&team.id, id, Role::Lead)?;
         }
     }
-    let _ = app.emit("teams-updated", ());
+    state
+        .app_handle
+        .emit_json("teams-updated", serde_json::Value::Null);
     Ok(team)
 }
 
 #[tauri::command]
 pub fn teams_join(
-    app: AppHandle,
     state: State<'_, AppState>,
     team_id: String,
     term_id: String,
@@ -106,18 +107,21 @@ pub fn teams_join(
             workspace_id: None,
         });
     }
-    let _ = app.emit("teams-updated", ());
+    state
+        .app_handle
+        .emit_json("teams-updated", serde_json::Value::Null);
     Ok(team)
 }
 
 #[tauri::command]
 pub fn teams_leave(
-    app: AppHandle,
     state: State<'_, AppState>,
     team_id: String,
     term_id: String,
 ) -> Result<Team, String> {
     let team = state.team_registry.leave(&team_id, &term_id)?;
-    let _ = app.emit("teams-updated", ());
+    state
+        .app_handle
+        .emit_json("teams-updated", serde_json::Value::Null);
     Ok(team)
 }

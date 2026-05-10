@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::State;
 
 use crate::pty::shell;
 use crate::state::AppState;
@@ -23,7 +23,6 @@ pub struct CreateTerminalRequest {
 
 #[tauri::command]
 pub fn create_terminal(
-    app: AppHandle,
     state: State<'_, AppState>,
     request: CreateTerminalRequest,
 ) -> Result<String, String> {
@@ -64,7 +63,7 @@ pub fn create_terminal(
         env.push(("WODOUYAO_WORKSPACE_ID".to_string(), ws.clone()));
     }
 
-    if let Ok(resource_dir) = app.path().resource_dir() {
+    if let Ok(resource_dir) = state.path_resolver.resource_dir() {
         // Tauri copies `bundle.resources` entries preserving their relative
         // path, so `src-tauri/resources/bin/wodouyao` lands at
         // `<resource_dir>/resources/bin/wodouyao` in both dev and bundled
