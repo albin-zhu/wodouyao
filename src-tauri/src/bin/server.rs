@@ -22,6 +22,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use tower_http::services::ServeDir;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -110,7 +111,25 @@ async fn main() {
     let public = Router::new()
         .route("/v1/events", get(ws_events))
         .route("/v1/file/raw", get(file_raw));
-    let app = public.merge(private).with_state(server_state);
+
+    // SPA dist: WODOUYAO_DIST_DIR overrides for prod deploys; dev build
+    // expects `vite build` to have populated `<repo>/dist` before launch.
+    // The fallback path is relative to the binary's parent dir so a
+    // packaged tarball can ship server + dist side-by-side.
+    let dist_dir = std::env::var("WODOUYAO_DIST_DIR").unwrap_or_else(|_| {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.join("dist")))
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "dist".into())
+    });
+    log::info!("serving SPA from: {}", dist_dir);
+    let static_files = ServeDir::new(&dist_dir).append_index_html_on_directories(true);
+
+    let app = public
+        .merge(private)
+        .with_state(server_state)
+        .fallback_service(static_files);
 
     let addr: SocketAddr = "127.0.0.1:0".parse().expect("hardcoded addr");
     let listener = tokio::net::TcpListener::bind(addr)

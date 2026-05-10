@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "server:build": "vite build && cargo build --manifest-path src-tauri/Cargo.toml --no-default-features --features web-runtime --bin wodouyao-server --release",
+    "server:dev": "vite build && cargo run --manifest-path src-tauri/Cargo.toml --no-default-features --features web-runtime --bin wodouyao-server"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",

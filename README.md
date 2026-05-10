@@ -228,6 +228,51 @@ npm run tauri build
 npx tsc --noEmit
 ```
 
+### Headless server mode (browser-side UI)
+
+The same Rust core can run as a headless HTTP+WebSocket server so you
+can drive the canvas — including PTY terminals, Claude / Codex
+sessions, and the hub — from a browser on another machine. Useful for:
+SSH-tunnelling into a workstation, running the orchestrator on a
+remote dev box, or just keeping a long-lived session on a server.
+
+```bash
+# Build the SPA bundle + the headless server binary
+npm run server:build
+
+# Or dev-style (debug build, foreground)
+npm run server:dev
+```
+
+When the server starts it prints a one-shot URL with the bearer token
+embedded in the hash:
+
+```
+wodouyao-server listening at:
+  http://127.0.0.1:54321/#token=…
+```
+
+Open that URL in any browser. The frontend reads the token from the
+hash, stashes it in `sessionStorage`, and uses it for both the
+`/v1/cmd/*` HTTP commands and the `/v1/events` WebSocket.
+
+For remote use, SSH-tunnel the port:
+
+```bash
+ssh -L 54321:127.0.0.1:54321 your-server
+# then on your laptop, open http://127.0.0.1:54321/#token=…
+```
+
+The headless binary listens on `127.0.0.1` only — there is **no
+in-process TLS, no multi-tenant auth**. Treat the bearer token as a
+shared secret and don't expose the port to the public internet
+without a TLS-terminating reverse proxy in front. This mode is
+intended for **single-user remote access**, not multi-tenant SaaS
+deployment.
+
+Set `WODOUYAO_DIST_DIR` to override where the server looks for the
+SPA bundle (defaults to `dist/` next to the binary).
+
 ---
 
 ## 📁 Project Structure
