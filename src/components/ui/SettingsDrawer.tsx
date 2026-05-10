@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { call } from "../../services/transport";
+import { call, isTauri } from "../../services/transport";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import type {
@@ -189,10 +189,12 @@ export default function SettingsDrawer() {
               onKeyDown={(e) => { if (e.key === "Enter") setWorkspaceCwd(cwdInput || null); }}
               placeholder={t("settings.workspaceDirPlaceholder")}
               style={{ ...inputBase, fontSize: 12, fontFamily: "monospace" }} />
-            <button onClick={async () => {
-              const sel = await openDialog({ directory: true, multiple: false }).catch(() => null);
-              if (typeof sel === "string") { setCwdInput(sel); setWorkspaceCwd(sel); }
-            }} style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)", borderRadius: 6, padding: "0 10px", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>📂</button>
+            {isTauri && (
+              <button onClick={async () => {
+                const sel = await openDialog({ directory: true, multiple: false }).catch(() => null);
+                if (typeof sel === "string") { setCwdInput(sel); setWorkspaceCwd(sel); }
+              }} style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text)", borderRadius: 6, padding: "0 10px", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>📂</button>
+            )}
             {cwdInput && (
               <button onClick={() => { setCwdInput(""); setWorkspaceCwd(null); }}
                 style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)", borderRadius: 6, padding: "0 10px", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>✕</button>
@@ -279,7 +281,7 @@ export default function SettingsDrawer() {
               <input value={bg.source ?? ""} onChange={(e) => patchBg({ source: e.target.value || null })}
                 placeholder={bg.kind === "url" ? t("settings.bgUrlPlaceholder") : t("settings.bgFilePlaceholder")}
                 style={{ ...inputBase, fontSize: 12, fontFamily: "monospace" }} />
-              {(bg.kind === "image" || bg.kind === "video") && (
+              {isTauri && (bg.kind === "image" || bg.kind === "video") && (
                 <button onClick={async () => {
                   const filters = bg.kind === "image"
                     ? [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "avif", "bmp"] }]

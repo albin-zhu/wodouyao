@@ -1,5 +1,6 @@
 import { getCurrentWindow, availableMonitors, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
 import { useCanvasStore } from "../store/canvasStore";
+import { isTauri } from "../services/transport";
 
 /**
  * Toggle "span all monitors" mode.
@@ -16,6 +17,10 @@ import { useCanvasStore } from "../store/canvasStore";
  * Combine with zen mode for a chromeless experience.
  */
 export async function toggleSpanAllMonitors() {
+  // Web mode runs in a regular browser tab; the OS window we'd resize is
+  // someone else's process. The button stays visible but acts as a no-op
+  // so the rest of the app behaves consistently.
+  if (!isTauri) return;
   const win = getCurrentWindow();
   const { spanAllMonitors, prevWindowBounds, setSpanAllMonitors } =
     useCanvasStore.getState();

@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { fileUrl } from "../../services/fileUrl";
 import { useFileNodeStore } from "../../store/fileNodeStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
 import { useNodeDrag } from "../../hooks/useNodeDrag";
@@ -175,7 +175,7 @@ function FileNodeImpl({ file }: FileNodeProps) {
       >
         {file.kind === "image" && (
           <img
-            src={convertFileSrc(file.path)}
+            src={fileUrl(file.path)}
             alt={file.name}
             style={{
               maxWidth: "100%",
@@ -188,7 +188,7 @@ function FileNodeImpl({ file }: FileNodeProps) {
         )}
         {file.kind === "video" && (
           <video
-            src={convertFileSrc(file.path)}
+            src={fileUrl(file.path)}
             controls
             style={{ width: "100%", maxHeight: "100%" }}
           />

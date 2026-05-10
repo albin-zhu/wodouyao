@@ -107,7 +107,9 @@ async fn main() {
             server_state.clone(),
             bearer_auth,
         ));
-    let public = Router::new().route("/v1/events", get(ws_events));
+    let public = Router::new()
+        .route("/v1/events", get(ws_events))
+        .route("/v1/file/raw", get(file_raw));
     let app = public.merge(private).with_state(server_state);
 
     let addr: SocketAddr = "127.0.0.1:0".parse().expect("hardcoded addr");
@@ -147,6 +149,56 @@ async fn bearer_auth(
 #[derive(Deserialize)]
 struct EventsQuery {
     token: String,
+}
+
+#[derive(Deserialize)]
+struct FileRawQuery {
+    path: String,
+    token: String,
+}
+
+/// Stream a file off the server filesystem so `<img>` / `<video>` tags
+/// can render server-side previews — the web counterpart to Tauri's
+/// `convertFileSrc()` / asset: protocol. Token in query params (image
+/// elements can't send Authorization headers).
+async fn file_raw(
+    State(state): State<ServerState>,
+    Query(q): Query<FileRawQuery>,
+) -> Result<Response, AppError> {
+    if q.token != state.bearer_token {
+        return Err(AppError::BadRequest("bad token".into()));
+    }
+    let bytes = std::fs::read(&q.path)
+        .map_err(|e| AppError::NotFound(format!("read {}: {}", q.path, e)))?;
+    let mime = guess_mime(&q.path);
+    Ok((
+        [(axum::http::header::CONTENT_TYPE, mime)],
+        bytes,
+    )
+        .into_response())
+}
+
+fn guess_mime(path: &str) -> &'static str {
+    let lower = path.to_ascii_lowercase();
+    let ext = lower.rsplit('.').next().unwrap_or("");
+    match ext {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        "ogg" | "ogv" => "video/ogg",
+        "mov" => "video/quicktime",
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "txt" | "log" => "text/plain; charset=utf-8",
+        "json" => "application/json",
+        _ => "application/octet-stream",
+    }
 }
 
 async fn ws_events(
