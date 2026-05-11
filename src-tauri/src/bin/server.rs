@@ -146,11 +146,12 @@ async fn main() {
         .fallback_service(static_files);
 
     let port = read_port();
-    let addr: SocketAddr = format!("127.0.0.1:{}", port).parse().expect("invalid addr");
+    let host = std::env::var("WODOUYAO_WEB_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let addr: SocketAddr = format!("{}:{}", host, port).parse().expect("invalid addr");
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap_or_else(|e| {
         panic!(
-            "bind 127.0.0.1:{} failed: {} (port in use? set WODOUYAO_WEB_PORT to another port)",
-            port, e
+            "bind {}:{} failed: {} (port in use? set WODOUYAO_WEB_PORT to another port)",
+            host, port, e
         )
     });
     let local_addr = listener.local_addr().expect("local_addr failed");
