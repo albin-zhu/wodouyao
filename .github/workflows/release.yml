@@ -36,16 +36,19 @@ jobs:
           workspaces: src-tauri
           shared-key: server-${{ matrix.label }}
       - name: Build frontend
-        run: npm ci && npm run build
+        run: npm ci && npx vite build
       - name: Build wodouyao-server
         run: cargo build --manifest-path src-tauri/Cargo.toml --no-default-features --features web-runtime --bin wodouyao-server --release
       - name: Package server + dist
         shell: bash
         run: |
+          set -euo pipefail
           BUNDLE="wodouyao-server-${{ matrix.label }}"
-          mkdir -p "$BUNDLE"
+          mkdir -p "$BUNDLE/dist"
           cp "src-tauri/target/release/wodouyao-server${{ matrix.ext }}" "$BUNDLE/"
-          cp -r dist "$BUNDLE/dist"
+          cp -r dist/. "$BUNDLE/dist/"
+          echo "=== bundle contents ==="
+          ls -lR "$BUNDLE"
           if [ "${{ matrix.ext }}" = ".exe" ]; then
             7z a "${BUNDLE}.zip" "$BUNDLE"
             echo "ASSET=${BUNDLE}.zip" >> "$GITHUB_ENV"
