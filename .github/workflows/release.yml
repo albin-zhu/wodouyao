@@ -6,6 +6,44 @@ on:
       - 'v*'
 
 jobs:
+  build-server:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            label: linux-x86_64
+            ext: ''
+          - platform: macos-latest
+            label: macos-aarch64
+            ext: ''
+          - platform: windows-latest
+            label: windows-x86_64
+            ext: .exe
+    runs-on: ${{ matrix.platform }}
+    name: Server (${{ matrix.label }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: server-${{ matrix.label }}
+      - name: Build wodouyao-server
+        run: cargo build --manifest-path src-tauri/Cargo.toml --no-default-features --features web-runtime --bin wodouyao-server --release
+      - name: Stage binary
+        shell: bash
+        run: cp "src-tauri/target/release/wodouyao-server${{ matrix.ext }}" "wodouyao-server-${{ matrix.label }}${{ matrix.ext }}"
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: wodouyao-server-${{ matrix.label }}${{ matrix.ext }}
+
   build:
     permissions:
       contents: write
