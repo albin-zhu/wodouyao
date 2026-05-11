@@ -29,6 +29,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use wodouyao_lib::commands;
+use wodouyao_lib::integrations;
 use wodouyao_lib::file_nodes::FileNodeStore;
 use wodouyao_lib::hub::{server as hub_server, IdentityRegistry, TeamRegistry, WireTopology};
 use wodouyao_lib::notes::NoteStore;
@@ -78,17 +79,19 @@ async fn main() {
     .expect("failed to start hub server");
     log::info!("hub listening at {}", hub_handle.url);
 
-    // Seed bundled shaders into ~/.wodouyao/shaders/ on first boot so the
-    // canvas background renders without the user having to manually copy
-    // .frag files. Tauri does this in its setup hook; the headless server
-    // has to wire it up itself.
+    // Seed bundled shaders, skill, and CLI on first boot.
     match path_resolver.resource_dir() {
         Ok(dir) => {
             if let Err(e) = wodouyao_lib::shaders::seed_from(&dir) {
                 log::warn!("shader seed failed: {}", e);
             }
+            match integrations::claude::install(&dir) {
+                Ok(_) => log::info!("Claude skill installed"),
+                Err(e) => log::warn!("Claude skill install failed: {}", e),
+            }
+            seed_cli(&dir);
         }
-        Err(e) => log::warn!("shader seed skipped (no resource dir): {}", e),
+        Err(e) => log::warn!("setup skipped (no resource dir): {}", e),
     }
 
     let app_state = Arc::new(AppState::new(
@@ -162,6 +165,48 @@ async fn main() {
 
     axum::serve(listener, app).await.expect("axum serve failed");
 }
+
+/// Copy the bundled `wodouyao` CLI script to the first writable bin directory
+/// on a conventional PATH: ~/.local/bin, then /usr/local/bin. Skips silently
+/// on Windows (the shell script doesn't apply there).
+#[cfg(unix)]
+fn seed_cli(resource_dir: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let src = resource_dir.join("resources").join("bin").join("wodouyao");
+    if !src.exists() {
+        log::warn!("CLI script not found at {}", src.display());
+        return;
+    }
+
+    let candidates: Vec<std::path::PathBuf> = [
+        dirs::home_dir().map(|h| h.join(".local").join("bin")),
+        Some(std::path::PathBuf::from("/usr/local/bin")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
+    for dir in candidates {
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            log::debug!("can't create {}: {}", dir.display(), e);
+            continue;
+        }
+        let target = dir.join("wodouyao");
+        match std::fs::copy(&src, &target) {
+            Ok(_) => {
+                let _ = std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755));
+                log::info!("wodouyao CLI installed to {}", target.display());
+                return;
+            }
+            Err(e) => log::debug!("can't install CLI to {}: {}", target.display(), e),
+        }
+    }
+    log::warn!("wodouyao CLI install skipped: ~/.local/bin and /usr/local/bin are not writable");
+}
+
+#[cfg(not(unix))]
+fn seed_cli(_resource_dir: &std::path::Path) {}
 
 /// Persistent port: defaults to 19799 (next to the hub's 19790-ish range
 /// and the desktop pet's 19800) so the user can bookmark a stable URL
