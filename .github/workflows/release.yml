@@ -26,23 +26,40 @@ jobs:
     name: Server (${{ matrix.label }})
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
           shared-key: server-${{ matrix.label }}
+      - name: Build frontend
+        run: npm ci && npm run build
       - name: Build wodouyao-server
         run: cargo build --manifest-path src-tauri/Cargo.toml --no-default-features --features web-runtime --bin wodouyao-server --release
-      - name: Stage binary
+      - name: Package server + dist
         shell: bash
-        run: cp "src-tauri/target/release/wodouyao-server${{ matrix.ext }}" "wodouyao-server-${{ matrix.label }}${{ matrix.ext }}"
+        run: |
+          BUNDLE="wodouyao-server-${{ matrix.label }}"
+          mkdir -p "$BUNDLE"
+          cp "src-tauri/target/release/wodouyao-server${{ matrix.ext }}" "$BUNDLE/"
+          cp -r dist "$BUNDLE/dist"
+          if [ "${{ matrix.ext }}" = ".exe" ]; then
+            7z a "${BUNDLE}.zip" "$BUNDLE"
+            echo "ASSET=${BUNDLE}.zip" >> "$GITHUB_ENV"
+          else
+            tar -czf "${BUNDLE}.tar.gz" "$BUNDLE"
+            echo "ASSET=${BUNDLE}.tar.gz" >> "$GITHUB_ENV"
+          fi
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          files: wodouyao-server-${{ matrix.label }}${{ matrix.ext }}
+          files: ${{ env.ASSET }}
 
   build:
     permissions:
