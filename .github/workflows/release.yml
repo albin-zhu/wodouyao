@@ -18,11 +18,6 @@ jobs:
             args: ''
             label: linux-x86_64
 
-          - platform: macos-13
-            rust-targets: x86_64-apple-darwin
-            args: --target x86_64-apple-darwin
-            label: macos-x86_64
-
           - platform: macos-latest
             rust-targets: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
@@ -98,7 +93,6 @@ jobs:
             | Platform | File |
             |---|---|
             | macOS (Apple Silicon) | `Wodouyao_*_aarch64.dmg` |
-            | macOS (Intel) | `Wodouyao_*_x64.dmg` |
             | Linux | `wodouyao_*_amd64.deb` / `Wodouyao_*_amd64.AppImage` |
             | Windows | `Wodouyao_*_x64-setup.exe` / `Wodouyao_*_x64_en-US.msi` |
           releaseDraft: true
