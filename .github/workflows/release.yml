@@ -47,6 +47,7 @@ jobs:
           mkdir -p "$BUNDLE/dist"
           cp "src-tauri/target/release/wodouyao-server${{ matrix.ext }}" "$BUNDLE/"
           cp -r dist/. "$BUNDLE/dist/"
+          cp -r src-tauri/resources "$BUNDLE/resources"
           echo "=== bundle contents ==="
           ls -lR "$BUNDLE"
           if [ "${{ matrix.ext }}" = ".exe" ]; then
