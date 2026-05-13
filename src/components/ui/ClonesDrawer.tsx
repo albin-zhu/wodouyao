@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 // Zustand selector creates a new array on every render and tips React's
 // useSyncExternalStore into an infinite re-render loop.
 import { useTranslation } from "react-i18next";
-import { useCloneStore } from "../../store/cloneStore";
+import { useCloneStore, workspaceCloneFilter } from "../../store/cloneStore";
+import { useWorkspaceStore } from "../../store/workspaceStore";
 import { useTerminal } from "../../hooks/useTerminal";
 import { useDialogStore } from "../../store/dialogStore";
 import { clonesForkSession } from "../../services/tauriCommands";
@@ -56,7 +57,11 @@ export default function ClonesDrawer() {
   const drawerOpen = useCloneStore((s) => s.drawerOpen);
   const closeDrawer = useCloneStore((s) => s.closeDrawer);
   const clonesMap = useCloneStore((s) => s.clones);
-  const clones = useMemo(() => Array.from(clonesMap.values()), [clonesMap]);
+  const currentWsId = useWorkspaceStore((s) => s.currentWorkspace?.id ?? null);
+  const clones = useMemo(
+    () => workspaceCloneFilter(clonesMap.values(), currentWsId),
+    [clonesMap, currentWsId]
+  );
   const validation = useCloneStore((s) => s.validation);
   const validateClone = useCloneStore((s) => s.validateClone);
   const removeClone = useCloneStore((s) => s.removeClone);

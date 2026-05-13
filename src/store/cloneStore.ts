@@ -107,8 +107,24 @@ export const useCloneStore = create<CloneStore>((set, get) => ({
   getVisible: () => {
     const wsId = useWorkspaceStore.getState().currentWorkspace?.id ?? null;
     if (!wsId) return [];
-    return Array.from(get().clones.values()).sort(
-      (a, b) => (b.last_used_at || b.created_at) - (a.last_used_at || a.created_at)
-    );
+    // Filter to the current workspace so switching workspaces doesn't
+    // leak clones from the previous one. Backend stores them per-ws on
+    // disk and IPC list is also scoped, but we filter defensively in case
+    // the in-memory store accumulates entries from multiple loaded
+    // workspaces during a hot-switch.
+    return Array.from(get().clones.values())
+      .filter((c) => c.workspace_id === wsId)
+      .sort(
+        (a, b) => (b.last_used_at || b.created_at) - (a.last_used_at || a.created_at)
+      );
   },
 }));
+
+/** Re-hydrate the clone store on workspace switch. Mounts in App.tsx
+ *  alongside the other sync hooks. */
+export function workspaceCloneFilter(clones: Iterable<Clone>, wsId: string | null): Clone[] {
+  if (!wsId) return [];
+  const out: Clone[] = [];
+  for (const c of clones) if (c.workspace_id === wsId) out.push(c);
+  return out;
+}

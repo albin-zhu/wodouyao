@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useDialogStore } from "../../store/dialogStore";
 import { useTerminal } from "../../hooks/useTerminal";
 import { useWorkspaceStore } from "../../store/workspaceStore";
-import { useCloneStore } from "../../store/cloneStore";
+import { useCloneStore, workspaceCloneFilter } from "../../store/cloneStore";
 import { clonesForkSession, listAvailableShells, detectCliAgents } from "../../services/tauriCommands";
 import { toast } from "../../store/toastStore";
 import type { CliAgent } from "../../services/tauriCommands";
@@ -42,12 +42,13 @@ export default function TerminalCreateDialog() {
   const { spawn } = useTerminal();
   const workspaceCwd = useWorkspaceStore((s) => s.currentWorkspaceCwd);
   const clonesMap = useCloneStore((s) => s.clones);
+  const currentWsId = useWorkspaceStore((s) => s.currentWorkspace?.id ?? null);
   const clones = useMemo(
     () =>
-      Array.from(clonesMap.values()).sort(
+      workspaceCloneFilter(clonesMap.values(), currentWsId).sort(
         (a, b) => (b.last_used_at || b.created_at) - (a.last_used_at || a.created_at)
       ),
-    [clonesMap]
+    [clonesMap, currentWsId]
   );
 
   const [name, setName] = useState("");

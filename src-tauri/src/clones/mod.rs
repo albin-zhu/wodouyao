@@ -124,6 +124,7 @@ impl CloneStore {
             session_id: input.session_id,
             role_hint: input.role_hint,
             parent_clone_id: input.parent_clone_id,
+            workspace_id: input.workspace_id.clone(),
             created_at: now,
             last_used_at: 0,
             fork_count: 0,
@@ -168,7 +169,12 @@ impl CloneStore {
         let mut map = self.inner.lock().unwrap();
         // Drop any existing entries for this workspace.
         map.retain(|_, (_, w)| w.as_deref() != Some(ws_id));
-        for c in clones {
+        for mut c in clones {
+            // Stamp workspace_id on the struct so old persisted clones
+            // (which lacked the field) gain it on first load.
+            if c.workspace_id.is_none() {
+                c.workspace_id = Some(ws_id.to_string());
+            }
             map.insert(c.id.clone(), (c, Some(ws_id.to_string())));
         }
     }

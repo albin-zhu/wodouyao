@@ -21,7 +21,14 @@ fn persist_workspace_clones(state: &AppState, ws_id: Option<&str>) {
 }
 
 pub fn clones_list_impl(state: &AppState) -> Vec<Clone> {
-    state.clones.list()
+    // Scope to the active workspace — otherwise switching workspaces would
+    // surface the previous one's clones in pickers and the drawer. The
+    // workspace_id is also embedded on each Clone so the frontend can
+    // double-check after the fact.
+    match workspace::current_workspace_id() {
+        Some(ws) => state.clones.filter_for_workspace(&ws),
+        None => Vec::new(),
+    }
 }
 
 pub fn clones_create_impl(state: &AppState, input: CloneCreate) -> Result<Clone, String> {

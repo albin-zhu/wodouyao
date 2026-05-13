@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useSettingsStore } from "../../store/settingsStore";
@@ -121,11 +122,18 @@ export default function Toolbar() {
   const addBoard = useTaskBoardStore((s) => s.addBoard);
   const openTasksDrawer = useTaskStore((s) => s.openDrawer);
   const openClonesDrawer = useCloneStore((s) => s.openDrawer);
-  const clonesCount = useCloneStore((s) => s.clones.size);
+  const clonesMap = useCloneStore((s) => s.clones);
   const openBootstrap = useDialogStore((s) => s.openBootstrapWorkflow);
   const tasksMap = useTaskStore((s) => s.tasks);
   const tasksActiveCount = Array.from(tasksMap.values()).filter((t) => t.status !== "completed").length;
   const currentWorkspace = useWorkspaceStore((s) => s.currentWorkspace);
+  const clonesCount = useMemo(() => {
+    let n = 0;
+    for (const c of clonesMap.values()) {
+      if (c.workspace_id === currentWorkspace?.id) n++;
+    }
+    return n;
+  }, [clonesMap, currentWorkspace?.id]);
   const forkWorkspace = useForkWorkspace();
   const currentMode = useCanvasInteractionStore((s) => s.mode);
   const setMode = useCanvasInteractionStore((s) => s.setMode);

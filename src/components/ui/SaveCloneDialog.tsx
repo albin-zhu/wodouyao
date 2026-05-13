@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { TerminalNode } from "../../types/terminal";
 import { useCloneStore } from "../../store/cloneStore";
+import { useWorkspaceStore } from "../../store/workspaceStore";
 import { ROLE_ORDER, TERMINAL_ROLES } from "../../utils/terminalRoles";
 import { toast } from "../../store/toastStore";
 
@@ -18,7 +19,14 @@ export default function SaveCloneDialog({ terminal, onClose }: Props) {
   const { t } = useTranslation();
   const createClone = useCloneStore((s) => s.createClone);
   const clonesMap = useCloneStore((s) => s.clones);
-  const existingClones = useMemo(() => Array.from(clonesMap.values()), [clonesMap]);
+  const currentWsId = useWorkspaceStore((s) => s.currentWorkspace?.id ?? null);
+  // Only consider clones from the current workspace when guessing the
+  // parent_clone_id — a session_id collision across workspaces would be
+  // coincidental and ambiguous, better to ignore.
+  const existingClones = useMemo(
+    () => Array.from(clonesMap.values()).filter((c) => c.workspace_id === currentWsId),
+    [clonesMap, currentWsId]
+  );
   const [name, setName] = useState(terminal.name || "");
   const [description, setDescription] = useState("");
   const [roleHint, setRoleHint] = useState<string>(terminal.role ?? "");

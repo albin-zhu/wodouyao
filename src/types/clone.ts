@@ -9,6 +9,7 @@ export interface Clone {
   session_id: string;
   role_hint?: string | null;
   parent_clone_id?: string | null;
+  workspace_id?: string | null;
   created_at: number;            // unix seconds
   last_used_at: number;
   fork_count: number;

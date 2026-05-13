@@ -111,6 +111,12 @@ pub struct Clone {
     /// from another clone, the chain is preserved here. Forms a tree.
     #[serde(default)]
     pub parent_clone_id: Option<String>,
+    /// The workspace this clone belongs to. Surfaced on the struct (not
+    /// just kept as a side channel in CloneStore) so the frontend can
+    /// filter the global list to the active workspace — without this,
+    /// switching workspaces would show the previous one's clones too.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     pub created_at: u64,
     #[serde(default)]
     pub last_used_at: u64,
