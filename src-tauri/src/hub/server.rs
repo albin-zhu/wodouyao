@@ -109,7 +109,6 @@ fn handle(
     app_handle: &AppHandleSlot,
     token: &str,
 ) {
-    let _ = clone_store; // clones routed via the IPC layer for now; reserved for future hub endpoints.
     if !is_authorised(&request, token) {
         let _ = request.respond(empty(401));
         return;
@@ -166,6 +165,10 @@ fn handle(
         (&Method::Post, "/v1/background") => background_set(request, app_handle),
         (&Method::Get, "/v1/background") => background_get(request),
         (&Method::Get, "/v1/shaders") => shaders_list_route(request),
+        (&Method::Get, "/v1/clones") => clones_list_route(request, clone_store),
+        (&Method::Post, "/v1/clones") => {
+            clones_create_route(request, clone_store, app_handle)
+        }
         _ => {
             if let Some(task_id) = path.strip_prefix("/v1/tasks/") {
                 // /v1/tasks/{id}/claim — atomic owner assignment
@@ -244,6 +247,9 @@ fn handle(
                         &Method::Post | &Method::Patch => {
                             terminals_set_session_route(request, id, app_handle);
                         }
+                        &Method::Get => {
+                            terminals_get_session_route(request, id);
+                        }
                         _ => {
                             let _ = request.respond(empty(404));
                         }
@@ -256,6 +262,25 @@ fn handle(
                         _ => {
                             let _ = request.respond(empty(404));
                         }
+                    }
+                }
+            } else if let Some(clone_path) = path.strip_prefix("/v1/clones/") {
+                if let Some(id) = clone_path.strip_suffix("/spawn") {
+                    match &method {
+                        &Method::Post => clones_fork_session_route(request, clone_store, id, app_handle),
+                        _ => { let _ = request.respond(empty(404)); }
+                    }
+                } else if let Some(id) = clone_path.strip_suffix("/validate") {
+                    match &method {
+                        &Method::Get => clones_validate_route(request, clone_store, id),
+                        _ => { let _ = request.respond(empty(404)); }
+                    }
+                } else {
+                    match &method {
+                        &Method::Get => clones_get_route(request, clone_store, clone_path),
+                        &Method::Patch => clones_patch_route(request, clone_store, clone_path, app_handle),
+                        &Method::Delete => clones_delete_route(request, clone_store, clone_path, app_handle),
+                        _ => { let _ = request.respond(empty(404)); }
                     }
                 }
             } else if let Some(note_id) = path.strip_prefix("/v1/notes/") {
@@ -2713,6 +2738,39 @@ struct TerminalSessionUpdatedPayload {
 /// reopen. The hub emits a `terminal-session-updated` event so the
 /// frontend store can mirror the value; the workspace save path then
 /// writes it into the layout.
+/// GET /v1/terminals/{id}/session — return the recorded claude session_id
+/// for the terminal, looked up in the active workspace's saved layout.
+/// Used by `wodouyao clone save` to discover its own session id without
+/// the agent needing to know it. Returns 404 when the terminal isn't
+/// known or hasn't reported a session yet.
+fn terminals_get_session_route(request: tiny_http::Request, term_id: &str) {
+    let Some(ws_id) = crate::workspace::storage::current_workspace_id() else {
+        let _ = request.respond(text(404, "no active workspace"));
+        return;
+    };
+    let Ok(ws) = crate::workspace::storage::load(&ws_id) else {
+        let _ = request.respond(text(404, "workspace load failed"));
+        return;
+    };
+    match ws
+        .terminals
+        .iter()
+        .find(|t| t.id == term_id)
+        .and_then(|t| t.session_id.as_ref())
+    {
+        Some(sid) => {
+            let body = serde_json::json!({
+                "terminal_id": term_id,
+                "session_id": sid,
+            });
+            let _ = request.respond(json(200, body.to_string()));
+        }
+        None => {
+            let _ = request.respond(text(404, "no session_id recorded for terminal"));
+        }
+    }
+}
+
 fn terminals_set_session_route(
     mut request: tiny_http::Request,
     term_id: &str,
@@ -2944,4 +3002,263 @@ fn shaders_list_route(request: tiny_http::Request) {
             let _ = request.respond(text(500, &e));
         }
     }
+}
+
+// ── Clone library endpoints ───────────────────────────────────────────
+//
+// These mirror the Tauri-IPC implementations in commands::clones so the
+// `wodouyao` CLI (and any third-party HTTP caller) can drive the clone
+// library exactly the way the desktop UI does. List is filtered to the
+// active workspace so agents see what they could actually spawn here.
+
+fn emit_clones_updated_hub(app_handle: &AppHandleSlot) {
+    app_handle.emit_json("clones-updated", serde_json::Value::Null);
+}
+
+fn persist_clones_for_active_workspace(
+    clone_store: &crate::clones::CloneStore,
+    ws_id: Option<&str>,
+) {
+    let Some(ws_id) = ws_id else { return };
+    let clones = clone_store.filter_for_workspace(ws_id);
+    if let Err(e) = crate::workspace::storage::persist_clones_for_workspace(ws_id, &clones) {
+        eprintln!("[hub] persist clones for workspace {} failed: {}", ws_id, e);
+    }
+}
+
+fn clones_list_route(
+    request: tiny_http::Request,
+    clone_store: &crate::clones::CloneStore,
+) {
+    // Scope the list to the currently-active workspace; an agent without an
+    // active workspace context shouldn't see clones from elsewhere.
+    let list = match crate::workspace::storage::current_workspace_id() {
+        Some(ws) => clone_store.filter_for_workspace(&ws),
+        None => Vec::new(),
+    };
+    let body = serde_json::to_string(&list).unwrap_or_else(|_| "[]".into());
+    let _ = request.respond(json(200, body));
+}
+
+fn clones_create_route(
+    mut request: tiny_http::Request,
+    clone_store: &crate::clones::CloneStore,
+    app_handle: &AppHandleSlot,
+) {
+    let mut body = String::new();
+    if request.as_reader().read_to_string(&mut body).is_err() {
+        let _ = request.respond(text(400, "unable to read body"));
+        return;
+    }
+    let mut input: crate::clones::CloneCreate = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => {
+            let _ = request.respond(text(400, &format!("invalid json: {}", e)));
+            return;
+        }
+    };
+    if input.name.trim().is_empty() {
+        let _ = request.respond(text(400, "name is required"));
+        return;
+    }
+    if input.session_id.trim().is_empty() {
+        let _ = request.respond(text(400, "session_id is required"));
+        return;
+    }
+    if input.workspace_id.is_none() {
+        input.workspace_id = crate::workspace::storage::current_workspace_id();
+    }
+    if input.workspace_id.is_none() {
+        let _ = request.respond(text(409, "no active workspace — clones must be workspace-scoped"));
+        return;
+    }
+    let ws_id = input.workspace_id.clone();
+    let clone = clone_store.create(input);
+    persist_clones_for_active_workspace(clone_store, ws_id.as_deref());
+    emit_clones_updated_hub(app_handle);
+    let body = serde_json::to_string(&clone).unwrap_or_else(|_| "{}".into());
+    let _ = request.respond(json(200, body));
+}
+
+fn clones_get_route(
+    request: tiny_http::Request,
+    clone_store: &crate::clones::CloneStore,
+    clone_id: &str,
+) {
+    match clone_store.get(clone_id) {
+        Some(c) => {
+            let body = serde_json::to_string(&c).unwrap_or_else(|_| "{}".into());
+            let _ = request.respond(json(200, body));
+        }
+        None => {
+            let _ = request.respond(text(404, "clone not found"));
+        }
+    }
+}
+
+fn clones_patch_route(
+    mut request: tiny_http::Request,
+    clone_store: &crate::clones::CloneStore,
+    clone_id: &str,
+    app_handle: &AppHandleSlot,
+) {
+    let mut body = String::new();
+    if request.as_reader().read_to_string(&mut body).is_err() {
+        let _ = request.respond(text(400, "unable to read body"));
+        return;
+    }
+    let patch: crate::clones::ClonePatch = if body.trim().is_empty() {
+        crate::clones::ClonePatch::default()
+    } else {
+        match serde_json::from_str(&body) {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = request.respond(text(400, &format!("invalid json: {}", e)));
+                return;
+            }
+        }
+    };
+    match clone_store.update(clone_id, patch) {
+        Some(c) => {
+            let ws_id = clone_store.workspace_of(clone_id);
+            persist_clones_for_active_workspace(clone_store, ws_id.as_deref());
+            emit_clones_updated_hub(app_handle);
+            let body = serde_json::to_string(&c).unwrap_or_else(|_| "{}".into());
+            let _ = request.respond(json(200, body));
+        }
+        None => {
+            let _ = request.respond(text(404, "clone not found"));
+        }
+    }
+}
+
+fn clones_delete_route(
+    request: tiny_http::Request,
+    clone_store: &crate::clones::CloneStore,
+    clone_id: &str,
+    app_handle: &AppHandleSlot,
+) {
+    let ws_id = clone_store.workspace_of(clone_id);
+    let removed = clone_store.remove(clone_id);
+    if removed {
+        persist_clones_for_active_workspace(clone_store, ws_id.as_deref());
+        emit_clones_updated_hub(app_handle);
+        let _ = request.respond(empty(204));
+    } else {
+        let _ = request.respond(text(404, "clone not found"));
+    }
+}
+
+fn clones_validate_route(
+    request: tiny_http::Request,
+    clone_store: &crate::clones::CloneStore,
+    clone_id: &str,
+) {
+    let Some(clone) = clone_store.get(clone_id) else {
+        let _ = request.respond(text(404, "clone not found"));
+        return;
+    };
+    if clone.agent_kind != "claude" {
+        let body = serde_json::json!({
+            "valid": false,
+            "reason": format!("unsupported agent_kind {}", clone.agent_kind)
+        });
+        let _ = request.respond(json(200, body.to_string()));
+        return;
+    }
+    let cwd = clone_store
+        .workspace_of(clone_id)
+        .and_then(|ws| workspace_cwd_lookup(&ws));
+    let Some(cwd) = cwd else {
+        let body = serde_json::json!({
+            "valid": false,
+            "reason": "workspace cwd not found"
+        });
+        let _ = request.respond(json(200, body.to_string()));
+        return;
+    };
+    let valid = crate::clones::validate_claude_session(&cwd, &clone.session_id);
+    let body = serde_json::json!({
+        "valid": valid,
+        "reason": if valid { serde_json::Value::Null } else {
+            serde_json::Value::String(format!("session file missing for {}", clone.session_id))
+        },
+    });
+    let _ = request.respond(json(200, body.to_string()));
+}
+
+/// Fork the clone's session and return the new session_id. The CLI then
+/// composes a `claude -r <new>` command and POSTs to /v1/spawn — separating
+/// the "snapshot copy" from the "create terminal" step keeps the spawn
+/// machinery in one place.
+fn clones_fork_session_route(
+    request: tiny_http::Request,
+    clone_store: &crate::clones::CloneStore,
+    clone_id: &str,
+    app_handle: &AppHandleSlot,
+) {
+    let Some(clone) = clone_store.get(clone_id) else {
+        let _ = request.respond(text(404, "clone not found"));
+        return;
+    };
+    if clone.agent_kind != "claude" {
+        let _ = request.respond(text(
+            400,
+            &format!("fork unsupported for agent_kind {}", clone.agent_kind),
+        ));
+        return;
+    }
+    let cwd = clone_store
+        .workspace_of(clone_id)
+        .and_then(|ws| workspace_cwd_lookup(&ws));
+    let Some(cwd) = cwd else {
+        let _ = request.respond(text(500, "workspace cwd not found"));
+        return;
+    };
+    let new_session_id = match crate::clones::fork_claude_session(&cwd, &clone.session_id) {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = request.respond(text(500, &e));
+            return;
+        }
+    };
+    clone_store.update(
+        clone_id,
+        crate::clones::ClonePatch {
+            mark_used: true,
+            ..Default::default()
+        },
+    );
+    let ws_id = clone_store.workspace_of(clone_id);
+    persist_clones_for_active_workspace(clone_store, ws_id.as_deref());
+    emit_clones_updated_hub(app_handle);
+
+    // Build a small object matching what the CLI expects so it can plug
+    // straight into a follow-up /v1/spawn request without parsing fiddly
+    // bits of clone metadata twice.
+    let body = serde_json::json!({
+        "session_id": new_session_id,
+        "agent_kind": "claude",
+        "name": clone.name,
+        "role": clone.role_hint,
+        "cwd": cwd,
+        "command": format!("claude --dangerously-skip-permissions -r {}", new_session_id),
+    });
+    let _ = request.respond(json(200, body.to_string()));
+}
+
+/// Workspace cwd resolver — same lookup that commands::clones uses, but
+/// inlined here to avoid pulling AppState into the hub module.
+fn workspace_cwd_lookup(ws_id: &str) -> Option<String> {
+    let path = dirs::data_dir()?
+        .join("com.wodouyao.app")
+        .join("workspaces.json");
+    let raw = std::fs::read_to_string(path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    v.get("entries")?
+        .as_array()?
+        .iter()
+        .find(|e| e.get("id").and_then(|x| x.as_str()) == Some(ws_id))
+        .and_then(|e| e.get("cwd").and_then(|x| x.as_str()))
+        .map(str::to_string)
 }

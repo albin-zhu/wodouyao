@@ -73,6 +73,24 @@ Usage: wodouyao <subcommand> [args]
                                      assign a task to a peer
   team bcast <team> "<msg>"          broadcast to all team members
   team dm <team> <role> "<msg>"      direct message members by role
+  clone list                         list saved agent snapshots in this workspace
+  clone get <id-or-name>             show one clone as JSON
+  clone save --name N [--desc D] [--tags t1,t2] [--role R]
+                                     snapshot the current terminal's claude
+                                     session as a reusable Class. Uses
+                                     WODOUYAO_ID by default; --from-terminal
+                                     to override
+  clone spawn <id-or-name> [--name N] [--role R]
+                                     fork the clone's session and instantiate
+                                     a new terminal that resumes from it.
+                                     The Class is unaffected; multiple spawns
+                                     produce independent siblings
+  clone remove <id-or-name>          delete a clone (does not affect spawned
+                                     instances)
+  clone validate <id-or-name>        check the clone's session JSONL still
+                                     exists on disk
+  clone tree                         render the parent_clone_id inheritance
+                                     tree
 EOF
     exit "${1:-1}"
 }
@@ -1851,6 +1869,283 @@ cmd_bg() {
     esac
 }
 
+# ── Clone library commands ───────────────────────────────────────────
+#
+# Clones are saved agent snapshots — named claude session ids you can
+# spawn from later. The OO mental model: clone = Class, spawn = new
+# instance. Spawning forks the session JSONL so instances don't pollute
+# the Class's session state.
+
+# Resolve <id-or-name> to a clone id by listing + matching.
+_clone_resolve_id() {
+    _query=$1
+    load_endpoint
+    _list=$(curl_auth -f "$URL/v1/clones") || die "failed to list clones"
+    if command -v python3 >/dev/null 2>&1; then
+        WD_QUERY=$_query python3 -c '
+import json, os, sys
+q = os.environ["WD_QUERY"]
+try:
+    arr = json.loads(sys.stdin.read())
+except Exception:
+    sys.exit(2)
+# Exact id match wins; otherwise exact name; otherwise prefix on name.
+for c in arr:
+    if c.get("id") == q:
+        print(c["id"]); sys.exit(0)
+for c in arr:
+    if c.get("name") == q:
+        print(c["id"]); sys.exit(0)
+matches = [c for c in arr if (c.get("name") or "").startswith(q)]
+if len(matches) == 1:
+    print(matches[0]["id"]); sys.exit(0)
+if len(matches) > 1:
+    sys.stderr.write("ambiguous, %d matches: %s\n" % (len(matches), ", ".join(m["name"] for m in matches)))
+    sys.exit(3)
+sys.exit(4)
+' <<EOF || die "no clone matches '$_query'"
+$_list
+EOF
+    else
+        # Without python: only exact id supported.
+        printf '%s' "$_list" | grep -q "\"id\":\"$_query\"" || die "no clone matches '$_query' (python3 unavailable for fuzzy lookup)"
+        printf '%s' "$_query"
+    fi
+}
+
+cmd_clone_list() {
+    load_endpoint
+    _body=$(curl_auth -f "$URL/v1/clones") || die "clone list failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_body" | python3 -c '
+import json, sys
+try:
+    arr = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+if not arr:
+    sys.exit(0)
+arr.sort(key=lambda c: -(c.get("last_used_at") or c.get("created_at") or 0))
+for c in arr:
+    tags = ",".join(c.get("tags") or []) or "-"
+    role = c.get("role_hint") or "-"
+    forks = c.get("fork_count") or 0
+    desc = (c.get("description") or "").replace("\n", " ")[:60]
+    print("%s\t%s\trole=%s\ttags=%s\tforks=%d\t%s" % (
+        c["id"], c["name"], role, tags, forks, desc))
+'
+    else
+        printf '%s\n' "$_body"
+    fi
+}
+
+cmd_clone_get() {
+    [ $# -ge 1 ] || die "clone get: missing <id-or-name>"
+    _id=$(_clone_resolve_id "$1")
+    load_endpoint
+    curl_auth -f "$URL/v1/clones/$_id" || die "clone get failed"
+    printf '\n'
+}
+
+cmd_clone_save() {
+    _name=""
+    _desc=""
+    _tags=""
+    _role=""
+    _terminal=$WODOUYAO_ID
+    _session=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --name)        [ $# -ge 2 ] || die "--name requires a value"
+                           _name=$2; shift 2 ;;
+            --desc|--description) [ $# -ge 2 ] || die "--desc requires a value"
+                           _desc=$2; shift 2 ;;
+            --tags)        [ $# -ge 2 ] || die "--tags requires a value"
+                           _tags=$2; shift 2 ;;
+            --role)        [ $# -ge 2 ] || die "--role requires a value"
+                           _role=$2; shift 2 ;;
+            --from-terminal) [ $# -ge 2 ] || die "--from-terminal requires a value"
+                           _terminal=$2; shift 2 ;;
+            --session-id)  [ $# -ge 2 ] || die "--session-id requires a value"
+                           _session=$2; shift 2 ;;
+            *)             die "unknown flag: $1" ;;
+        esac
+    done
+    [ -n "$_name" ] || die "clone save: missing --name"
+    load_endpoint
+    if [ -z "$_session" ]; then
+        [ -n "$_terminal" ] || die "clone save: no terminal id (set WODOUYAO_ID or pass --from-terminal)"
+        _info=$(curl_auth -f "$URL/v1/terminals/$_terminal/session") \
+            || die "clone save: terminal $_terminal has no session yet (claude SessionStart hook hasn't fired?)"
+        _session=$(extract_field session_id /dev/stdin <<EOF
+$_info
+EOF
+)
+        [ -n "$_session" ] || die "clone save: failed to parse session_id from terminal info"
+    fi
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WD_NAME=$_name WD_DESC=$_desc WD_TAGS=$_tags WD_ROLE=$_role WD_SESSION=$_session \
+                python3 -c '
+import json, os
+tags = [t.strip() for t in (os.environ.get("WD_TAGS") or "").split(",") if t.strip()]
+out = {
+    "name": os.environ["WD_NAME"],
+    "description": os.environ.get("WD_DESC") or "",
+    "session_id": os.environ["WD_SESSION"],
+    "agent_kind": "claude",
+    "tags": tags,
+}
+role = os.environ.get("WD_ROLE")
+if role:
+    out["role_hint"] = role
+print(json.dumps(out))
+')
+    else
+        die "clone save: python3 required for json encoding"
+    fi
+    _resp=$(curl_auth -f -X POST -H "Content-Type: application/json" \
+        --data-binary "$_body" "$URL/v1/clones") || die "clone save failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_resp" | python3 -c '
+import json, sys
+c = json.load(sys.stdin)
+print("✓ saved clone %s (id=%s, session=%s)" % (c["name"], c["id"], c["session_id"][:8]))
+'
+    else
+        printf '%s\n' "$_resp"
+    fi
+}
+
+cmd_clone_spawn() {
+    [ $# -ge 1 ] || die "clone spawn: missing <id-or-name>"
+    _query=$1; shift
+    _name=""
+    _role=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --name) [ $# -ge 2 ] || die "--name requires a value"
+                    _name=$2; shift 2 ;;
+            --role) [ $# -ge 2 ] || die "--role requires a value"
+                    _role=$2; shift 2 ;;
+            *)      die "unknown flag: $1" ;;
+        esac
+    done
+    _id=$(_clone_resolve_id "$_query")
+    load_endpoint
+    # Step 1: fork the session and get a fresh session_id + canonical
+    # spawn payload from the server.
+    _fork=$(curl_auth -f -X POST "$URL/v1/clones/$_id/spawn") \
+        || die "clone spawn: fork-session failed"
+    if command -v python3 >/dev/null 2>&1; then
+        _body=$(WD_FORK=$_fork WD_NAME=$_name WD_ROLE=$_role python3 -c '
+import json, os
+fork = json.loads(os.environ["WD_FORK"])
+override_name = os.environ.get("WD_NAME") or ""
+override_role = os.environ.get("WD_ROLE") or ""
+out = {
+    "command": fork["command"],
+    "kind": fork.get("agent_kind") or "claude",
+    "name": override_name or fork.get("name") or "Clone",
+    "auto_wire_from": os.environ.get("WODOUYAO_ID") or None,
+}
+role = override_role or fork.get("role")
+if role:
+    out["role"] = role
+cwd = fork.get("cwd")
+if cwd:
+    out["cwd"] = cwd
+out = {k: v for k, v in out.items() if v is not None}
+print(json.dumps(out))
+')
+    else
+        die "clone spawn: python3 required"
+    fi
+    # Step 2: ride the existing /v1/spawn machinery so the new terminal
+    # lands on the canvas exactly the way `wodouyao spawn` does.
+    _resp=$(curl_auth -f -X POST -H "Content-Type: application/json" \
+        --data-binary "$_body" "$URL/v1/spawn") || die "clone spawn: /v1/spawn failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_resp" | python3 -c '
+import json, sys
+r = json.load(sys.stdin)
+print("✓ spawned %s" % r.get("id", "<no-id>"))
+'
+    else
+        printf '%s\n' "$_resp"
+    fi
+}
+
+cmd_clone_remove() {
+    [ $# -ge 1 ] || die "clone remove: missing <id-or-name>"
+    _id=$(_clone_resolve_id "$1")
+    load_endpoint
+    curl_auth -f -X DELETE "$URL/v1/clones/$_id" >/dev/null \
+        || die "clone remove failed"
+    echo "✓ removed clone $_id"
+}
+
+cmd_clone_validate() {
+    [ $# -ge 1 ] || die "clone validate: missing <id-or-name>"
+    _id=$(_clone_resolve_id "$1")
+    load_endpoint
+    curl_auth -f "$URL/v1/clones/$_id/validate" || die "validate failed"
+    printf '\n'
+}
+
+cmd_clone_tree() {
+    load_endpoint
+    _body=$(curl_auth -f "$URL/v1/clones") || die "clone tree failed"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$_body" | python3 -c '
+import json, sys
+try:
+    arr = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+by_id = {c["id"]: c for c in arr}
+children = {}
+roots = []
+for c in arr:
+    p = c.get("parent_clone_id")
+    if p and p in by_id:
+        children.setdefault(p, []).append(c)
+    else:
+        roots.append(c)
+def render(node, depth):
+    role = node.get("role_hint") or ""
+    forks = node.get("fork_count") or 0
+    print("%s%s%s  forks=%d  id=%s" % (
+        "  " * depth,
+        "↳ " if depth else "",
+        node["name"] + (" [" + role + "]" if role else ""),
+        forks,
+        node["id"]))
+    for ch in sorted(children.get(node["id"], []), key=lambda x: x.get("name") or ""):
+        render(ch, depth + 1)
+roots.sort(key=lambda c: -(c.get("last_used_at") or c.get("created_at") or 0))
+for r in roots:
+    render(r, 0)
+'
+    else
+        printf '%s\n' "$_body"
+    fi
+}
+
+cmd_clone() {
+    [ $# -gt 0 ] || die "clone: missing subcommand (list|get|save|spawn|remove|validate|tree)"
+    _sub=$1; shift
+    case $_sub in
+        list)     cmd_clone_list "$@" ;;
+        get)      cmd_clone_get "$@" ;;
+        save)     cmd_clone_save "$@" ;;
+        spawn)    cmd_clone_spawn "$@" ;;
+        remove|rm) cmd_clone_remove "$@" ;;
+        validate) cmd_clone_validate "$@" ;;
+        tree)     cmd_clone_tree "$@" ;;
+        *)        die "clone: unknown subcommand: $_sub" ;;
+    esac
+}
+
 [ $# -gt 0 ] || usage
 sub=$1; shift
 case $sub in
@@ -1868,6 +2163,7 @@ case $sub in
     note)           cmd_note  "$@" ;;
     terminal)       cmd_terminal "$@" ;;
     bg)             cmd_bg "$@" ;;
+    clone)          cmd_clone "$@" ;;
     workflow)       cmd_workflow "$@" ;;
     -h|--help|help) usage 0 ;;
     *)              die "unknown subcommand: $sub" ;;

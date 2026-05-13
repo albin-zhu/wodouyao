@@ -457,8 +457,78 @@ Capture both the command echo and its output in `read` — do not assume the pee
 | `peers` prints nothing | Terminal is isolated | Same — needs a wire. |
 | `whoami` returns id but no name/kind | Never called `hello` | Run `hello` to register. |
 
+## Clone library — reusable agent snapshots
+
+A **clone** is a saved snapshot of an agent's claude session. Spawning from a clone gives you a brand-new terminal whose agent already has the parent's full context — read code, understands the project, knows the conventions — without paying the onboarding cost again.
+
+Mental model:
+
+| OO | Wodouyao |
+|---|---|
+| Class | clone (saved snapshot with name/description/role_hint) |
+| Instance | terminal spawned from the clone (`claude -r <fresh-uuid>`) |
+| `class A extends B` | save a clone from a terminal that was itself spawned from another clone — `parent_clone_id` is captured automatically |
+| `new A()` | `wodouyao clone spawn <name>` |
+
+Each spawn **forks** the session JSONL: a fresh UUID file is copied from the parent, so multiple instances don't pollute each other or the original Class. The Class stays frozen; instances diverge.
+
+### Discovering what's available
+
+Before doing fresh onboarding work, **check if a relevant clone already exists**:
+
+```sh
+wodouyao clone list             # one row per clone, sorted by recency
+wodouyao clone tree             # inheritance tree by parent_clone_id
+wodouyao clone get <name>       # full JSON, including description and tags
+```
+
+The `description` and `tags` are how teammates communicate intent ("frontend-knower: has read all of `src/components/canvas`, understands the layer stack"). Read them before deciding whether to spawn vs. start fresh.
+
+### Spawning an instance
+
+```sh
+wodouyao clone spawn frontend-knower            # default name = clone name
+wodouyao clone spawn qa-knower --role qa        # override role hint
+wodouyao clone spawn architect --name "design-review"
+```
+
+The new terminal lands on the canvas auto-wired to the caller (so you can `send`/`read` it). Its session is a JSONL fork — your new instance inherits all parent context but writes diverge.
+
+### Saving the current session as a clone
+
+When you (or the user) recognize "this agent has built up valuable context worth re-using", capture it:
+
+```sh
+wodouyao clone save --name "frontend-knower" \
+    --desc "Has read all of src/components/canvas, knows the layer stack" \
+    --tags frontend,canvas \
+    --role frontend
+```
+
+`--name` is required; the rest are optional. By default it snapshots **your own** session (`WODOUYAO_ID`); `--from-terminal <id>` saves a peer instead.
+
+The save will fail with a clear error if your terminal's `session_id` hasn't been recorded yet — claude's SessionStart hook usually fires within a few seconds of launch, so retry shortly after starting a fresh agent.
+
+### When to spawn vs. start fresh
+
+| Situation | Spawn from clone | Start fresh |
+|---|---|---|
+| Need to write code in an area another agent already explored | ✓ | |
+| Need an opinionated "QA mindset" that's been refined for this project | ✓ | |
+| Greenfield exploration / first time touching this kind of work | | ✓ |
+| Debugging — want a clean slate to avoid confirmation bias | | ✓ |
+| Multiple parallel takes on the same problem | ✓ (spawn N instances from one clone) | |
+
+### Clone hygiene
+
+- **Don't auto-save every session.** Save only when an agent has accumulated context that's *expensive to recreate* — e.g. read 30+ files, formed strong opinions, learned project quirks. The library should stay curated.
+- **Re-save after big context jumps.** If a clone has done another major piece of work since it was saved, save it again as a child (the `parent_clone_id` link is automatic when the new clone's parent terminal was itself spawned from a clone).
+- **`wodouyao clone validate <name>`** before spawn if the clone is old — workspace renames or claude's own session GC can leave dangling references. Validation is cheap.
+- **`wodouyao clone remove`** clones whose context is no longer accurate (after major refactors, etc). Removing a clone does **not** kill instances spawned from it.
+
 ## Hard rules
 
 - Never fabricate peer ids. Always list via `peers` first.
 - Do not pipe `send` arguments through `eval` or unsanitized shell expansion — the user's text may contain backticks or `$(...)`.
 - When the user asks for a capability the peer has not advertised (check its `capabilities` array), warn before calling — the peer may ignore it.
+- Never spawn from a clone you haven't read (`clone get <name>`). Spawning a "qa-knower" expecting frontend code is wasted tokens.
