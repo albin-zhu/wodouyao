@@ -1,7 +1,14 @@
 import { call } from "./transport";
 import type { CreateTerminalRequest, ShellInfo } from "../types/terminal";
 import type { Workspace, WorkspaceMeta } from "../types/workspace";
-import type { AppSettings } from "../types/settings";
+import type { AppSettings, HookRun, HookStats } from "../types/settings";
+import type { Role } from "../types/role";
+import type {
+  Clone,
+  CloneCreateInput,
+  ClonePatchInput,
+  CloneValidation,
+} from "../types/clone";
 import type { Team } from "../types/team";
 import type { Task, TaskCreateInput, TaskPatchInput } from "../types/task";
 
@@ -374,6 +381,53 @@ export async function taskBoardsRemove(id: string): Promise<boolean> {
 
 export async function taskBoardsReplaceAll(boards: TaskBoardIpc[]): Promise<void> {
   return call<void>("task_boards_replace_all", { boards });
+}
+
+// Clones (workspace-scoped saved agent sessions)
+export async function clonesList(): Promise<Clone[]> {
+  return call<Clone[]>("clones_list");
+}
+export async function clonesCreate(input: CloneCreateInput): Promise<Clone> {
+  return call<Clone>("clones_create", { input });
+}
+export async function clonesUpdate(id: string, patch: ClonePatchInput): Promise<Clone> {
+  return call<Clone>("clones_update", { id, patch });
+}
+export async function clonesRemove(id: string): Promise<boolean> {
+  return call<boolean>("clones_remove", { id });
+}
+export async function clonesValidate(id: string): Promise<CloneValidation> {
+  return call<CloneValidation>("clones_validate", { id });
+}
+/** Copy the clone's session JSONL to a fresh UUID and return that id. The
+ *  caller spawns `claude -r <new id>` so the new instance writes to its
+ *  own file instead of polluting the Class's session history. */
+export async function clonesForkSession(id: string): Promise<string> {
+  return call<string>("clones_fork_session", { id });
+}
+
+// Roles (md+frontmatter under ~/.wodouyao/roles/)
+export async function rolesList(): Promise<Role[]> {
+  return call<Role[]>("roles_list");
+}
+export async function rolesDirPath(): Promise<string> {
+  return call<string>("roles_dir_path");
+}
+export async function rolesOpenDir(): Promise<void> {
+  return call<void>("roles_open_dir");
+}
+
+// Hooks (runtime telemetry — config goes through get_settings/update_settings)
+export async function hooksStatus(): Promise<Record<string, HookStats>> {
+  return call<Record<string, HookStats>>("hooks_status");
+}
+
+export async function hooksRuns(hookId: string): Promise<HookRun[]> {
+  return call<HookRun[]>("hooks_runs", { hookId, hook_id: hookId });
+}
+
+export async function hooksTest(hookId: string): Promise<HookRun> {
+  return call<HookRun>("hooks_test", { hookId, hook_id: hookId });
 }
 
 export async function getHubEndpoint(): Promise<{ url: string; token: string }> {

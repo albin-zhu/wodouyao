@@ -45,6 +45,7 @@ pub fn start(
     note_store: NoteStore,
     file_node_store: FileNodeStore,
     task_board_store: TaskBoardStore,
+    clone_store: crate::clones::CloneStore,
     pty_manager: Arc<Mutex<PtyManager>>,
     app_handle: AppHandleSlot,
 ) -> Result<HubHandle, String> {
@@ -78,6 +79,7 @@ pub fn start(
                 &note_store,
                 &file_node_store,
                 &task_board_store,
+                &clone_store,
                 &pty_manager,
                 &app_handle,
                 &token_for_thread,
@@ -102,10 +104,12 @@ fn handle(
     note_store: &NoteStore,
     file_node_store: &FileNodeStore,
     task_board_store: &TaskBoardStore,
+    clone_store: &crate::clones::CloneStore,
     pty_manager: &Arc<Mutex<PtyManager>>,
     app_handle: &AppHandleSlot,
     token: &str,
 ) {
+    let _ = clone_store; // clones routed via the IPC layer for now; reserved for future hub endpoints.
     if !is_authorised(&request, token) {
         let _ = request.respond(empty(401));
         return;
@@ -148,7 +152,9 @@ fn handle(
         (&Method::Post, "/v1/teams") => teams_create(request, team_registry, app_handle),
         (&Method::Get, "/v1/teams") => teams_list(request, team_registry),
         (&Method::Get, "/v1/tasks") => tasks_list_route(request, task_store),
-        (&Method::Post, "/v1/tasks") => tasks_create_route(request, task_store, app_handle),
+        (&Method::Post, "/v1/tasks") => {
+            tasks_create_route(request, task_store, pty_manager, app_handle)
+        }
         (&Method::Get, "/v1/tasks/next") => {
             tasks_next_route(request, task_store, identities, &query)
         }
@@ -165,7 +171,14 @@ fn handle(
                 // /v1/tasks/{id}/claim — atomic owner assignment
                 if let Some(id) = task_id.strip_suffix("/claim") {
                     if matches!(&method, &Method::Post) {
-                        tasks_claim_route(request, task_store, identities, id, app_handle);
+                        tasks_claim_route(
+                            request,
+                            task_store,
+                            identities,
+                            id,
+                            pty_manager,
+                            app_handle,
+                        );
                     } else {
                         let _ = request.respond(empty(404));
                     }
@@ -197,8 +210,20 @@ fn handle(
                 } else {
                     match &method {
                         &Method::Get => tasks_get_route(request, task_store, task_id),
-                        &Method::Patch => tasks_patch_route(request, task_store, task_id, app_handle),
-                        &Method::Delete => tasks_delete_route(request, task_store, task_id, app_handle),
+                        &Method::Patch => tasks_patch_route(
+                            request,
+                            task_store,
+                            task_id,
+                            pty_manager,
+                            app_handle,
+                        ),
+                        &Method::Delete => tasks_delete_route(
+                            request,
+                            task_store,
+                            task_id,
+                            pty_manager,
+                            app_handle,
+                        ),
                         _ => {
                             let _ = request.respond(empty(404));
                         }
@@ -661,18 +686,18 @@ fn spawn(
     }
 
     // When the CLI passes --role X without an explicit append_system_prompt,
-    // backfill from the built-in role dictionary so spawn behaves like the
-    // workflow_bootstrap path (which gets per-role prompts from the
-    // frontend dialog or settings.custom_roles).
-    let role_prompt: Option<&'static str> = parsed
+    // backfill from the role registry (`~/.wodouyao/roles/<key>.md`) so spawn
+    // behaves like the workflow_bootstrap path (which gets per-role prompts
+    // from the frontend dialog or settings.custom_roles).
+    let role_prompt: Option<String> = parsed
         .role
         .as_deref()
         .filter(|_| parsed.append_system_prompt.is_none())
         .and_then(builtin_role_prompt);
-    let effective_append = parsed
-        .append_system_prompt
-        .as_deref()
-        .or(role_prompt);
+    let effective_append: Option<&str> = match parsed.append_system_prompt.as_deref() {
+        Some(s) => Some(s),
+        None => role_prompt.as_deref(),
+    };
 
     let command = parsed.command.clone().or_else(|| {
         parsed.kind.as_deref().and_then(|k| match k {
@@ -755,105 +780,16 @@ fn spawn(
 /// of the canonical role list (terminalRoles.ts). Returns None for unknown
 /// roles so callers fall back to the generic "## Your Role" hint without
 /// an extra appended block.
-fn builtin_role_prompt(role: &str) -> Option<&'static str> {
-    match role.to_lowercase().as_str() {
-        "pm" => Some(
-"## You are the Project Manager
-
-You coordinate this multi-agent workflow. You don't write code yourself —
-you keep the team unblocked.
-
-Responsibilities:
-1. **Parse PRDs** — when a user sends a PRD note, expand it into a task
-   tree using `wodouyao task add` for each item, with `--blocked-by`
-   for ordering.
-2. **Watch for stuck tasks** — if a task has been `in_progress` for too
-   long without progress reports, ask the owner what's going on. If they
-   don't respond, `wodouyao task update <id>` to unclaim it.
-3. **Re-route work** — when an agent finishes a task and pulls the next
-   one, you don't intervene; agents self-serve via `task next --role X`.
-4. **Summarize status** — when the user asks \"what's happening\", give a
-   one-screen rundown of the board.
-
-Don't claim tasks yourself. Don't run commands the workers can run."),
-        "architect" => Some(
-"## You are the Architect
-
-You design the system before code is written. Pick patterns, draw module
-boundaries, decide on data shapes, and write decisions to sticky notes
-or task docs so the team can see them. Prefer `task next --role architect`
-for work tagged to you. When the design is settled, hand off by creating
-implementation tasks for backend/frontend/qa with `--blocked-by` your
-design task."),
-        "backend" => Some(
-"## You are the Backend engineer
-
-You own server-side code: APIs, database, business logic, integrations.
-Pull tasks via `wodouyao task next --role backend`. When a task touches
-the frontend contract, post a sticky note with the schema before
-diverging. Tests live next to the code; run them before `task done`."),
-        "frontend" => Some(
-"## You are the Frontend engineer
-
-You own UI/UX, client state, and what the user sees. Pull tasks via
-`wodouyao task next --role frontend`. Coordinate with backend on API
-shape; coordinate with designer on visuals. Verify in a real browser
-before `task done` — type-check is not feature-check."),
-        "qa" => Some(
-"## You are QA
-
-You validate that completed tasks meet their acceptance criteria. Pull
-tasks via `wodouyao task next --role qa`. For each completed task: read
-the acceptance list, run the relevant flow end-to-end, and either mark
-verified or file a follow-up bug task with `--blocked-by` the original.
-Don't fix bugs yourself — route them to the appropriate role."),
-        "devops" => Some(
-"## You are DevOps
-
-You own build, deploy, and infra. Pull tasks via `wodouyao task next
---role devops`. CI/CD changes go through review; production-affecting
-changes get a sticky note announcing the window before you flip the
-switch."),
-        "designer" => Some(
-"## You are the Designer
-
-You own the visual language: layout, color, typography, motion. Drop
-mockups as image attachments on file nodes; explain rationale in sticky
-notes. Pull tasks via `wodouyao task next --role designer`. Hand off to
-frontend with explicit specs (sizes, tokens) — don't assume they'll
-infer it."),
-        "planner" => Some(
-"## You are the Planner
-
-You break high-level goals into concrete tasks the rest of the team can
-pick up. Use `wodouyao task add` with descriptive subjects and
-`--blocked-by` to encode order. Don't implement; once a task is on the
-board, leave it for a generator/backend/frontend to claim."),
-        "generator" => Some(
-"## You are the Generator
-
-You write code. Pull tasks via `wodouyao task next --role generator`,
-implement, mark done. Defer design questions to planner; defer review
-questions to evaluator."),
-        "evaluator" => Some(
-"## You are the Evaluator
-
-You review and test the team's output. Pull tasks via `wodouyao task
-next --role evaluator`. Run tests, read diffs, and post findings as
-sticky notes or follow-up tasks. Don't author features yourself."),
-        "researcher" => Some(
-"## You are the Researcher
-
-You explore unknowns: read docs, prototype, ask questions. Pull tasks
-via `wodouyao task next --role researcher`. Output is usually a sticky
-note or task doc summarizing what you learned, not code."),
-        "shell" => Some(
-"## You are a Shell terminal
-
-You're a plain shell, not an agent. The user drives you directly. No
-auto-claim, no self-serve task pulling — wait for explicit instructions."),
-        _ => None,
-    }
+/// Look up a role's system-prompt body from the role registry. Roles live
+/// as md+frontmatter under `~/.wodouyao/roles/<key>.md`; the bundle ships
+/// defaults that get seeded into that folder on first launch.
+///
+/// Users override the prompt at runtime by editing the md file directly.
+/// `AppSettings.pm_prompt` (PM only) and `AppSettings.custom_roles[].prompt`
+/// still take precedence over what we return here — settings.json wins so
+/// the existing settings UI keeps working.
+fn builtin_role_prompt(role: &str) -> Option<String> {
+    crate::roles::get(role).map(|r| r.prompt)
 }
 
 /// Compose the .md file we hand to `claude @file` on spawn. Always includes
@@ -2302,6 +2238,7 @@ fn tasks_get_route(request: tiny_http::Request, task_store: &TaskStore, task_id:
 fn tasks_create_route(
     mut request: tiny_http::Request,
     task_store: &TaskStore,
+    pty_manager: &Arc<Mutex<PtyManager>>,
     app_handle: &AppHandleSlot,
 ) {
     let mut body = String::new();
@@ -2331,6 +2268,7 @@ fn tasks_create_route(
     let task = task_store.create(parsed);
     persist_workspace_tasks(task_store, task.workspace_id.as_deref());
     emit_tasks_updated(app_handle);
+    crate::hooks::task_changed(pty_manager, None, Some(&task));
     let body = serde_json::to_string(&task).unwrap_or_else(|_| "{}".into());
     let _ = request.respond(json(200, body));
 }
@@ -2339,6 +2277,7 @@ fn tasks_patch_route(
     mut request: tiny_http::Request,
     task_store: &TaskStore,
     task_id: &str,
+    pty_manager: &Arc<Mutex<PtyManager>>,
     app_handle: &AppHandleSlot,
 ) {
     let mut body = String::new();
@@ -2357,10 +2296,12 @@ fn tasks_patch_route(
             }
         }
     };
+    let prev = task_store.get(task_id);
     match task_store.update(task_id, patch) {
         Some(task) => {
             persist_workspace_tasks(task_store, task.workspace_id.as_deref());
             emit_tasks_updated(app_handle);
+            crate::hooks::task_changed(pty_manager, prev.as_ref(), Some(&task));
             let body = serde_json::to_string(&task).unwrap_or_else(|_| "{}".into());
             let _ = request.respond(json(200, body));
         }
@@ -2374,15 +2315,17 @@ fn tasks_delete_route(
     request: tiny_http::Request,
     task_store: &TaskStore,
     task_id: &str,
+    pty_manager: &Arc<Mutex<PtyManager>>,
     app_handle: &AppHandleSlot,
 ) {
-    // Capture workspace_id before removal so we know which workspace.json
-    // to rewrite.
-    let ws_id = task_store.get(task_id).and_then(|t| t.workspace_id);
+    // Capture the full task before removal so hooks can fire with its data.
+    let prev = task_store.get(task_id);
+    let ws_id = prev.as_ref().and_then(|t| t.workspace_id.clone());
     let removed = task_store.remove(task_id);
     if removed {
         persist_workspace_tasks(task_store, ws_id.as_deref());
         emit_tasks_updated(app_handle);
+        crate::hooks::task_changed(pty_manager, prev.as_ref(), None);
         let _ = request.respond(empty(204));
     } else {
         let _ = request.respond(text(404, "task not found"));
@@ -2597,6 +2540,7 @@ fn tasks_claim_route(
     task_store: &TaskStore,
     _identities: &IdentityRegistry,
     task_id: &str,
+    pty_manager: &Arc<Mutex<PtyManager>>,
     app_handle: &AppHandleSlot,
 ) {
     let url = request.url().to_string();
@@ -2609,10 +2553,12 @@ fn tasks_claim_route(
         let _ = request.respond(text(400, "claim requires ?from=<terminal-id>"));
         return;
     };
+    let prev = task_store.get(task_id);
     match task_store.try_claim(task_id, &from) {
         ClaimResult::Ok(t) => {
             persist_workspace_tasks(task_store, t.workspace_id.as_deref());
             emit_tasks_updated(app_handle);
+            crate::hooks::task_changed(pty_manager, prev.as_ref(), Some(&t));
             let body = serde_json::to_string(&t).unwrap_or_else(|_| "{}".into());
             let _ = request.respond(json(200, body));
         }

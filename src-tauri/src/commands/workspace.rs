@@ -39,6 +39,9 @@ pub fn load_workspace_impl(state: &AppState, id: &str) -> Result<Workspace, Stri
     state
         .task_boards
         .upsert_for_workspace(id, workspace.task_boards.clone());
+    state
+        .clones
+        .replace_for_workspace(id, workspace.clones.clone());
     // Teams remain global (no workspace_id) for now — they cross workspaces.
     state.team_registry.replace_all(workspace.teams.clone());
     Ok(workspace)

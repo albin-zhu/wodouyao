@@ -5,6 +5,7 @@ import { useCanvasStore } from "../../store/canvasStore";
 import { useTeamStore } from "../../store/teamStore";
 import { useNoteStore } from "../../store/noteStore";
 import { useTaskStore } from "../../store/taskStore";
+import { useCloneStore } from "../../store/cloneStore";
 import { useTaskBoardStore } from "../../store/taskBoardStore";
 import { useDialogStore } from "../../store/dialogStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
@@ -119,6 +120,8 @@ export default function Toolbar() {
   const addNote = useNoteStore((s) => s.addNote);
   const addBoard = useTaskBoardStore((s) => s.addBoard);
   const openTasksDrawer = useTaskStore((s) => s.openDrawer);
+  const openClonesDrawer = useCloneStore((s) => s.openDrawer);
+  const clonesCount = useCloneStore((s) => s.clones.size);
   const openBootstrap = useDialogStore((s) => s.openBootstrapWorkflow);
   const tasksMap = useTaskStore((s) => s.tasks);
   const tasksActiveCount = Array.from(tasksMap.values()).filter((t) => t.status !== "completed").length;
@@ -375,6 +378,29 @@ export default function Toolbar() {
           onClick={openTasksDrawer}
           badge={tasksActiveCount > 0 ? tasksActiveCount : undefined}
         />
+
+        {/* Clones */}
+        <button
+          onClick={openClonesDrawer}
+          title={t("toolbar.clones", "Clone library")}
+          style={{
+            background: "none",
+            border: "none",
+            color: clonesCount > 0 ? "var(--color-accent)" : "var(--color-text-muted)",
+            cursor: "pointer",
+            fontSize: 14,
+            padding: "4px 8px",
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+          }}
+        >
+          <span style={{ fontFamily: "monospace" }}>⎘</span>
+          {clonesCount > 0 && (
+            <span style={{ fontSize: 10, fontWeight: 600 }}>{clonesCount}</span>
+          )}
+        </button>
 
         {/* Settings */}
         <IconBtn

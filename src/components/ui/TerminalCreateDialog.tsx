@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useDialogStore } from "../../store/dialogStore";
 import { useTerminal } from "../../hooks/useTerminal";
 import { useWorkspaceStore } from "../../store/workspaceStore";
-import { listAvailableShells, detectCliAgents } from "../../services/tauriCommands";
+import { useCloneStore } from "../../store/cloneStore";
+import { clonesForkSession, listAvailableShells, detectCliAgents } from "../../services/tauriCommands";
+import { toast } from "../../store/toastStore";
 import type { CliAgent } from "../../services/tauriCommands";
 import { ACCENT_COLORS, TERMINAL_THEMES } from "../../utils/terminalThemes";
 import RolePicker from "./RolePicker";
@@ -39,6 +41,14 @@ export default function TerminalCreateDialog() {
     useDialogStore();
   const { spawn } = useTerminal();
   const workspaceCwd = useWorkspaceStore((s) => s.currentWorkspaceCwd);
+  const clonesMap = useCloneStore((s) => s.clones);
+  const clones = useMemo(
+    () =>
+      Array.from(clonesMap.values()).sort(
+        (a, b) => (b.last_used_at || b.created_at) - (a.last_used_at || a.created_at)
+      ),
+    [clonesMap]
+  );
 
   const [name, setName] = useState("");
   const [color, setColor] = useState(ACCENT_COLORS[0].hex);
@@ -181,6 +191,75 @@ export default function TerminalCreateDialog() {
                     {a.name.charAt(0).toUpperCase() + a.name.slice(1)}
                   </button>
                 ))}
+            </div>
+          </div>
+        )}
+
+        {/* Spawn from a saved clone */}
+        {clones.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>From clone</label>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {clones.slice(0, 6).map((c) => (
+                <button
+                  key={c.id}
+                  title={`${c.description || c.name}\n${c.fork_count} fork(s) · session ${c.session_id.slice(0, 8)}`}
+                  onClick={async () => {
+                    let forkedSession: string;
+                    try {
+                      forkedSession = await clonesForkSession(c.id);
+                    } catch (e) {
+                      toast(`Failed to fork clone session: ${e}`, "error");
+                      return;
+                    }
+                    spawn({
+                      command: `claude --dangerously-skip-permissions -r ${forkedSession}`,
+                      name: c.name,
+                      role: (c.role_hint as TerminalRole | undefined) ?? role,
+                      color,
+                      theme,
+                      cwd: cwd || undefined,
+                      fastStart,
+                      position: terminalCreateDefaults?.position,
+                      size: terminalCreateDefaults?.size,
+                    });
+                    closeTerminalCreate();
+                  }}
+                  style={{
+                    background: "var(--color-surface-alt)",
+                    color: "var(--color-text)",
+                    border: "1px solid var(--color-border-strong)",
+                    borderRadius: 6,
+                    padding: "5px 10px",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  <span style={{ color: "var(--color-accent)", fontFamily: "monospace" }}>⎘</span>
+                  {c.name}
+                  {c.fork_count > 0 && (
+                    <span
+                      style={{
+                        color: "var(--color-text-muted)",
+                        fontSize: 9,
+                        background: "var(--color-bg)",
+                        borderRadius: 3,
+                        padding: "1px 4px",
+                      }}
+                    >
+                      {c.fork_count}
+                    </span>
+                  )}
+                </button>
+              ))}
+              {clones.length > 6 && (
+                <span style={{ color: "var(--color-text-muted)", fontSize: 11, alignSelf: "center" }}>
+                  +{clones.length - 6} more in drawer
+                </span>
+              )}
             </div>
           </div>
         )}

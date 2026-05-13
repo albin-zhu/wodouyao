@@ -110,6 +110,51 @@ export interface AppSettings {
   /** User-defined roles, merged on top of BUILTIN_ROLES at runtime. Each
    *  entry's `key` becomes the lookup id (lowercased identifier). */
   custom_roles: CustomRole[];
+  /** Shell-command hooks fired on task lifecycle events. */
+  hooks: Hook[];
+}
+
+export type HookEvent =
+  | "task.created"
+  | "task.claimed"
+  | "task.completed"
+  | "task.removed";
+
+export const HOOK_EVENTS: HookEvent[] = [
+  "task.created",
+  "task.claimed",
+  "task.completed",
+  "task.removed",
+];
+
+export interface HookFilter {
+  status?: string[] | null;
+  subject_pattern?: string | null;
+  workspace_id?: string | null;
+}
+
+export interface Hook {
+  id: string;
+  name: string;
+  events: HookEvent[];
+  enabled: boolean;
+  filter?: HookFilter;
+}
+
+export interface HookStats {
+  last_fired_at?: number | null;
+  last_notifier_count?: number | null;
+  last_error?: string | null;
+  fire_count: number;
+}
+
+export interface HookRun {
+  timestamp: number;
+  event: string;
+  task_id: string;
+  task_subject: string;
+  notifier_count: number;
+  error?: string | null;
 }
 
 export interface CustomRole {

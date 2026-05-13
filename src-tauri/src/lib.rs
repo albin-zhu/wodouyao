@@ -1,9 +1,12 @@
+pub mod clones;
 pub mod commands;
 pub mod file_nodes;
+pub mod hooks;
 pub mod hub;
 pub mod integrations;
 pub mod notes;
 pub mod pty;
+pub mod roles;
 pub mod runtime;
 pub mod settings;
 pub mod shaders;
@@ -145,6 +148,7 @@ pub fn run() {
     let note_store = NoteStore::new();
     let file_node_store = FileNodeStore::new();
     let task_board_store = TaskBoardStore::new();
+    let clone_store = clones::CloneStore::new();
     // Inner OnceLock holds the AppHandle once Tauri's setup hook fires.
     // TauriEmitter wraps it; hub server, PTY, AppState all take a typed
     // `Arc<dyn EventEmitter>` (aliased as `AppHandleSlot` in the hub mod
@@ -164,6 +168,7 @@ pub fn run() {
         note_store.clone(),
         file_node_store.clone(),
         task_board_store.clone(),
+        clone_store.clone(),
         pty_manager.clone(),
         app_handle_slot.clone(),
     )
@@ -180,6 +185,7 @@ pub fn run() {
         note_store,
         file_node_store,
         task_board_store,
+        clone_store,
         app_handle_slot,
         path_resolver,
     );
@@ -195,6 +201,10 @@ pub fn run() {
                 match integrations::claude::install(&resource_dir) {
                     Ok(status) => log::info!("claude install: {:?}", status),
                     Err(e) => log::warn!("claude install failed: {}", e),
+                }
+                match roles::seed_from(&resource_dir) {
+                    Ok(n) => log::info!("roles seed: {} new role(s) copied to ~/.wodouyao/roles", n),
+                    Err(e) => log::warn!("roles seed failed: {}", e),
                 }
             }
             if let Err(e) = commands::shaders::seed_from_resources(app.handle()) {
@@ -297,6 +307,18 @@ pub fn run() {
             commands::shaders::shaders_list,
             commands::shaders::shaders_get,
             commands::shaders::shaders_dir_path,
+            commands::hooks::hooks_status,
+            commands::hooks::hooks_runs,
+            commands::hooks::hooks_test,
+            commands::roles::roles_list,
+            commands::roles::roles_dir_path,
+            commands::roles::roles_open_dir,
+            commands::clones::clones_list,
+            commands::clones::clones_create,
+            commands::clones::clones_update,
+            commands::clones::clones_remove,
+            commands::clones::clones_validate,
+            commands::clones::clones_fork_session,
             open_url,
         ])
         .run(tauri::generate_context!())

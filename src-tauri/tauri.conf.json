@@ -46,7 +46,8 @@
       "resources/bin/wodouyao",
       "resources/skills/wodouyao/SKILL.md",
       "resources/skills/wodouyao/references/send-keys.md",
-      "resources/shaders/*.frag"
+      "resources/shaders/*.frag",
+      "resources/roles/*.md"
     ]
   }
 }

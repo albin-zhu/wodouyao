@@ -64,7 +64,16 @@ export function useCanvas() {
       // Left button in select mode on empty canvas: pan
       if (e.button === 0 && mode === "select") {
         const target = e.target as HTMLElement;
-        if (target.closest(".terminal-node, [data-node-id]") || target.closest("button")) return;
+        if (
+          target.closest(".terminal-node, [data-node-id]") ||
+          target.closest("button") ||
+          // Don't preventDefault on form fields — that breaks the browser's
+          // default "mousedown focuses the field" behavior and inputs become
+          // keyboard-only. Affects portal'd dialogs whose React events still
+          // bubble through the canvas component tree.
+          target.closest("input, textarea, select")
+        )
+          return;
 
         e.preventDefault();
         panningRef.current = true;

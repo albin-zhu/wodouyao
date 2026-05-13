@@ -206,6 +206,10 @@ pub struct AppSettings {
     /// runtime. Frontend resolves the merge.
     #[serde(default)]
     pub custom_roles: Vec<CustomRole>,
+    /// Shell-command hooks fired on task lifecycle events. See
+    /// `crate::hooks` for the event names and env-var contract.
+    #[serde(default)]
+    pub hooks: Vec<crate::hooks::Hook>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -251,6 +255,7 @@ impl Default for AppSettings {
             terminal_gpu_renderer: false,
             pm_prompt: String::new(),
             custom_roles: Vec::new(),
+            hooks: Vec::new(),
             quick_commands: vec![
                 QuickCommand {
                     id: "claude".into(),

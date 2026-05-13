@@ -85,8 +85,39 @@ pub struct Workspace {
     pub file_nodes: Vec<FileNode>,
     #[serde(default)]
     pub task_boards: Vec<TaskBoard>,
+    /// Saved agent snapshots — see `crate::clones`. Each entry is a named
+    /// claude session that can be re-spawned (`claude -r <session_id>`) so
+    /// the new terminal inherits the original agent's context.
+    #[serde(default)]
+    pub clones: Vec<Clone>,
     pub created_at: u64,
     pub updated_at: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Clone {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    /// "claude" for now. Codex resume semantics differ; left as a string
+    /// so future kinds can be added without a schema migration.
+    pub agent_kind: String,
+    /// The session_id to resume from (`claude -r <id>`).
+    pub session_id: String,
+    #[serde(default)]
+    pub role_hint: Option<String>,
+    /// If this clone was created from a terminal that itself was spawned
+    /// from another clone, the chain is preserved here. Forms a tree.
+    #[serde(default)]
+    pub parent_clone_id: Option<String>,
+    pub created_at: u64,
+    #[serde(default)]
+    pub last_used_at: u64,
+    #[serde(default)]
+    pub fork_count: u32,
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -426,6 +457,10 @@ pub fn persist_task_boards_for_workspace(
     boards: &[TaskBoard],
 ) -> Result<(), String> {
     persist_field_for_workspace(ws_id, "task_boards", &boards)
+}
+
+pub fn persist_clones_for_workspace(ws_id: &str, clones: &[Clone]) -> Result<(), String> {
+    persist_field_for_workspace(ws_id, "clones", &clones)
 }
 
 pub fn persist_wires_for_workspace(ws_id: &str, wires: &[Wire]) -> Result<(), String> {

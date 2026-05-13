@@ -12,6 +12,7 @@ import type {
   TerminalOptions,
 } from "../../types/settings";
 import { DEFAULT_TERMINAL_OPTIONS } from "../../types/settings";
+import HooksSection from "./HooksSection";
 import IntegrationsSection from "./IntegrationsSection";
 import TerminalOptionsSection from "./TerminalOptionsSection";
 
@@ -367,6 +368,14 @@ export default function SettingsDrawer() {
         <div style={cardHeader}>{t("settings.integrations")}</div>
         <div style={{ padding: "10px 0" }}>
           <IntegrationsSection />
+        </div>
+      </div>
+
+      {/* Hooks */}
+      <div style={card} data-hooks-section>
+        <div style={cardHeader}>{t("settings.hooks.title", "Hooks")}</div>
+        <div style={{ padding: "10px 0" }}>
+          <HooksSection />
         </div>
       </div>
 

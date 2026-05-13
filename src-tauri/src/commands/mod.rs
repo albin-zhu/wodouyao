@@ -1,9 +1,12 @@
 pub mod agents;
+pub mod clones;
 pub mod file_nodes;
 pub mod file_preview;
+pub mod hooks;
 pub mod hub;
 pub mod integrations;
 pub mod notes;
+pub mod roles;
 pub mod settings;
 pub mod shaders;
 pub mod task_boards;

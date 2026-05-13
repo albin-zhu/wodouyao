@@ -120,7 +120,12 @@ export default function InfiniteCanvas() {
       if (mode !== "draw") return;
       if (e.button !== 0) return;
       const target = e.target as HTMLElement;
-      if (target.closest("[data-node-id], [data-terminal-id]") || target.closest("button")) return;
+      if (
+        target.closest("[data-node-id], [data-terminal-id]") ||
+        target.closest("button") ||
+        target.closest("input, textarea, select")
+      )
+        return;
 
       e.preventDefault();
       const world = screenToWorld(e.clientX, e.clientY);

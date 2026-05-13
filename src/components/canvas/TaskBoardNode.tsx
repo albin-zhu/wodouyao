@@ -3,6 +3,7 @@ import { useTaskBoardStore, type TaskBoard } from "../../store/taskBoardStore";
 import { useTaskStore } from "../../store/taskStore";
 import { useTerminalStore } from "../../store/terminalStore";
 import { useCanvasInteractionStore } from "../../store/canvasInteractionStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import { useNodeDrag } from "../../hooks/useNodeDrag";
 import { TERMINAL_ROLES } from "../../utils/terminalRoles";
 import type { Task, TaskStatus } from "../../types/task";
@@ -256,6 +257,15 @@ function TaskBoardNodeImpl({ board }: Props) {
   const tasksMap = useTaskStore((s) => s.tasks);
   const createTask = useTaskStore((s) => s.createTask);
   const updateTask = useTaskStore((s) => s.updateTask);
+  const settingsHooks = useSettingsStore((s) => s.settings?.hooks);
+  const openSettingsDrawer = useSettingsStore((s) => s.openDrawer);
+  const activeHookCount = useMemo(
+    () =>
+      (settingsHooks ?? []).filter(
+        (h) => h.enabled && h.events.some((e) => e.startsWith("task."))
+      ).length,
+    [settingsHooks]
+  );
   const [hovered, setHovered] = useState(false);
   const [dropOver, setDropOver] = useState(false);
   const [quickAdd, setQuickAdd] = useState("");
@@ -429,6 +439,28 @@ function TaskBoardNodeImpl({ board }: Props) {
         <span style={{ color: "var(--color-text-muted)", fontSize: 11, flexShrink: 0 }}>
           {activeCount}/{totalCount}
         </span>
+        {activeHookCount > 0 && (
+          <button
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={openSettingsDrawer}
+            title={`${activeHookCount} hook${activeHookCount === 1 ? "" : "s"} active`}
+            style={{
+              background: "color-mix(in srgb, var(--color-accent) 18%, transparent)",
+              border: "1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)",
+              color: "var(--color-accent)",
+              borderRadius: 3,
+              padding: "1px 5px",
+              fontSize: 9,
+              fontWeight: 600,
+              letterSpacing: 0.3,
+              cursor: "pointer",
+              flexShrink: 0,
+              fontFamily: "monospace",
+            }}
+          >
+            {"⚟"} {activeHookCount}
+          </button>
+        )}
         {/* Wire anchor */}
         {(hovered || mode === "wire") && (
           <span

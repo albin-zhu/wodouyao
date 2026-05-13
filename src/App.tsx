@@ -5,6 +5,7 @@ import CommandPalette from "./components/command-palette/CommandPalette";
 import SettingsDrawer from "./components/ui/SettingsDrawer";
 import TeamsDrawer from "./components/ui/TeamsDrawer";
 import TasksDrawer from "./components/ui/TasksDrawer";
+import ClonesDrawer from "./components/ui/ClonesDrawer";
 import TerminalPanel from "./components/ui/TerminalPanel";
 import TerminalCreateDialog from "./components/ui/TerminalCreateDialog";
 import TerminalContextMenu from "./components/terminal/TerminalContextMenu";
@@ -14,10 +15,12 @@ import BootstrapWorkflowDialog from "./components/ui/BootstrapWorkflowDialog";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { useSettingsStore } from "./store/settingsStore";
 import { useCanvasStore } from "./store/canvasStore";
+import { useRoleStore } from "./store/roleStore";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { useHubSpawn } from "./hooks/useHubSpawn";
 import { useTeamsSync } from "./hooks/useTeamsSync";
 import { useTasksSync } from "./hooks/useTasksSync";
+import { useClonesSync } from "./hooks/useClonesSync";
 import { useTerminalActivity } from "./hooks/useTerminalActivity";
 import { useNotesSync } from "./hooks/useNotesSync";
 import { useWiresSync } from "./hooks/useWiresSync";
@@ -30,10 +33,12 @@ export default function App() {
   useHubSpawn();
   useTeamsSync();
   useTasksSync();
+  useClonesSync();
   useTerminalActivity();
   useNotesSync();
   useWiresSync();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const hydrateRoles = useRoleStore((s) => s.hydrate);
   const zenMode = useCanvasStore((s) => s.zenMode);
   const isHdpi = useSettingsStore((s) => s.settings?.is_hdpi ?? true);
   const theme = useSettingsStore((s) => s.settings?.theme ?? "system");
@@ -72,13 +77,14 @@ export default function App() {
 
   useEffect(() => {
     loadSettings();
+    hydrateRoles();
     // Hub or other processes may mutate settings on disk (e.g. wodouyao bg).
     // Listen for the settings-changed event and reload.
     const unlisten = subscribeJson("settings-changed", () => loadSettings());
     return () => {
       unlisten.then((fn) => fn()).catch(() => {});
     };
-  }, [loadSettings]);
+  }, [loadSettings, hydrateRoles]);
 
   // Handle fork-workspace events dispatched by useForkWorkspace
   useEffect(() => {
@@ -118,6 +124,7 @@ export default function App() {
       <SettingsDrawer />
       <TeamsDrawer />
       <TasksDrawer />
+      <ClonesDrawer />
       <TerminalPanel />
       <TerminalCreateDialog />
       <TerminalContextMenu />

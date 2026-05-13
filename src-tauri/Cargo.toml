@@ -16,7 +16,7 @@ required-features = ["tauri-runtime"]
 
 [[bin]]
 name = "wodouyao-server"
-path = "src/bin/server.rs"
+path = "src/bin/wodouyao-server.rs"
 required-features = ["web-runtime"]
 
 [features]
@@ -47,6 +47,8 @@ log = "0.4"
 tiny_http = "0.12"
 open = "5"
 vt100 = "0.15"
+regex = "1"
+serde_yaml = "0.9"
 axum = { version = "0.7", features = ["ws", "macros"], optional = true }
 tower-http = { version = "0.6", features = ["fs", "cors", "trace"], optional = true }
 env_logger = { version = "0.11", optional = true }

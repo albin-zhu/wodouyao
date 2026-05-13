@@ -1,3 +1,4 @@
+use crate::hooks;
 use crate::state::AppState;
 use crate::tasks::{Task, TaskCreate, TaskPatch, TaskStore};
 
@@ -32,6 +33,7 @@ pub fn tasks_create_impl(state: &AppState, input: TaskCreate) -> Result<Task, St
     let task = state.tasks.create(input);
     persist_workspace_tasks(&state.tasks, task.workspace_id.as_deref());
     emit_tasks_updated(state);
+    hooks::task_changed(&state.pty_manager,None, Some(&task));
     Ok(task)
 }
 
@@ -40,21 +42,25 @@ pub fn tasks_update_impl(
     id: &str,
     patch: TaskPatch,
 ) -> Result<Task, String> {
+    let prev = state.tasks.get(id);
     let updated = state
         .tasks
         .update(id, patch)
         .ok_or_else(|| format!("task {} not found", id))?;
     persist_workspace_tasks(&state.tasks, updated.workspace_id.as_deref());
     emit_tasks_updated(state);
+    hooks::task_changed(&state.pty_manager,prev.as_ref(), Some(&updated));
     Ok(updated)
 }
 
 pub fn tasks_remove_impl(state: &AppState, id: &str) -> Result<bool, String> {
-    let ws_id = state.tasks.get(id).and_then(|t| t.workspace_id);
+    let prev = state.tasks.get(id);
+    let ws_id = prev.as_ref().and_then(|t| t.workspace_id.clone());
     let removed = state.tasks.remove(id);
     if removed {
         persist_workspace_tasks(&state.tasks, ws_id.as_deref());
         emit_tasks_updated(state);
+        hooks::task_changed(&state.pty_manager,prev.as_ref(), None);
     }
     Ok(removed)
 }

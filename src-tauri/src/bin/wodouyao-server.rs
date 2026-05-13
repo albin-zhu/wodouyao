@@ -59,6 +59,7 @@ async fn main() {
     let note_store = NoteStore::new();
     let file_node_store = FileNodeStore::new();
     let task_board_store = TaskBoardStore::new();
+    let clone_store = wodouyao_lib::clones::CloneStore::new();
 
     let web_emitter = Arc::new(WebEmitter::new(1024));
     let emitter: Arc<dyn EventEmitter> = web_emitter.clone();
@@ -73,6 +74,7 @@ async fn main() {
         note_store.clone(),
         file_node_store.clone(),
         task_board_store.clone(),
+        clone_store.clone(),
         pty_manager.clone(),
         emitter.clone(),
     )
@@ -89,6 +91,10 @@ async fn main() {
                 Ok(_) => log::info!("Claude skill installed"),
                 Err(e) => log::warn!("Claude skill install failed: {}", e),
             }
+            match wodouyao_lib::roles::seed_from(&dir) {
+                Ok(n) => log::info!("roles seed: {} new role(s)", n),
+                Err(e) => log::warn!("roles seed failed: {}", e),
+            }
             seed_cli(&dir);
         }
         Err(e) => log::warn!("setup skipped (no resource dir): {}", e),
@@ -104,6 +110,7 @@ async fn main() {
         note_store,
         file_node_store,
         task_board_store,
+        clone_store,
         emitter.clone(),
         path_resolver,
     ));
@@ -737,6 +744,60 @@ async fn cmd_dispatch(
         "shaders_dir_path" => commands::shaders::shaders_dir_path_impl()
             .map_err(err_to_app)
             .and_then(ok),
+
+        // ── hooks ──────────────────────────────────────────────────────
+        "hooks_status" => ok(commands::hooks::hooks_status_impl()),
+        "hooks_runs" => {
+            let hook_id: String = extract(&args, "hook_id").or_else(|_| extract(&args, "hookId"))?;
+            ok(commands::hooks::hooks_runs_impl(&hook_id))
+        }
+        "hooks_test" => {
+            let hook_id: String = extract(&args, "hook_id").or_else(|_| extract(&args, "hookId"))?;
+            commands::hooks::hooks_test_impl(s, &hook_id)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+
+        // ── roles ──────────────────────────────────────────────────────
+        "roles_list" => ok(commands::roles::roles_list_impl()),
+        "roles_dir_path" => commands::roles::roles_dir_path_impl()
+            .map_err(err_to_app)
+            .and_then(ok),
+        "roles_open_dir" => commands::roles::roles_open_dir_impl()
+            .map_err(err_to_app)
+            .and_then(ok),
+
+        // ── clones ─────────────────────────────────────────────────────
+        "clones_list" => ok(commands::clones::clones_list_impl(s)),
+        "clones_create" => {
+            let input = extract(&args, "input")?;
+            commands::clones::clones_create_impl(s, input)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "clones_update" => {
+            let id: String = extract(&args, "id")?;
+            let patch = extract(&args, "patch")?;
+            commands::clones::clones_update_impl(s, &id, patch)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "clones_remove" => {
+            let id: String = extract(&args, "id")?;
+            commands::clones::clones_remove_impl(s, &id)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
+        "clones_validate" => {
+            let id: String = extract(&args, "id")?;
+            ok(commands::clones::clones_validate_impl(s, &id))
+        }
+        "clones_fork_session" => {
+            let id: String = extract(&args, "id")?;
+            commands::clones::clones_fork_session_impl(s, &id)
+                .map_err(err_to_app)
+                .and_then(ok)
+        }
 
         // ── misc ───────────────────────────────────────────────────────
         "open_url" => {

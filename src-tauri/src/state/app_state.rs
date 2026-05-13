@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use crate::clones::CloneStore;
 use crate::file_nodes::FileNodeStore;
 use crate::hub::{AppHandleSlot, HubHandle, IdentityRegistry, TeamRegistry, WireTopology};
 use crate::notes::NoteStore;
@@ -17,6 +18,7 @@ pub struct AppState {
     pub notes: NoteStore,
     pub file_nodes: FileNodeStore,
     pub task_boards: TaskBoardStore,
+    pub clones: CloneStore,
     pub hub: HubHandle,
     /// Same emitter the hub server uses to reach the frontend (Tauri
     /// WebView or browser WS client). In-process Tauri commands emit
@@ -40,6 +42,7 @@ impl AppState {
         notes: NoteStore,
         file_nodes: FileNodeStore,
         task_boards: TaskBoardStore,
+        clones: CloneStore,
         app_handle: AppHandleSlot,
         path_resolver: SharedPathResolver,
     ) -> Self {
@@ -52,6 +55,7 @@ impl AppState {
             notes,
             file_nodes,
             task_boards,
+            clones,
             hub,
             app_handle,
             path_resolver,

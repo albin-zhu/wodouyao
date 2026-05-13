@@ -132,12 +132,6 @@ jobs:
           cargo build --manifest-path src-tauri/Cargo.toml \
             --no-default-features --features web-runtime \
             --bin wodouyao-server --release $TARGET_FLAG
-          # Tauri bundles the binary using the src/bin/ file stem ("server")
-          if [ -f "$RELEASE_DIR/wodouyao-server.exe" ]; then
-            cp "$RELEASE_DIR/wodouyao-server.exe" "$RELEASE_DIR/server.exe"
-          else
-            cp "$RELEASE_DIR/wodouyao-server" "$RELEASE_DIR/server"
-          fi
 
       - name: Build and publish release
         uses: tauri-apps/tauri-action@v0

@@ -6,6 +6,7 @@ import { useTerminal } from "../../hooks/useTerminal";
 import { useTeamStore } from "../../store/teamStore";
 import TerminalStatusBadge from "./TerminalStatusBadge";
 import RolePicker from "../ui/RolePicker";
+import SaveCloneDialog from "../ui/SaveCloneDialog";
 import { TERMINAL_ROLES } from "../../utils/terminalRoles";
 import type { TerminalNode } from "../../types/terminal";
 
@@ -30,6 +31,7 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
     ? `color-mix(in srgb, ${titleBg} 82%, ${terminal.color} 18%)`
     : titleBg;
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
+  const [showSaveClone, setShowSaveClone] = useState(false);
   const roleMeta = terminal.role ? TERMINAL_ROLES[terminal.role] : undefined;
 
   const isMaximized = !!terminal.prevBounds;
@@ -154,6 +156,26 @@ export default function TerminalTitleBar({ terminal }: TerminalTitleBarProps) {
           {roleMeta ? `${roleMeta.glyph} ${roleMeta.label}` : "+ role"}
         </button>
       </span>
+      {terminal.agentKind === "claude" && terminal.sessionId && (
+        <button
+          onClick={() => setShowSaveClone(true)}
+          title="Save as clone (snapshot this agent's context)"
+          style={{
+            background: "none",
+            border: "none",
+            color: "var(--color-text-muted)",
+            cursor: "pointer",
+            fontSize: 13,
+            padding: "2px 6px",
+            lineHeight: 1,
+          }}
+        >
+          {"⎘"}
+        </button>
+      )}
+      {showSaveClone && (
+        <SaveCloneDialog terminal={terminal} onClose={() => setShowSaveClone(false)} />
+      )}
       <button
         onClick={handleFoldToggle}
         title={terminal.isFolded ? "Expand" : "Collapse"}
