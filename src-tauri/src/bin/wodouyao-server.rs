@@ -76,6 +76,7 @@ async fn main() {
         task_board_store.clone(),
         clone_store.clone(),
         pty_manager.clone(),
+        path_resolver.clone(),
         emitter.clone(),
     )
     .expect("failed to start hub server");

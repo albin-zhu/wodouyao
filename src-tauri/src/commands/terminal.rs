@@ -1,6 +1,11 @@
+use std::path::Path;
+use std::sync::{Arc, Mutex};
+
 use serde::Deserialize;
 
+use crate::pty::manager::PtyManager;
 use crate::pty::shell;
+use crate::runtime::SharedPathResolver;
 use crate::state::AppState;
 
 #[derive(Deserialize)]
@@ -24,13 +29,31 @@ pub fn create_terminal_impl(
     state: &AppState,
     request: CreateTerminalRequest,
 ) -> Result<String, String> {
+    create_terminal_with_parts(
+        &state.pty_manager,
+        &state.path_resolver,
+        &state.hub.endpoint_path,
+        request,
+    )
+}
+
+/// Create-terminal that takes the bare collaborators it needs instead of a
+/// full `AppState`. Lets the hub `/v1/spawn` route create the PTY synchronously
+/// before responding — closing the race where `wodouyao spawn` returned an id
+/// before the frontend's downstream `create_terminal` actually built the PTY.
+pub fn create_terminal_with_parts(
+    pty_manager: &Arc<Mutex<PtyManager>>,
+    path_resolver: &SharedPathResolver,
+    hub_endpoint_path: &Path,
+    request: CreateTerminalRequest,
+) -> Result<String, String> {
     // Idempotency: if a PTY with this id is already alive, treat the
     // call as a re-attach and bail before doing anything destructive.
     // Crucial for browser-refresh / workspace-switch in web mode where
     // the frontend rebuilds its terminal-node Map from the persisted
     // layout and would otherwise nuke the running session each time.
     {
-        let manager = state.pty_manager.lock().map_err(|e| e.to_string())?;
+        let manager = pty_manager.lock().map_err(|e| e.to_string())?;
         if manager.has_session(&request.id) {
             return Ok(request.id);
         }
@@ -66,24 +89,17 @@ pub fn create_terminal_impl(
 
     env.push((
         "WODOUYAO_ENDPOINT".to_string(),
-        state.hub.endpoint_path.to_string_lossy().into_owned(),
+        hub_endpoint_path.to_string_lossy().into_owned(),
     ));
     env.push(("WODOUYAO_ID".to_string(), request.id.clone()));
     if let Some(ws) = request.workspace_id.as_ref().filter(|s| !s.is_empty()) {
         env.push(("WODOUYAO_WORKSPACE_ID".to_string(), ws.clone()));
     }
 
-    if let Ok(resource_dir) = state.path_resolver.resource_dir() {
-        // Tauri copies `bundle.resources` entries preserving their relative
-        // path, so `src-tauri/resources/bin/wodouyao` lands at
-        // `<resource_dir>/resources/bin/wodouyao` in both dev and bundled
-        // builds.
+    if let Ok(resource_dir) = path_resolver.resource_dir() {
         let bin_dir = resource_dir.join("resources").join("bin");
         let bin_dir_str = bin_dir.to_string_lossy().into_owned();
         let separator = if cfg!(windows) { ';' } else { ':' };
-        // Precedence for the base PATH: explicit user override → parent
-        // process env → empty. We always PREPEND the wodouyao bin dir so
-        // the CLI is discoverable regardless of user config.
         let base_path = user_path
             .filter(|s| !s.is_empty())
             .or_else(|| std::env::var("PATH").ok().filter(|s| !s.is_empty()));
@@ -93,11 +109,10 @@ pub fn create_terminal_impl(
         };
         env.push(("PATH".to_string(), new_path));
     } else if let Some(p) = user_path {
-        // No resource dir (unlikely) — just honor the user's PATH verbatim.
         env.push(("PATH".to_string(), p));
     }
 
-    let mut manager = state.pty_manager.lock().map_err(|e| e.to_string())?;
+    let mut manager = pty_manager.lock().map_err(|e| e.to_string())?;
     manager.create_session(
         request.id,
         &shell_path,

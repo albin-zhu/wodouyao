@@ -47,6 +47,7 @@ pub fn start(
     task_board_store: TaskBoardStore,
     clone_store: crate::clones::CloneStore,
     pty_manager: Arc<Mutex<PtyManager>>,
+    path_resolver: crate::runtime::SharedPathResolver,
     app_handle: AppHandleSlot,
 ) -> Result<HubHandle, String> {
     let server = Server::http("127.0.0.1:0")
@@ -68,6 +69,7 @@ pub fn start(
     )?;
 
     let token_for_thread = token.clone();
+    let endpoint_path_for_thread = endpoint_path.clone();
     thread::spawn(move || {
         for request in server.incoming_requests() {
             handle(
@@ -81,6 +83,8 @@ pub fn start(
                 &task_board_store,
                 &clone_store,
                 &pty_manager,
+                &path_resolver,
+                &endpoint_path_for_thread,
                 &app_handle,
                 &token_for_thread,
             );
@@ -106,6 +110,8 @@ fn handle(
     task_board_store: &TaskBoardStore,
     clone_store: &crate::clones::CloneStore,
     pty_manager: &Arc<Mutex<PtyManager>>,
+    path_resolver: &crate::runtime::SharedPathResolver,
+    hub_endpoint_path: &std::path::Path,
     app_handle: &AppHandleSlot,
     token: &str,
 ) {
@@ -131,7 +137,15 @@ fn handle(
         ),
         (&Method::Get, "/v1/whoami") => whoami(request, identities, &query),
         (&Method::Post, "/v1/self") => register_self(request, identities),
-        (&Method::Post, "/v1/spawn") => spawn(request, topology, team_registry, app_handle),
+        (&Method::Post, "/v1/spawn") => spawn(
+            request,
+            topology,
+            team_registry,
+            pty_manager,
+            path_resolver,
+            hub_endpoint_path,
+            app_handle,
+        ),
         (&Method::Post, "/v1/fork") => fork(request, topology, identities, app_handle),
         (&Method::Post, "/v1/workflow/bootstrap") => {
             workflow_bootstrap(request, topology, app_handle)
@@ -636,10 +650,14 @@ struct SpawnResponse {
     id: String,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn spawn(
     mut request: tiny_http::Request,
     topology: &WireTopology,
     team_registry: &TeamRegistry,
+    pty_manager: &Arc<Mutex<PtyManager>>,
+    path_resolver: &crate::runtime::SharedPathResolver,
+    hub_endpoint_path: &std::path::Path,
     app_handle: &AppHandleSlot,
 ) {
     if !app_handle.is_ready() {
@@ -767,10 +785,10 @@ fn spawn(
         .clone()
         .or_else(crate::workspace::storage::current_workspace_id);
 
-    // Write a placeholder layout BEFORE emitting the spawn event so a
-    // `kill -9` between event emit and the frontend's debounced terminal
-    // save (~250ms) doesn't lose this terminal. The frontend's full
-    // layout overwrites the stub on its next save.
+    // Write a placeholder layout BEFORE creating the PTY so a `kill -9` in
+    // the gap before the frontend's debounced terminal save (~250ms) doesn't
+    // lose this terminal. The frontend's full layout overwrites the stub on
+    // its next save.
     persist_spawn_terminal_stub(
         workspace_id.as_deref(),
         &new_id,
@@ -780,6 +798,31 @@ fn spawn(
         parsed.cwd.as_deref(),
         parsed.role.as_deref(),
     );
+
+    // Synchronously create the PTY before responding to the CLI. Closes the
+    // race where `wodouyao spawn` returned an id but the frontend's downstream
+    // create_terminal hadn't run yet — peers / autosave / xterm onData all
+    // saw "Session not found" until the frontend caught up. With this in
+    // place the id the CLI receives is immediately usable.
+    let create_req = crate::commands::terminal::CreateTerminalRequest {
+        id: new_id.clone(),
+        shell_path: None,
+        command: command.clone(),
+        cols: 80,
+        rows: 24,
+        cwd: parsed.cwd.clone(),
+        fast_start: false,
+        workspace_id: workspace_id.clone(),
+    };
+    if let Err(e) = crate::commands::terminal::create_terminal_with_parts(
+        pty_manager,
+        path_resolver,
+        hub_endpoint_path,
+        create_req,
+    ) {
+        let _ = request.respond(text(500, &format!("create PTY failed: {}", e)));
+        return;
+    }
 
     let payload = SpawnEventPayload {
         id: new_id.clone(),

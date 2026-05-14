@@ -1,6 +1,26 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
+
+/// Per-workspace mutex guarding the read-modify-write cycle in
+/// `persist_field_for_workspace`. Frontend autosaves fire concurrent
+/// terminals/notes/wires/clones writes from a single layout mutation;
+/// without serialization each one reads the same baseline and the last
+/// rename wins, silently dropping the others' field updates. Lock scope
+/// is per workspace id so unrelated workspaces don't block each other.
+fn workspace_save_lock(id: &str) -> &'static Mutex<()> {
+    static LOCKS: OnceLock<Mutex<HashMap<String, &'static Mutex<()>>>> = OnceLock::new();
+    let map = LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut guard = map.lock().expect("workspace lock map poisoned");
+    if let Some(m) = guard.get(id) {
+        return *m;
+    }
+    let leaked: &'static Mutex<()> = Box::leak(Box::new(Mutex::new(())));
+    guard.insert(id.to_string(), leaked);
+    leaked
+}
 
 use crate::file_nodes::FileNode;
 use crate::hub::{Team, Wire};
@@ -410,6 +430,9 @@ fn persist_field_for_workspace<T: serde::Serialize>(
     field: &str,
     value: &T,
 ) -> Result<(), String> {
+    let _save_guard = workspace_save_lock(ws_id)
+        .lock()
+        .map_err(|e| format!("Workspace save lock poisoned: {}", e))?;
     let cat = read_catalog();
     let Some(entry) = cat.entries.iter().find(|e| e.id == ws_id) else {
         return Ok(());
@@ -432,10 +455,41 @@ fn persist_field_for_workspace<T: serde::Serialize>(
         obj.insert("updated_at".to_string(), serde_json::json!(now));
     }
     let out = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
-    let tmp = paths.workspace_json.with_extension("json.tmp");
-    fs::write(&tmp, out).map_err(|e| format!("Failed to write {} tmp: {}", field, e))?;
-    fs::rename(&tmp, &paths.workspace_json)
-        .map_err(|e| format!("Failed to rename {} tmp: {}", field, e))
+    // Unique tmp per call. The frontend fires terminals/notes/wires/clones
+    // saves concurrently from a single layout mutation; if they all use
+    // `workspace.json.tmp`, two writers can collide:
+    //   - A writes tmp, A renames tmp→workspace.json ✓
+    //   - B writes tmp (overwriting A's), B renames tmp→workspace.json — but
+    //     under macOS APFS the rename can also race with a concurrent reader
+    //     that catches the truncate window and parses 0 bytes, or the second
+    //     rename can ENOENT because the first already consumed the source.
+    // Process-id + nanosecond timestamp + thread-id is enough to be unique
+    // within a single host without needing a global counter or RNG.
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tid = format!("{:?}", std::thread::current().id());
+    let tid_clean: String = tid.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    let tmp = paths.workspace_json.with_extension(format!(
+        "json.tmp.{}.{}.{}",
+        std::process::id(),
+        tid_clean,
+        nanos
+    ));
+    let write_res = fs::write(&tmp, out)
+        .map_err(|e| format!("Failed to write {} tmp: {}", field, e));
+    if let Err(e) = write_res {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
+    let rename_res = fs::rename(&tmp, &paths.workspace_json)
+        .map_err(|e| format!("Failed to rename {} tmp: {}", field, e));
+    if rename_res.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    rename_res
 }
 
 /// Hub-level persistence hook for task mutations. Reads workspace.json,

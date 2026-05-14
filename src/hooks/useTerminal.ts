@@ -84,7 +84,11 @@ export function useTerminal() {
         });
         toast(i18n.t("toast.terminalCreated"), "success", 2000);
       } catch (err) {
+        // Roll back the optimistic addTerminal — without this the canvas
+        // keeps an orphan node whose xterm onData fires write_terminal IPCs
+        // for an id that has no PTY, spamming "Session not found" 500s.
         console.error("[spawn] createTerminal failed:", err);
+        removeTerminal(id);
         toast(i18n.t("toast.terminalError"), "error");
       }
 

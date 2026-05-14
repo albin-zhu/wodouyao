@@ -170,6 +170,7 @@ pub fn run() {
         task_board_store.clone(),
         clone_store.clone(),
         pty_manager.clone(),
+        path_resolver.clone(),
         app_handle_slot.clone(),
     )
     .expect("failed to start hub server");

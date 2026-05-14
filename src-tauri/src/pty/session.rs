@@ -11,6 +11,25 @@ use super::shell::ShellType;
 
 const RING_BUFFER_CAPACITY: usize = 64 * 1024;
 
+/// Detect a DA1 query — `ESC [ c` or `ESC [ 0 c` — anywhere in `slice`.
+/// Conservative scan: only matches these two exact forms to avoid colliding
+/// with secondary DA (`ESC [ > c`) or other CSI-terminated-by-`c` sequences.
+fn memchr_da1(slice: &[u8]) -> bool {
+    let mut i = 0;
+    while i + 2 < slice.len() {
+        if slice[i] == 0x1b && slice[i + 1] == b'[' {
+            if slice[i + 2] == b'c' {
+                return true;
+            }
+            if i + 3 < slice.len() && slice[i + 2] == b'0' && slice[i + 3] == b'c' {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
 #[derive(serde::Serialize, Clone)]
 pub struct TerminalOutputPayload {
     pub id: String,
@@ -26,7 +45,7 @@ pub struct TerminalExitPayload {
 pub struct PtySession {
     pub id: String,
     pub master: Box<dyn MasterPty + Send>,
-    pub writer: Box<dyn Write + Send>,
+    pub writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub child: Box<dyn Child + Send + Sync>,
     pub shell_type: ShellType,
     pub cols: u16,
@@ -255,38 +274,12 @@ printf '\033]133;A\007'
         // Drop the slave side - we only need the master
         drop(pair.slave);
 
-        let mut writer = pair
-            .master
-            .take_writer()
-            .map_err(|e| format!("Failed to get PTY writer: {}", e))?;
-
-        // Pre-inject a DA1 (Primary Device Attributes) response into the PTY
-        // *before* the reader thread starts forwarding shell output. Fish shell
-        // sends \033[c immediately on startup and waits up to 10 s for the
-        // terminal to reply with \033[?…c. In our architecture the reply has to
-        // travel: fish → PTY master → Tauri event → JS → xterm.js → onData →
-        // writeTerminal → PTY → fish — but the JS listener is registered
-        // asynchronously, so it often isn't ready in time and fish stalls.
-        //
-        // Writing the response directly into the PTY master here means fish
-        // reads it from the slave side the moment it queries, eliminating the
-        // 10-second startup penalty.
-        //
-        // We only do this for fish — other shells don't issue DA1 at startup so
-        // preloading an unsolicited response could confuse their parsers.
-        //
-        // \033[?62;22c = VT220 with ANSI color — a safe, widely-accepted
-        // response that satisfies fish without enabling any obscure features.
-        {
-            let basename = std::path::Path::new(shell_path)
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("");
-            if basename == "fish" {
-                let _ = writer.write_all(b"\x1b[?62;22c");
-                let _ = writer.flush();
-            }
-        }
+        let writer: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(
+            pair.master
+                .take_writer()
+                .map_err(|e| format!("Failed to get PTY writer: {}", e))?,
+        ));
+        let writer_for_reader = Arc::clone(&writer);
 
         let mut reader = pair
             .master
@@ -316,6 +309,18 @@ printf '\033]133;A\007'
                     }
                     Ok(n) => {
                         let slice = &buf[..n];
+                        // Reactively answer DA1 (Primary Device Attributes) queries —
+                        // \x1b[c or \x1b[0c — that fish issues at startup and waits
+                        // up to 10s for. Responding from Rust avoids the JS-listener
+                        // timing race and avoids injecting unsolicited bytes into
+                        // shells that never query (which used to leak ^[[?62;22c
+                        // into the prompt on systems where fish didn't ask).
+                        if memchr_da1(slice) {
+                            if let Ok(mut w) = writer_for_reader.lock() {
+                                let _ = w.write_all(b"\x1b[?62;22c");
+                                let _ = w.flush();
+                            }
+                        }
                         if let Ok(mut ring) = ring_for_reader.lock() {
                             if slice.len() >= RING_BUFFER_CAPACITY {
                                 ring.clear();
@@ -347,7 +352,7 @@ printf '\033]133;A\007'
 
         let shell_type = super::shell::detect_default_shell().shell_type;
 
-        let mut session = PtySession {
+        let session = PtySession {
             id,
             master: pair.master,
             writer,
@@ -375,20 +380,23 @@ printf '\033]133;A\007'
         // If an initial command is provided, write it after a short delay
         if let Some(cmd_str) = command {
             let cmd_with_newline = format!("{}\n", cmd_str);
-            let _ = session.writer.write_all(cmd_with_newline.as_bytes());
-            let _ = session.writer.flush();
+            if let Ok(mut w) = session.writer.lock() {
+                let _ = w.write_all(cmd_with_newline.as_bytes());
+                let _ = w.flush();
+            }
         }
 
         Ok(session)
     }
 
     pub fn write(&mut self, data: &[u8]) -> Result<(), String> {
-        self.writer
-            .write_all(data)
+        let mut w = self
+            .writer
+            .lock()
+            .map_err(|e| format!("Writer lock poisoned: {}", e))?;
+        w.write_all(data)
             .map_err(|e| format!("Write failed: {}", e))?;
-        self.writer
-            .flush()
-            .map_err(|e| format!("Flush failed: {}", e))?;
+        w.flush().map_err(|e| format!("Flush failed: {}", e))?;
         Ok(())
     }
 
