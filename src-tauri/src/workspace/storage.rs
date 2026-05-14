@@ -184,8 +184,63 @@ fn legacy_workspaces_dir() -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+/// Catalog lives in `~/.wodouyao/` so it sits next to `web-token` and is
+/// stable across mac/linux (Tauri's `app_data_dir()` resolves to
+/// `~/Library/Application Support/com.wodouyao.app/` on mac and
+/// `~/.local/share/com.wodouyao.app/` on linux — which split the same logical
+/// state into platform-specific dirs and was easy to lose track of).
 fn catalog_path() -> Result<PathBuf, String> {
+    let home = dirs::home_dir().ok_or_else(|| "home dir not found".to_string())?;
+    let dir = home.join(".wodouyao");
+    fs::create_dir_all(&dir).map_err(|e| format!("create {}: {}", dir.display(), e))?;
+    Ok(dir.join("workspaces.json"))
+}
+
+/// Pre-2026-05 location, kept for one-shot migration. Returns Err on
+/// platforms where `app_data_dir()` is unavailable, which is fine — the
+/// caller silently skips migration.
+fn legacy_catalog_path() -> Result<PathBuf, String> {
     Ok(app_data_dir()?.join("workspaces.json"))
+}
+
+/// Serializes catalog read-modify-write so concurrent upsert/remove calls
+/// don't lose each other's mutations. Workspace creation and the hub's
+/// spawn route can both touch the catalog, and the atomic-write below only
+/// protects the on-disk file from torn writes — without this lock two
+/// processes could each read the same baseline and the second rename wins,
+/// silently dropping the first's entry.
+fn catalog_lock() -> &'static std::sync::Mutex<()> {
+    static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    LOCK.get_or_init(|| std::sync::Mutex::new(()))
+}
+
+/// One-shot migration from the legacy app_data_dir catalog to `~/.wodouyao/`.
+/// Runs lazily on the first read after upgrade. If both files exist, the
+/// new location wins (it's the live one); the legacy file is left in place
+/// for inspection.
+fn migrate_catalog_location_if_needed() {
+    let Ok(new_path) = catalog_path() else { return };
+    if new_path.exists() {
+        return;
+    }
+    let Ok(legacy) = legacy_catalog_path() else { return };
+    if !legacy.exists() {
+        return;
+    }
+    if let Err(e) = fs::copy(&legacy, &new_path) {
+        log::warn!(
+            "catalog migrate {} -> {} failed: {}",
+            legacy.display(),
+            new_path.display(),
+            e
+        );
+    } else {
+        log::info!(
+            "catalog migrated to {} (legacy at {} kept for safety)",
+            new_path.display(),
+            legacy.display()
+        );
+    }
 }
 
 /// Project-level `.wodouyao/` directory for a given cwd. Created on demand.
@@ -229,6 +284,7 @@ struct CatalogEntry {
 }
 
 fn read_catalog() -> Catalog {
+    migrate_catalog_location_if_needed();
     let Ok(p) = catalog_path() else {
         return Catalog::default();
     };
@@ -244,10 +300,35 @@ fn read_catalog() -> Catalog {
 fn write_catalog(cat: &Catalog) -> Result<(), String> {
     let p = catalog_path()?;
     let json = serde_json::to_string_pretty(cat).map_err(|e| e.to_string())?;
-    fs::write(p, json).map_err(|e| format!("Failed to write catalog: {}", e))
+    // Atomic write — a torn write during another reader's `read_catalog`
+    // call used to leave the catalog with EOF parse errors and effectively
+    // drop entries. Unique tmp suffix mirrors `persist_field_for_workspace`
+    // so two concurrent writers don't collide on a fixed `.tmp` name.
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tid = format!("{:?}", std::thread::current().id());
+    let tid_clean: String = tid.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    let tmp = p.with_extension(format!(
+        "json.tmp.{}.{}.{}",
+        std::process::id(),
+        tid_clean,
+        nanos
+    ));
+    if let Err(e) = fs::write(&tmp, json) {
+        let _ = fs::remove_file(&tmp);
+        return Err(format!("Failed to write catalog tmp: {}", e));
+    }
+    fs::rename(&tmp, &p).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("Failed to rename catalog tmp: {}", e)
+    })
 }
 
 fn upsert_catalog(entry: CatalogEntry) {
+    let _guard = catalog_lock().lock().expect("catalog lock poisoned");
     let mut cat = read_catalog();
     cat.entries.retain(|e| e.id != entry.id);
     cat.entries.push(entry);
@@ -255,6 +336,7 @@ fn upsert_catalog(entry: CatalogEntry) {
 }
 
 fn remove_from_catalog(id: &str) {
+    let _guard = catalog_lock().lock().expect("catalog lock poisoned");
     let mut cat = read_catalog();
     let before = cat.entries.len();
     cat.entries.retain(|e| e.id != id);
