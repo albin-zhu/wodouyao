@@ -44,7 +44,13 @@ use wodouyao_lib::tasks::TaskStore;
 struct ServerState {
     inner: Arc<AppState>,
     emitter: Arc<WebEmitter>,
-    bearer_token: String,
+    /// `Some(token)` enforces Bearer auth on /v1/cmd/* and a `?token=` query
+    /// on /v1/events + /v1/file/raw. `None` disables auth entirely — used
+    /// when the server sits behind a reverse proxy (nginx, Cloudflare,
+    /// Tailscale Funnel) that already authenticates upstream and a second
+    /// layer of bearer would just get in the way. Toggle with
+    /// `WODOUYAO_NO_AUTH=1`.
+    bearer_token: Option<String>,
 }
 
 #[tokio::main]
@@ -116,7 +122,16 @@ async fn main() {
         path_resolver,
     ));
 
-    let bearer_token = load_or_create_token().expect("load_or_create_token failed");
+    let auth_disabled = read_no_auth_flag();
+    let bearer_token: Option<String> = if auth_disabled {
+        log::warn!(
+            "WODOUYAO_NO_AUTH is set — Bearer auth disabled. Only run like \
+             this behind a trusted reverse proxy or on a private interface."
+        );
+        None
+    } else {
+        Some(load_or_create_token().expect("load_or_create_token failed"))
+    };
     let server_state = ServerState {
         inner: app_state,
         emitter: web_emitter,
@@ -167,7 +182,10 @@ async fn main() {
     });
     let local_addr = listener.local_addr().expect("local_addr failed");
     println!("wodouyao-server listening at:");
-    println!("  http://{}/#token={}", local_addr, bearer_token);
+    match &bearer_token {
+        Some(t) => println!("  http://{}/#token={}", local_addr, t),
+        None => println!("  http://{}/  (auth disabled)", local_addr),
+    }
     println!("(open the URL above in a browser; SSH-tunnel the port if remote)");
     log::info!("wodouyao-server bound to {}", local_addr);
 
@@ -279,9 +297,12 @@ async fn bearer_auth(
     req: axum::extract::Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    let Some(expected) = state.bearer_token.as_deref() else {
+        return Ok(next.run(req).await);
+    };
     let auth = req.headers().get("authorization");
     let ok = match auth.and_then(|v| v.to_str().ok()) {
-        Some(v) if v.starts_with("Bearer ") => &v[7..] == state.bearer_token,
+        Some(v) if v.starts_with("Bearer ") => &v[7..] == expected,
         _ => false,
     };
     if ok {
@@ -291,14 +312,26 @@ async fn bearer_auth(
     }
 }
 
+/// Whether to skip Bearer / query-token checks entirely. Set
+/// `WODOUYAO_NO_AUTH=1` (or `true`) when fronting the server with nginx /
+/// Cloudflare Access / Tailscale, where a second auth layer is redundant.
+fn read_no_auth_flag() -> bool {
+    matches!(
+        std::env::var("WODOUYAO_NO_AUTH").ok().as_deref(),
+        Some("1") | Some("true") | Some("yes") | Some("on")
+    )
+}
+
 #[derive(Deserialize)]
 struct EventsQuery {
+    #[serde(default)]
     token: String,
 }
 
 #[derive(Deserialize)]
 struct FileRawQuery {
     path: String,
+    #[serde(default)]
     token: String,
 }
 
@@ -310,8 +343,10 @@ async fn file_raw(
     State(state): State<ServerState>,
     Query(q): Query<FileRawQuery>,
 ) -> Result<Response, AppError> {
-    if q.token != state.bearer_token {
-        return Err(AppError::BadRequest("bad token".into()));
+    if let Some(expected) = state.bearer_token.as_deref() {
+        if q.token != expected {
+            return Err(AppError::BadRequest("bad token".into()));
+        }
     }
     let bytes = std::fs::read(&q.path)
         .map_err(|e| AppError::NotFound(format!("read {}: {}", q.path, e)))?;
@@ -351,8 +386,10 @@ async fn ws_events(
     State(state): State<ServerState>,
     Query(q): Query<EventsQuery>,
 ) -> Response {
-    if q.token != state.bearer_token {
-        return (StatusCode::UNAUTHORIZED, "bad token").into_response();
+    if let Some(expected) = state.bearer_token.as_deref() {
+        if q.token != expected {
+            return (StatusCode::UNAUTHORIZED, "bad token").into_response();
+        }
     }
     ws.on_upgrade(move |socket| handle_ws(socket, state.emitter.clone()))
 }
