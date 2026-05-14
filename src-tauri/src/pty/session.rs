@@ -296,6 +296,16 @@ printf '\033]133;A\007'
             Arc::new(Mutex::new(vt100::Parser::new(rows, cols, 1000)));
         let vt100_for_reader = Arc::clone(&vt100_parser);
 
+        // Tracks the most recent PTY output timestamp + whether output was
+        // ever produced. The initial-command writer thread reads these to
+        // decide when the shell is "idle after startup chatter" — see the
+        // "Initial command" block below for the protocol.
+        let last_output: Arc<Mutex<Option<std::time::Instant>>> = Arc::new(Mutex::new(None));
+        let has_output: Arc<std::sync::atomic::AtomicBool> =
+            Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let last_output_for_reader = Arc::clone(&last_output);
+        let has_output_for_reader = Arc::clone(&has_output);
+
         // Use a plain std::thread instead of tokio — no runtime needed
         let reader_id = id.clone();
         let reader_emitter = emitter.clone();
@@ -309,6 +319,11 @@ printf '\033]133;A\007'
                     }
                     Ok(n) => {
                         let slice = &buf[..n];
+                        // Stamp activity for the initial-command writer to poll.
+                        if let Ok(mut t) = last_output_for_reader.lock() {
+                            *t = Some(std::time::Instant::now());
+                        }
+                        has_output_for_reader.store(true, std::sync::atomic::Ordering::Release);
                         // Reactively answer DA1 (Primary Device Attributes) queries —
                         // \x1b[c or \x1b[0c — that fish issues at startup and waits
                         // up to 10s for. Responding from Rust avoids the JS-listener
@@ -377,25 +392,64 @@ printf '\033]133;A\007'
         // prompt via Ctrl-U / stdin injection which had timing bugs.
         let _ = fast_start; // suppress unused-binding warning
 
-        // Initial command is written from a separate thread after a delay.
-        // Writing it inline (the original code) is unreliable: the shell hasn't
-        // finished sourcing rc files / switched to raw mode yet, so the bytes
-        // we send sit in the slave's cooked-mode input queue, get echoed onto
-        // the screen as if typed, then are wiped by the shell's startup
-        // tcflush before they reach the command parser. Result on Ubuntu /
-        // fish: user sees the command text but it never runs.
+        // Write the initial command only after the shell has finished its
+        // startup chatter. Writing it eagerly (the original behavior) was
+        // unreliable: while the shell is still sourcing rc files and in
+        // cooked mode, our bytes get echoed onto the screen as if typed,
+        // then the shell's startup tcflush wipes them before the command
+        // parser ever sees them. Symptom: the command text shows up in the
+        // terminal but nothing runs.
         //
-        // The delay below covers a healthy bash/zsh/fish startup. Slow inits
-        // (conda, nvm, universal-variable probe on first fish run) may still
-        // race, but the dropped-command failure mode goes from "always" to
-        // "rare". A more robust fix would block until we see an OSC 133;A
-        // fence (or the shell's first prompt bytes) in PTY output before
-        // writing — left for a follow-up if the delay alone proves flaky.
+        // A fixed delay (250ms / 500ms / etc.) is shell- and machine-
+        // dependent — too short and slow inits (conda, nvm, fish first-run
+        // universal-variable probe, network-y rc files) lose the command;
+        // too long and every spawn feels laggy. Instead, watch the PTY
+        // output stream itself:
+        //
+        //   1. Wait until the shell produces ANY output (`has_output`),
+        //      proving it's alive and writing to its tty. Pre-output bytes
+        //      from us would still race with rc-file processing.
+        //   2. Wait for an idle gap — `IDLE_THRESHOLD` since the last byte
+        //      arrived. By the time the prompt is fully drawn and the shell
+        //      is blocking on read(), output has stopped.
+        //   3. Hard cap at `MAX_WAIT` so a hypothetical mute shell doesn't
+        //      hang the spawn forever.
+        //
+        // Shell-agnostic — works for bash, zsh, fish, sh, pwsh, cmd, plus
+        // anything that prints a prompt. DA1-query rebound (fish) gets
+        // counted as output, but the idle window after our reactive
+        // `\x1b[?62;22c` reply still gives fish time to actually print its
+        // prompt before we write the command.
         if let Some(cmd_str) = command {
             let cmd_with_newline = format!("{}\n", cmd_str);
             let writer_for_initial = Arc::clone(&session.writer);
+            let has_output_for_initial = Arc::clone(&has_output);
+            let last_output_for_initial = Arc::clone(&last_output);
             thread::spawn(move || {
-                thread::sleep(std::time::Duration::from_millis(250));
+                use std::sync::atomic::Ordering;
+                use std::time::{Duration, Instant};
+                const POLL_INTERVAL: Duration = Duration::from_millis(20);
+                const IDLE_THRESHOLD: Duration = Duration::from_millis(120);
+                const MAX_WAIT: Duration = Duration::from_secs(5);
+
+                let start = Instant::now();
+                while !has_output_for_initial.load(Ordering::Acquire) {
+                    if start.elapsed() >= MAX_WAIT {
+                        break;
+                    }
+                    thread::sleep(POLL_INTERVAL);
+                }
+                loop {
+                    if start.elapsed() >= MAX_WAIT {
+                        break;
+                    }
+                    let last = last_output_for_initial.lock().ok().and_then(|g| *g);
+                    match last {
+                        Some(t) if t.elapsed() >= IDLE_THRESHOLD => break,
+                        _ => thread::sleep(POLL_INTERVAL),
+                    }
+                }
+
                 if let Ok(mut w) = writer_for_initial.lock() {
                     let _ = w.write_all(cmd_with_newline.as_bytes());
                     let _ = w.flush();
