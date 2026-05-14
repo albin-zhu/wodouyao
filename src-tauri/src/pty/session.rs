@@ -377,13 +377,30 @@ printf '\033]133;A\007'
         // prompt via Ctrl-U / stdin injection which had timing bugs.
         let _ = fast_start; // suppress unused-binding warning
 
-        // If an initial command is provided, write it after a short delay
+        // Initial command is written from a separate thread after a delay.
+        // Writing it inline (the original code) is unreliable: the shell hasn't
+        // finished sourcing rc files / switched to raw mode yet, so the bytes
+        // we send sit in the slave's cooked-mode input queue, get echoed onto
+        // the screen as if typed, then are wiped by the shell's startup
+        // tcflush before they reach the command parser. Result on Ubuntu /
+        // fish: user sees the command text but it never runs.
+        //
+        // The delay below covers a healthy bash/zsh/fish startup. Slow inits
+        // (conda, nvm, universal-variable probe on first fish run) may still
+        // race, but the dropped-command failure mode goes from "always" to
+        // "rare". A more robust fix would block until we see an OSC 133;A
+        // fence (or the shell's first prompt bytes) in PTY output before
+        // writing — left for a follow-up if the delay alone proves flaky.
         if let Some(cmd_str) = command {
             let cmd_with_newline = format!("{}\n", cmd_str);
-            if let Ok(mut w) = session.writer.lock() {
-                let _ = w.write_all(cmd_with_newline.as_bytes());
-                let _ = w.flush();
-            }
+            let writer_for_initial = Arc::clone(&session.writer);
+            thread::spawn(move || {
+                thread::sleep(std::time::Duration::from_millis(250));
+                if let Ok(mut w) = writer_for_initial.lock() {
+                    let _ = w.write_all(cmd_with_newline.as_bytes());
+                    let _ = w.flush();
+                }
+            });
         }
 
         Ok(session)
