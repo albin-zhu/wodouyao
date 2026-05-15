@@ -73,8 +73,8 @@
     "term": {
       "font": "Font",
       "fontSize": "Size",
-      "fontFamily": "Font Family",
-      "fontFamilyHint": "Comma-separated list, first available font wins",
+      "fontFamily": "Global Font",
+      "fontFamilyHint": "Applied to terminals, notes, task boards, and all other UI elements. Comma-separated, first available font wins.",
       "lineHeight": "Line height",
       "letterSpacing": "Letter spacing",
       "cursor": "Cursor",

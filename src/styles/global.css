@@ -73,7 +73,7 @@ html, body, #root {
      show the desktop through when the user dials opacity below 1. */
   background: transparent;
   color: var(--color-text);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-global-family, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
   cursor: default;
   /* HDPI default — fonts get the lighter, modern look. */
   -webkit-font-smoothing: antialiased;

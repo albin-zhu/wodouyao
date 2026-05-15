@@ -128,7 +128,7 @@ function NoteNodeImpl({ note }: NoteNodeProps) {
           color: "var(--color-text)",
           padding: 8,
           fontSize: 12,
-          fontFamily: "'Inter', system-ui, sans-serif",
+          fontFamily: "var(--font-global-family, 'Inter', system-ui, sans-serif)",
           resize: "none",
           lineHeight: 1.5,
         }}

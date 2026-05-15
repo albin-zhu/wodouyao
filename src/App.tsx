@@ -42,12 +42,26 @@ export default function App() {
   const zenMode = useCanvasStore((s) => s.zenMode);
   const isHdpi = useSettingsStore((s) => s.settings?.is_hdpi ?? true);
   const theme = useSettingsStore((s) => s.settings?.theme ?? "system");
+  const globalFontFamily = useSettingsStore(
+    (s) => s.settings?.terminal_options?.font_family ?? null
+  );
 
   // Toggle body class so global.css applies the non-HDPI font smoothing
   // and border-snap rules. Cheaper than re-rendering every component.
   useEffect(() => {
     document.body.classList.toggle("wd-no-hdpi", !isHdpi);
   }, [isHdpi]);
+
+  // Mirror the terminal font choice to a CSS variable so UI elements
+  // (notes, task boards, panels) automatically match the user's font
+  // preference without requiring separate per-component settings.
+  useEffect(() => {
+    if (globalFontFamily) {
+      document.documentElement.style.setProperty("--font-global-family", globalFontFamily);
+    } else {
+      document.documentElement.style.removeProperty("--font-global-family");
+    }
+  }, [globalFontFamily]);
 
   // Theme: flip html[data-theme] and mirror to localStorage so the FOUC
   // bootstrap script in index.html has an up-to-date value on next launch.

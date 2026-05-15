@@ -73,8 +73,8 @@
     "term": {
       "font": "字体",
       "fontSize": "大小",
-      "fontFamily": "字体族",
-      "fontFamilyHint": "逗号分隔，优先使用靠前的字体",
+      "fontFamily": "全局字体",
+      "fontFamilyHint": "同时应用于终端、便签、任务看板等所有界面元素；逗号分隔，优先使用靠前的字体",
       "lineHeight": "行高",
       "letterSpacing": "字间距",
       "cursor": "光标",
