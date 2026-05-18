@@ -12,6 +12,7 @@ import TerminalContextMenu from "./components/terminal/TerminalContextMenu";
 import ToastContainer from "./components/ui/ToastContainer";
 import PerfHUD from "./components/ui/PerfHUD";
 import BootstrapWorkflowDialog from "./components/ui/BootstrapWorkflowDialog";
+import MobileLayout from "./components/mobile/MobileLayout";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { useSettingsStore } from "./store/settingsStore";
 import { useCanvasStore } from "./store/canvasStore";
@@ -115,6 +116,9 @@ export default function App() {
     return () => window.removeEventListener("wodouyao:fork-workspace", handler);
   }, [applyWorkspace]);
 
+  const isMobilePage =
+    typeof window !== "undefined" && window.location.pathname === "/mobile";
+
   return (
     <div
       style={{
@@ -127,23 +131,30 @@ export default function App() {
         // alpha; keep this transparent so a transparent Tauri window can
         // show the desktop through.
         background: "transparent",
-        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        fontFamily:
+          "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       }}
     >
-      {!zenMode && <Toolbar />}
-      <div style={{ flex: 1, position: "relative" }}>
-        <InfiniteCanvas />
-      </div>
-      <CommandPalette />
-      <SettingsDrawer />
-      <TeamsDrawer />
-      <TasksDrawer />
-      <ClonesDrawer />
-      <TerminalPanel />
-      <TerminalCreateDialog />
-      <TerminalContextMenu />
+      {isMobilePage ? (
+        <MobileLayout />
+      ) : (
+        <>
+          {!zenMode && <Toolbar />}
+          <div style={{ flex: 1, position: "relative" }}>
+            <InfiniteCanvas />
+          </div>
+          <CommandPalette />
+          <SettingsDrawer />
+          <TeamsDrawer />
+          <TasksDrawer />
+          <ClonesDrawer />
+          <TerminalPanel />
+          <TerminalCreateDialog />
+          <TerminalContextMenu />
+          <PerfHUD />
+        </>
+      )}
       <ToastContainer />
-      <PerfHUD />
       <BootstrapWorkflowDialog />
     </div>
   );

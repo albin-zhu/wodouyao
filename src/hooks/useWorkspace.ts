@@ -451,9 +451,9 @@ export function useWorkspace() {
   // Startup: load last workspace
   useEffect(() => {
     if (initRef.current) return;
-    initRef.current = true;
 
     const init = async () => {
+      initRef.current = true;
       await loadWorkspaceList();
       const lastId = settings?.last_workspace_id;
       if (lastId) {

@@ -23,7 +23,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -164,7 +164,10 @@ async fn main() {
             .unwrap_or_else(|| "dist".into())
     });
     log::info!("serving SPA from: {}", dist_dir);
-    let static_files = ServeDir::new(&dist_dir).append_index_html_on_directories(true);
+    let index_path = std::path::PathBuf::from(&dist_dir).join("index.html");
+    let static_files = ServeDir::new(&dist_dir)
+        .append_index_html_on_directories(true)
+        .fallback(ServeFile::new(index_path));
 
     let app = public
         .merge(private)
