@@ -394,7 +394,8 @@ async fn ws_events(
             return (StatusCode::UNAUTHORIZED, "bad token").into_response();
         }
     }
-    ws.on_upgrade(move |socket| handle_ws(socket, state.emitter.clone()))
+    let pty_manager = state.inner.pty_manager.clone();
+    ws.on_upgrade(move |socket| handle_ws(socket, state.emitter.clone(), pty_manager))
 }
 
 /// Drain the broadcast channel onto a single WS connection. Text frames
@@ -403,8 +404,56 @@ async fn ws_events(
 /// receivers (slow clients) skip dropped events and keep going — fine
 /// for status pings, lossy for terminal output, but acceptable for
 /// self-use over a LAN tunnel.
-async fn handle_ws(mut socket: WebSocket, emitter: Arc<WebEmitter>) {
+async fn handle_ws(
+    mut socket: WebSocket,
+    emitter: Arc<WebEmitter>,
+    pty_manager: Arc<Mutex<PtyManager>>,
+) {
     let mut rx = emitter.subscribe();
+
+    // Replay each live PTY's recent output before draining new events.
+    // A browser refresh tears down xterm; without this, the new connection
+    // would only see output produced after the WS upgrade, leaving the
+    // terminal blank until a TUI app redraws on SIGWINCH (which is what
+    // "resize recovers" was masking). The 64KB-per-session cap matches
+    // PtySession::ring_buffer. The lock is released before any await so
+    // the resulting future stays Send (axum requires it).
+    let snapshots: Vec<(String, Vec<u8>)> = match pty_manager.lock() {
+        Ok(manager) => manager
+            .live_ids()
+            .into_iter()
+            .filter_map(|id| {
+                manager
+                    .read_recent(&id, 64 * 1024)
+                    .ok()
+                    .filter(|b| !b.is_empty())
+                    .map(|b| (id, b))
+            })
+            .collect(),
+        Err(_) => {
+            log::warn!("ws replay: pty_manager poisoned, skipping");
+            Vec::new()
+        }
+    };
+    for (id, data) in snapshots {
+        let id_bytes = id.as_bytes();
+        let id_len = id_bytes.len().min(255) as u8;
+        let mut frame = Vec::with_capacity(1 + id_bytes.len() + data.len());
+        frame.push(id_len);
+        frame.extend_from_slice(&id_bytes[..id_len as usize]);
+        frame.extend_from_slice(&data);
+        if socket.send(Message::Binary(frame)).await.is_err() {
+            return;
+        }
+    }
+
+    drain_loop(&mut socket, &mut rx).await;
+}
+
+async fn drain_loop(
+    socket: &mut WebSocket,
+    rx: &mut tokio::sync::broadcast::Receiver<WebEvent>,
+) {
     loop {
         match rx.recv().await {
             Ok(event) => {
