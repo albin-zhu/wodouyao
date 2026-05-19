@@ -199,6 +199,12 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
     if (!el) return;
 
     let timer: ReturnType<typeof setTimeout> | null = null;
+    // Track display:none → block transitions across workspace switches.
+    // When the wrapper is hidden, xterm's renderer may end up with stale
+    // canvas dimensions, and fit() on re-show is a no-op when cols/rows
+    // didn't change. We force a refresh in that case so the canvas
+    // repaints from the buffer.
+    let wasHidden = el.offsetParent === null;
     const observer = new ResizeObserver(() => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
@@ -207,7 +213,12 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
         // null and contentRect collapse to 0). Calling fit() in that state
         // would send a ~0-column resize to the backend PTY, breaking TUI
         // program layouts in the hidden workspace.
-        if (el.offsetParent === null) return;
+        if (el.offsetParent === null) {
+          wasHidden = true;
+          return;
+        }
+        const becameVisible = wasHidden;
+        wasHidden = false;
         const term = termRef.current;
         if (!term) {
           fit();
@@ -230,6 +241,14 @@ export default function TerminalBody({ terminalId }: TerminalBodyProps) {
             const nb = t.buffer.active;
             const target = Math.max(0, anchorLine - t.rows + 1);
             t.scrollToLine(Math.min(target, nb.length - t.rows));
+          }
+          // After a hidden→visible transition, force a full repaint. fit()
+          // alone is insufficient: when cols/rows are unchanged xterm's
+          // renderer skips the redraw, leaving a blank canvas until the
+          // user manually resizes. refresh() draws every visible row from
+          // the in-memory buffer regardless of dimension changes.
+          if (becameVisible) {
+            try { t.refresh(0, t.rows - 1); } catch { /* ignore */ }
           }
           // Recompute block overlay positions after resize.
           setBlockVersion((v) => v + 1);
