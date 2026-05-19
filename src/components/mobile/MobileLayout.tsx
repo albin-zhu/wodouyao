@@ -31,8 +31,6 @@ function StatusDot({ status }: { status: TerminalStatus }) {
 export default function MobileLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
-  // Incremented on every workspace switch to force MobileTerminalView remount.
-  const [terminalViewKey, setTerminalViewKey] = useState(0);
   // Select the Map directly (stable reference between store updates) and
   // memoize the visible list so Zustand’s useSyncExternalStore doesn’t see
   // a new object on every render. Must also depend on currentWorkspaceId
@@ -41,6 +39,9 @@ export default function MobileLayout() {
   const terminalsMap = useTerminalStore((s) => s.terminals);
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspace?.id ?? null);
   const loading = useWorkspaceStore((s) => s.loading);
+  // Drawer / auto-select use the current-workspace slice; the main area
+  // mounts terminalsMap.values() in full so xterm is保活 across workspace
+  // switches (mirrors the desktop NodeLayer pattern).
   const terminals = useMemo<TerminalNode[]>(() => {
     // Don't filter until the workspace switch has fully completed (loading=false).
     // applyWorkspace updates terminals first, then currentWorkspace — filtering
@@ -50,6 +51,10 @@ export default function MobileLayout() {
     if (currentWorkspaceId === null) return all;
     return all.filter((t) => (t.workspaceId ?? currentWorkspaceId) === currentWorkspaceId);
   }, [terminalsMap, currentWorkspaceId, loading]);
+  const allTerminals = useMemo<TerminalNode[]>(
+    () => Array.from(terminalsMap.values()),
+    [terminalsMap],
+  );
   const { spawn, kill } = useTerminal();
   const { buildWorkspace, applyWorkspace } = useWorkspace();
   const currentWorkspace = useWorkspaceStore((s) => s.currentWorkspace);
@@ -93,7 +98,8 @@ export default function MobileLayout() {
     async (id: string) => {
       setActiveId(null);
       setDrawerOpen(false);
-      setTerminalViewKey((k) => k + 1);
+      // No forced remount: terminals from the outgoing workspace stay
+      // mounted (display:none) so their xterm buffers survive the switch.
       if (currentWorkspace?.id === id) {
         await loadWorkspaceById(id, applyWorkspace);
       } else {
@@ -394,7 +400,23 @@ export default function MobileLayout() {
                 position: "relative",
               }}
             >
-              <MobileTerminalView key={terminalViewKey} terminalId={activeTerminal.id} />
+              {/* Mount every terminal across every workspace so xterm
+                  instances survive workspace + drawer switches. The
+                  active one shows; the rest are display:none (matching
+                  the desktop NodeLayer保活 pattern). */}
+              {allTerminals.map((t) => (
+                <div
+                  key={t.id}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: t.id === activeId ? "flex" : "none",
+                    flexDirection: "column",
+                  }}
+                >
+                  <MobileTerminalView terminalId={t.id} active={t.id === activeId} />
+                </div>
+              ))}
             </div>
           </>
         ) : (
