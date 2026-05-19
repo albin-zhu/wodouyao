@@ -98,6 +98,13 @@ type BinaryHandler = (bytes: Uint8Array) => void;
 
 const jsonSubs = new Map<string, Set<JsonHandler>>();
 const binaryByTerminal = new Map<string, Set<BinaryHandler>>();
+// Frames that arrive before any handler is registered for a given
+// terminal id (e.g. the server-side ring-buffer replay sent immediately
+// on WS upgrade, while the SPA is still bootstrapping). Drained on
+// first subscribeTerminalBinary call for that id. Capped so a terminal
+// the SPA never subscribes to can't leak memory.
+const pendingBinary = new Map<string, Uint8Array[]>();
+const PENDING_BUFFER_CAP = 256 * 1024;
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -115,7 +122,28 @@ function dispatchBinary(buf: ArrayBuffer) {
   const id = new TextDecoder().decode(view.subarray(1, 1 + idLen));
   const data = view.subarray(1 + idLen);
   const handlers = binaryByTerminal.get(id);
-  if (handlers) for (const h of handlers) h(data);
+  if (handlers && handlers.size > 0) {
+    for (const h of handlers) h(data);
+    return;
+  }
+  // No handler yet — buffer for the future subscriber. Copy the slice
+  // because `view` aliases the WS message buffer which may be reused.
+  const copy = new Uint8Array(data.length);
+  copy.set(data);
+  let queue = pendingBinary.get(id);
+  if (!queue) {
+    queue = [];
+    pendingBinary.set(id, queue);
+  }
+  queue.push(copy);
+  // Drop oldest frames if we blow past the cap (the server's own ring
+  // buffer is 64KB so a single replay should fit comfortably).
+  let total = 0;
+  for (const c of queue) total += c.length;
+  while (total > PENDING_BUFFER_CAP && queue.length > 1) {
+    const removed = queue.shift()!;
+    total -= removed.length;
+  }
 }
 
 function dispatchJson(text: string) {
@@ -206,11 +234,23 @@ export function subscribeTerminalBinary(
   }
   ensureWS();
   let set = binaryByTerminal.get(terminalId);
+  const wasEmpty = !set || set.size === 0;
   if (!set) {
     set = new Set();
     binaryByTerminal.set(terminalId, set);
   }
   set.add(cb);
+  // Flush any frames that arrived before this subscriber was registered
+  // (typical case: server-side ring-buffer replay on WS upgrade fires
+  // before the SPA has mounted any terminal). Only the first subscriber
+  // for a given id drains the queue; later ones see only live frames.
+  if (wasEmpty) {
+    const queue = pendingBinary.get(terminalId);
+    if (queue && queue.length > 0) {
+      pendingBinary.delete(terminalId);
+      for (const bytes of queue) cb(bytes);
+    }
+  }
   return Promise.resolve(() => {
     set!.delete(cb);
     if (set!.size === 0) binaryByTerminal.delete(terminalId);
