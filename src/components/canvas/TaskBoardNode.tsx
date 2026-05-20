@@ -373,7 +373,7 @@ function TaskBoardNodeImpl({ board }: Props) {
     >
       {/* Header */}
       <div
-        onMouseDown={handleDragStart}
+        onPointerDown={handleDragStart}
         style={{
           height: 36,
           display: "flex",
@@ -576,7 +576,7 @@ function TaskBoardNodeImpl({ board }: Props) {
 
       {/* Resize handle */}
       <div
-        onMouseDown={handleResizeStart}
+        onPointerDown={handleResizeStart}
         style={{
           position: "absolute",
           bottom: 0,

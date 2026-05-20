@@ -78,7 +78,7 @@ function NoteNodeImpl({ note }: NoteNodeProps) {
       }}
     >
       <div
-        onMouseDown={handleDragStart}
+        onPointerDown={handleDragStart}
         style={{
           height: HEADER_H,
           display: "flex",
@@ -134,7 +134,7 @@ function NoteNodeImpl({ note }: NoteNodeProps) {
         }}
       />
       <div
-        onMouseDown={handleResizeStart}
+        onPointerDown={handleResizeStart}
         title="Drag to resize"
         style={{
           position: "absolute",

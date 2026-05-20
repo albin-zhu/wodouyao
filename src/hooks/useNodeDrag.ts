@@ -18,7 +18,8 @@ function getCanvasZoom(): number {
   return Number.isFinite(z) && z > 0 ? z : 1;
 }
 
-/** Drag-to-move + resize handlers for canvas nodes. Mirrors TerminalNode patterns. */
+/** Drag-to-move + resize handlers for canvas nodes. Mirrors TerminalNode patterns.
+ *  Supports both mouse and touch via Pointer Events. */
 export function useNodeDrag(opts: NodeDragOptions) {
   const dragStartRef = useRef<{
     x: number;
@@ -37,7 +38,7 @@ export function useNodeDrag(opts: NodeDragOptions) {
   const minH = opts.minHeight ?? 80;
 
   const handleDragStart = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.PointerEvent) => {
       if ((e.target as HTMLElement).closest("button, textarea, input")) return;
       e.preventDefault();
       e.stopPropagation();
@@ -49,7 +50,7 @@ export function useNodeDrag(opts: NodeDragOptions) {
         startY: opts.position.y,
       };
 
-      const onMouseMove = (ev: MouseEvent) => {
+      const onPointerMove = (ev: PointerEvent) => {
         if (!dragStartRef.current) return;
         const zoom = getCanvasZoom();
         const dx = (ev.clientX - dragStartRef.current.x) / zoom;
@@ -60,20 +61,20 @@ export function useNodeDrag(opts: NodeDragOptions) {
         });
       };
 
-      const onMouseUp = () => {
+      const onPointerUp = () => {
         dragStartRef.current = null;
-        window.removeEventListener("mousemove", onMouseMove);
-        window.removeEventListener("mouseup", onMouseUp);
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
       };
 
-      window.addEventListener("mousemove", onMouseMove);
-      window.addEventListener("mouseup", onMouseUp);
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
     },
     [opts]
   );
 
   const handleResizeStart = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.PointerEvent) => {
       e.preventDefault();
       e.stopPropagation();
       resizeStartRef.current = {
@@ -83,7 +84,7 @@ export function useNodeDrag(opts: NodeDragOptions) {
         startH: opts.size.height,
       };
 
-      const onMouseMove = (ev: MouseEvent) => {
+      const onPointerMove = (ev: PointerEvent) => {
         if (!resizeStartRef.current) return;
         const zoom = getCanvasZoom();
         const dw = (ev.clientX - resizeStartRef.current.mouseX) / zoom;
@@ -94,14 +95,14 @@ export function useNodeDrag(opts: NodeDragOptions) {
         });
       };
 
-      const onMouseUp = () => {
+      const onPointerUp = () => {
         resizeStartRef.current = null;
-        window.removeEventListener("mousemove", onMouseMove);
-        window.removeEventListener("mouseup", onMouseUp);
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
       };
 
-      window.addEventListener("mousemove", onMouseMove);
-      window.addEventListener("mouseup", onMouseUp);
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
     },
     [opts, minW, minH]
   );

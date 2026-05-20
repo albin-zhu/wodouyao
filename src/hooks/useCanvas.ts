@@ -9,6 +9,15 @@ export function useCanvas() {
   const panningRef = useRef(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
 
+  // Touch/mobile gesture tracking
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStateRef = useRef<{
+    startDist: number;
+    startZoom: number;
+    startPanX: number;
+    startPanY: number;
+  } | null>(null);
+
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       // Ctrl/Meta+wheel always zooms the canvas, regardless of target.
@@ -100,5 +109,92 @@ export function useCanvas() {
     [mode, adjustPan]
   );
 
-  return { panX, panY, zoom, handleWheel, handleCanvasMouseDown };
+  // Pointer event handlers for touch/mobile gestures
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse") return; // Desktop uses mouse handlers
+      e.preventDefault();
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      // Reset pinch state when new pointer touches
+      if (pointersRef.current.size === 2) {
+        pinchStateRef.current = null;
+      }
+    },
+    []
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse") return;
+
+      // Check if this pointer is being tracked
+      if (!pointersRef.current.has(e.pointerId)) return;
+
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      const pointers = pointersRef.current;
+
+      if (pointers.size === 1) {
+        // Single finger pan
+        const entries = [...pointers.entries()];
+        const [id, start] = entries[0];
+        if (id === e.pointerId) {
+          const dx = e.clientX - start.x;
+          const dy = e.clientY - start.y;
+          adjustPan(dx, dy);
+          pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        }
+      } else if (pointers.size === 2) {
+        // Two-finger pinch zoom + pan
+        const [a, b] = [...pointers.values()];
+        const dist = Math.hypot(b.x - a.x, b.y - a.y);
+
+        // Initialize pinch state on first frame with 2 fingers
+        if (!pinchStateRef.current) {
+          pinchStateRef.current = {
+            startDist: dist,
+            startZoom: zoom,
+            startPanX: panX,
+            startPanY: panY,
+          };
+        }
+
+        const state = pinchStateRef.current;
+        const scale = dist / state.startDist;
+
+        // Clamp scale to reasonable bounds
+        const newZoom = Math.max(0.1, Math.min(5, state.startZoom * scale));
+
+        // Center point of pinch gesture
+        const cx = (a.x + b.x) / 2;
+        const cy = (a.y + b.y) / 2;
+
+        setZoom(newZoom, cx, cy);
+      }
+    },
+    [zoom, panX, panY, adjustPan, setZoom]
+  );
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse") return;
+      pointersRef.current.delete(e.pointerId);
+      if (pointersRef.current.size < 2) {
+        pinchStateRef.current = null;
+      }
+    },
+    []
+  );
+
+  return {
+    panX,
+    panY,
+    zoom,
+    handleWheel,
+    handleCanvasMouseDown,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerUp,
+  };
 }

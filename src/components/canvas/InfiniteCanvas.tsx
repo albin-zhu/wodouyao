@@ -50,7 +50,7 @@ function classifyByExt(path: string): FileKind {
 }
 
 export default function InfiniteCanvas() {
-  const { handleWheel, handleCanvasMouseDown } = useCanvas();
+  const { handleWheel, handleCanvasMouseDown, handlePointerDown, handlePointerMove, handlePointerUp } = useCanvas();
   const { panX, panY, zoom } = useCanvasStore();
   const zenMode = useCanvasStore((s) => s.zenMode);
   const mode = useCanvasInteractionStore((s) => s.mode);
@@ -278,6 +278,10 @@ export default function InfiniteCanvas() {
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
       onContextMenu={(e) => {
         // Only prevent default on empty canvas, not on terminal/note/file nodes
         const target = e.target as HTMLElement;
@@ -294,6 +298,11 @@ export default function InfiniteCanvas() {
         // the user-controlled opacity actually shows the desktop through.
         background: "transparent",
         cursor: mode === "draw" ? "crosshair" : mode === "wire" ? "crosshair" : "default",
+        // Mobile touch: prevent browser gestures
+        touchAction: "none",
+        WebkitTouchCallout: "none",
+        userSelect: "none",
+        WebkitUserSelect: "none",
       }}
     >
       <BackgroundLayer />

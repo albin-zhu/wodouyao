@@ -499,6 +499,10 @@ pub fn list() -> Result<Vec<WorkspaceMeta>, String> {
     }
 
     metas.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    // Deduplicate by id: multiple catalog entries can point to the same
+    // workspace.json file (e.g., after a save-with-new-id). Keep the entry
+    // that matches the on-disk id (already in metas from the file read).
+    metas.dedup_by(|a, b| a.id == b.id);
     Ok(metas)
 }
 

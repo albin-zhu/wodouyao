@@ -114,7 +114,7 @@ function FileNodeImpl({ file }: FileNodeProps) {
       }}
     >
       <div
-        onMouseDown={handleDragStart}
+        onPointerDown={handleDragStart}
         style={{
           height: HEADER_H,
           display: "flex",
@@ -233,7 +233,7 @@ function FileNodeImpl({ file }: FileNodeProps) {
       </div>
 
       <div
-        onMouseDown={handleResizeStart}
+        onPointerDown={handleResizeStart}
         title="Drag to resize"
         style={{
           position: "absolute",

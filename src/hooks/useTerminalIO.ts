@@ -222,17 +222,29 @@ export function useTerminalIO(
     }
 
     // Defer fit() so xterm.js has time to measure cell dimensions.
-    // Skip if the container is hidden (display:none) — fit() would measure
-    // 0 cols/rows and send a damaging resize to the backend PTY.
-    requestAnimationFrame(() => {
-      if (container.offsetParent === null) return;
-      try {
-        fitAddon.fit();
-        updateTerminal(terminalId, { cols: term.cols, rows: term.rows });
-      } catch {
-        // Ignore — terminal may not be ready yet
-      }
-    });
+    // Retry with setTimeout to keep trying until the container has valid
+    // dimensions. This handles CSS loading delays, font loading, etc.
+    const fitTimers: ReturnType<typeof setTimeout>[] = [];
+    const tryFit = (attempt: number) => {
+      if (attempt > 20) return; // max 2 seconds of retries
+      const delay = attempt < 5 ? 16 : 100; // faster initially, slower later
+      const timer = setTimeout(() => {
+        if (container.offsetParent === null) {
+          tryFit(attempt + 1);
+          return;
+        }
+        try {
+          fitAddon.fit();
+          if (term.cols > 0 && term.rows > 0) {
+            updateTerminal(terminalId, { cols: term.cols, rows: term.rows });
+            return; // success, stop retrying
+          }
+        } catch { /* continue retrying */ }
+        tryFit(attempt + 1);
+      }, delay);
+      fitTimers.push(timer);
+    };
+    tryFit(0);
 
     termRef.current = term;
     fitAddonRef.current = fitAddon;
@@ -279,8 +291,51 @@ export function useTerminalIO(
 
     setStatus(terminalId, "running");
 
+    // ── Visibility change handler ─────────────────────────────────────────
+    // When the container transitions from hidden (display:none) to visible,
+    // xterm's Canvas renderer doesn't re-initialize automatically. This causes
+    // blank terminals after workspace switches or maximized-terminal restore.
+    // Use MutationObserver on the parent element to detect display/style changes.
+    let wasHidden = container.offsetParent === null;
+    const scheduleFit = () => {
+      // Re-fit with a small delay to ensure DOM dimensions are stable after
+      // the visibility change completes (browser layout pass).
+      window.setTimeout(() => {
+        try {
+          fitAddon.fit();
+          updateTerminal(terminalId, { cols: term.cols, rows: term.rows });
+        } catch { /* ignore — may race with unmount */ }
+      }, 16);
+    };
+    const visibilityCheck = () => {
+      const nowHidden = container.offsetParent === null;
+      if (wasHidden && !nowHidden) {
+        scheduleFit();
+      }
+      wasHidden = nowHidden;
+    };
+    const visibilityTimer = window.setInterval(visibilityCheck, 100);
+
+    // Also observe parent element mutations for faster detection of visibility
+    // changes that don't trigger offsetParent (e.g., CSS class changes).
+    let mutationObs: MutationObserver | null = null;
+    const parent = container.parentElement;
+    if (parent) {
+      mutationObs = new MutationObserver(() => {
+        const nowHidden = container.offsetParent === null;
+        if (wasHidden && !nowHidden) {
+          scheduleFit();
+        }
+        wasHidden = nowHidden;
+      });
+      mutationObs.observe(parent, { attributes: true, attributeFilter: ["class", "style", "id"] });
+    }
+
     // Cleanup — runs on unmount (and between StrictMode re-mounts)
     return () => {
+      window.clearInterval(visibilityTimer);
+      fitTimers.forEach((t) => clearTimeout(t));
+      mutationObs?.disconnect();
       document.removeEventListener("input", handleIMEInput, true);
       if (helperTextarea) {
         helperTextarea.removeEventListener("compositionend", handleCompositionEnd, true);

@@ -41,9 +41,9 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
     bringToFront(terminal.id);
   }, [bringToFront, terminal.id]);
 
-  // Drag to move
+  // Drag to move - supports both mouse and touch via Pointer Events
   const handleDragStart = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.PointerEvent) => {
       if ((e.target as HTMLElement).closest("button")) return;
       e.preventDefault();
       bringToFront(terminal.id);
@@ -54,7 +54,8 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
         startY: terminal.position.y,
       };
 
-      const onMouseMove = (ev: MouseEvent) => {
+      // Use pointermove/pointerup for unified mouse + touch support
+      const onPointerMove = (ev: PointerEvent) => {
         if (!dragStartRef.current) return;
         const zoom = parseFloat(
           document.getElementById("node-layer")?.style.getPropertyValue("--zoom") ?? "1"
@@ -69,24 +70,25 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
         });
       };
 
-      const onMouseUp = () => {
+      const onPointerUp = () => {
         dragStartRef.current = null;
-        window.removeEventListener("mousemove", onMouseMove);
-        window.removeEventListener("mouseup", onMouseUp);
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
       };
 
-      window.addEventListener("mousemove", onMouseMove);
-      window.addEventListener("mouseup", onMouseUp);
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
     },
     [terminal.id, terminal.position, bringToFront, updateTerminal]
   );
 
   // Resize from any edge or corner. `dir` is a subset of n/s/e/w.
-  // Uses rAF coalescing so rapid mouse events collapse into one update
+  // Uses rAF coalescing so rapid pointer events collapse into one update
   // per frame, which keeps the drag feeling smooth.
+  // Supports both mouse and touch via Pointer Events.
   const startResize = useCallback(
     (dir: { n?: boolean; s?: boolean; e?: boolean; w?: boolean }) =>
-      (e: React.MouseEvent) => {
+      (e: React.PointerEvent) => {
         // In wire mode the crosshair is doing something else — let the
         // click fall through to the canvas / wire anchor logic.
         if (mode === "wire") return;
@@ -121,7 +123,7 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
         const MIN_H = 100;
 
         let pendingFrame = 0;
-        let latest: MouseEvent | null = null;
+        let latest: PointerEvent | null = null;
 
         const flush = () => {
           pendingFrame = 0;
@@ -163,20 +165,20 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
           });
         };
 
-        const onMouseMove = (ev: MouseEvent) => {
+        const onPointerMove = (ev: PointerEvent) => {
           latest = ev;
           if (pendingFrame) return;
           pendingFrame = requestAnimationFrame(flush);
         };
-        const onMouseUp = () => {
+        const onPointerUp = () => {
           if (pendingFrame) cancelAnimationFrame(pendingFrame);
-          window.removeEventListener("mousemove", onMouseMove);
-          window.removeEventListener("mouseup", onMouseUp);
+          window.removeEventListener("pointermove", onPointerMove);
+          window.removeEventListener("pointerup", onPointerUp);
           document.body.style.cursor = prevBodyCursor;
           document.body.style.userSelect = prevUserSelect;
         };
-        window.addEventListener("mousemove", onMouseMove);
-        window.addEventListener("mouseup", onMouseUp);
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", onPointerUp);
       },
     [terminal.id, terminal.position, terminal.size, updateTerminal, bringToFront, mode]
   );
@@ -256,7 +258,7 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
         pointerEvents: "auto",
       }}
     >
-      <div onMouseDown={handleDragStart}>
+      <div onPointerDown={handleDragStart}>
         <TerminalTitleBar terminal={terminal} />
       </div>
       {assignedLabel && (
@@ -300,7 +302,7 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
               corners removed so accidental drags from those areas are
               impossible (they were also fighting wire-mode hits). */}
           <div
-            onMouseDown={startResize({ s: true, e: true })}
+            onPointerDown={startResize({ s: true, e: true })}
             title="Drag to resize"
             style={{
               position: "absolute",
@@ -335,7 +337,7 @@ function TerminalNodeImpl({ terminal }: TerminalNodeProps) {
       {/* Wire connection anchor (right side) — visible on hover or wire mode */}
       {(hovered || mode === "wire") && (
         <div
-          onMouseDown={handleWireAnchorDown}
+          onPointerDown={handleWireAnchorDown}
           style={{
             position: "absolute",
             right: -6,
